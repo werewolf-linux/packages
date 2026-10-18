@@ -1,0 +1,64 @@
+name: release one package
+on:
+  workflow_call:
+    inputs:
+      package:
+        type: string
+        required: true
+      build:
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  build:
+    if: inputs.build && github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    uses: ./.github/workflows/build.yml
+    with:
+      package: ${{ inputs.package }}
+      arch: ${{ matrix.arch }}
+      trusted: true
+  publish:
+    needs: build
+    if: >-
+      always() && !cancelled() && github.repository == 'werewolf-linux/packages' &&
+      github.ref == 'refs/heads/main' &&
+      (needs.build.result == 'success' || (!inputs.build && needs.build.result == 'skipped'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - name: Download the x86_64 build
+        if: inputs.build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.package }}-x86_64
+          path: artifacts/x86_64
+      - name: Download the ARM64 build
+        if: inputs.build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.package }}-aarch64
+          path: artifacts/aarch64
+      - name: Validate, sign and publish this package
+        env:
+          PACKAGE: ${{ inputs.package }}
+          PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          PATH="$PWD/build/tools:$PATH" python3 scripts/publish.py "$PACKAGE"
+      - name: Remove any unfinished signing key
+        if: always()
+        run: rm -f build/keys/werewolf-packages.rsa

@@ -1,0 +1,86 @@
+name: native package build
+on:
+  workflow_call:
+    inputs:
+      package:
+        type: string
+        required: true
+      arch:
+        type: string
+        required: true
+      trusted:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: >-
+      ${{ fromJSON(inputs.trusted &&
+          (inputs.arch == 'aarch64' && vars.WEREWOLF_ARM64_BUILD_RUNNER ||
+           inputs.arch == 'x86_64' && vars.WEREWOLF_X86_64_BUILD_RUNNER) ||
+          (inputs.arch == 'aarch64' && '["ubuntu-26.04-arm"]' || '["ubuntu-26.04"]')) }}
+    timeout-minutes: 360
+    env:
+      PACKAGE: ${{ inputs.package }}
+      ARCH: ${{ inputs.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the native builder
+        run: |
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
+            sudo -n apt-get -o Acquire::Retries=3 update
+            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make openssl patch
+          else
+            for tool in bwrap python3 git make openssl patch unshare newuidmap newgidmap; do
+              command -v "$tool" >/dev/null || { echo "Missing native builder: $tool" >&2; exit 1; }
+            done
+          fi
+          python3 scripts/install-melange.py --dest build/tools/melange
+          scripts/ci-root python3 scripts/setup-runner.py
+          scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
+            --cap-add CAP_SYS_CHROOT -- /usr/bin/python3 -c 'import os; os.chroot("/")'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/cache
+          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', inputs.package), 'tools.lock.json') }}
+          restore-keys: source-${{ inputs.arch }}-${{ inputs.package }}-
+      - name: Build and validate unsigned APKs
+        run: |
+          set -o pipefail
+          scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
+            2>&1 | tee build/build.log
+      - name: Restore artifact ownership
+        if: always()
+        run: |
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] && [ -d build ]; then
+            scripts/ci-root chown -R "$(id -u):$(id -g)" build
+          fi
+      - name: Verify native provenance as the workflow user
+        run: |
+          PATH="$PWD/build/tools:$PATH" python3 - "$PACKAGE" "$ARCH" <<'PYVERIFY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          import common, publish
+          package, arch = sys.argv[1:]
+          publish.validate(Path('build/artifacts') / package / arch, common.metadata(package), arch,
+                           os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ID'])
+          PYVERIFY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.package }}-${{ inputs.arch }}
+          path: |
+            build/artifacts/${{ inputs.package }}/${{ inputs.arch }}/*.apk
+            build/artifacts/${{ inputs.package }}/${{ inputs.arch }}/build.json
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: log-${{ inputs.package }}-${{ inputs.arch }}
+          path: build/build.log
+          if-no-files-found: ignore

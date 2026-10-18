@@ -1,0 +1,65 @@
+name: publish packages
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md', 'LICENSE']
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Context directory; empty builds all unpublished contexts
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: publish-packages
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      releases: ${{ steps.plan.outputs.releases }}
+      failed: ${{ steps.plan.outputs.failed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - name: Test the publisher before selecting builds
+        run: PATH="$PWD/build/tools:$PATH" make test check
+      - name: Select unpublished packages and staged retries
+        id: plan
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --package "$PACKAGE"
+  release:
+    needs: plan
+    if: needs.plan.outputs.publish != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.plan.outputs.releases) }}
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
+    with:
+      package: ${{ matrix.package }}
+      build: ${{ matrix.build }}
+  result:
+    needs: [plan, release]
+    if: always() && !cancelled()
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Report failures without preventing other packages from publishing
+        env:
+          PLAN: ${{ needs.plan.result }}
+          RELEASE: ${{ needs.release.result }}
+          FAILED: ${{ needs.plan.outputs.failed }}
+        run: |
+          test "$PLAN" = success
+          test "$RELEASE" = success || test "$RELEASE" = skipped
+          test "$FAILED" = '[]'

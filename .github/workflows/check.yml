@@ -1,0 +1,32 @@
+name: check
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - run: PATH="$PWD/build/tools:$PATH" make test check
+      - name: Validate every context and its APK names
+        run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --offline
+  native-smoke:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    uses: ./.github/workflows/build.yml
+    with:
+      package: onnx-minilm
+      arch: ${{ matrix.arch }}
+      trusted: false

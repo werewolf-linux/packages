@@ -1,0 +1,19 @@
+#!/bin/sh
+# Namespace root for native builders; host root only on disposable hosted CI.
+set -eu
+case ${RUNNER_ENVIRONMENT:-} in
+github-hosted)
+    exec sudo -n "$@"
+    ;;
+self-hosted)
+    if [ "$(id -u)" -eq 0 ]; then
+        echo 'ci-root: run the self-hosted agent as a dedicated non-root account' >&2
+        exit 1
+    fi
+    exec unshare --user --map-auto --map-root-user "$@"
+    ;;
+*)
+    echo 'ci-root: expected RUNNER_ENVIRONMENT=github-hosted or self-hosted' >&2
+    exit 1
+    ;;
+esac
