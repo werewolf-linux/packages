@@ -6,8 +6,8 @@
 # the configuration and the user.
 package:
   name: suricata
-  version: 8.0.4
-  epoch: 1
+  version: "8.0.7"
+  epoch: 0
   description: Network IDS, IPS and security monitoring engine
   copyright:
     - license: GPL-2.0-only
@@ -37,7 +37,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://www.openinfosecfoundation.org/download/suricata-${{package.version}}.tar.gz
-      expected-sha256: 81cee7bae69848a9751b2ce0867620eefa52b192e79c20b5eac897600b28b191
+      expected-sha256: "a9d46a9c8f40e81f8a6df3ecc2c5a9a8e8da985876299108d92da547c013ba8c"
 
   # The release tarball vendors the Rust crates, so the build fetches
   # nothing. Baseline CPU targets keep host-only instructions out.
