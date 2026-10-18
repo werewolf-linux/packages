@@ -178,3 +178,24 @@ and Python updates. The updater therefore uses Go's standard library plus the
 same YAML parser as Melange, keeping wolfictl optional for manual maintenance.
 For an upstream version change, use the Go updater so source and lock pins move
 together, then commit and push through the regular publisher.
+
+Bundled upstream components are listed under `components` in `updates.json`,
+keyed by the recipe variable holding their version. They use the same stable
+GitHub release resolver. For example, Vaultwarden's web vault is tracked
+independently of its server. A component-only update refreshes its archive hash
+and increments the parent's APK epoch; it does not regenerate the parent's
+unchanged dependency lock. Subpackage pipelines are included. A `commit-var`
+can additionally pin a component's release to its dereferenced commit (n8n's
+launcher). Vulnerability demonstrations remain pinned, including components.
+
+`wordpress-sqlite` packages WordPress's official SQLite integration release and
+builds its database drop-in from the matching template. Werewolf keeps its
+site configuration, installer and integration tests.
+
+Werewolf's hourly `package-pins.yml` job verifies the signed `contexts/*/current.json`
+records in this feed against a clean source snapshot. Every locked context and
+subpackage must be published for both native architectures before it proposes
+an immutable source commit and digest. Its regular check workflow tests the PR
+and merges it only after the tests and form boots pass. Failed publication or
+consumer tests leave the previous pins in place. No new publication mechanism
+or R2 credentials are needed by the consumer.

@@ -4,7 +4,7 @@
   "bugsink": {"source": "pypi", "project": "bugsink", "lock": "bugsink"},
   "continuwuity": {"source": "github-tags", "repo": "continuwuity/continuwuity", "prefix": "v"},
   "galene": {"source": "github-tags", "repo": "jech/galene", "prefix": "galene-"},
-  "greenbone": {"source": "github", "repo": "greenbone/pg-gvm", "prefix": "v"},
+  "greenbone": {"source": "github", "repo": "greenbone/pg-gvm", "prefix": "v", "components": {"gvm-libs-version": {"prefix": "v", "repo": "greenbone/gvm-libs", "source": "github"}}},
   "keycloak": {"source": "github", "repo": "keycloak/keycloak"},
   "langflow": {"source": "pypi", "project": "langflow", "lock": "langflow"},
   "langflow-vuln-demo": {"source": "pinned", "reason": "Intentionally vulnerable training release."},
@@ -16,7 +16,7 @@
   "miniflux": {"source": "github", "repo": "miniflux/v2"},
   "moodle": {"source": "github-tags", "repo": "moodle/moodle", "prefix": "v"},
   "mox": {"source": "github", "repo": "mjl-/mox", "prefix": "v"},
-  "n8n": {"source": "npm", "project": "n8n", "lock": "npm"},
+  "n8n": {"source": "npm", "project": "n8n", "lock": "npm", "components": {"launcher-version": {"commit-var": "launcher-commit", "repo": "n8n-io/task-runner-launcher", "source": "github"}}},
   "n8n-vuln-demo": {"source": "pinned", "reason": "Intentionally vulnerable training release."},
   "nextcloud": {"source": "github-tags", "repo": "nextcloud/server", "prefix": "v"},
   "onnx": {"source": "github", "repo": "microsoft/onnxruntime", "prefix": "v"},
@@ -28,7 +28,8 @@
   "solr": {"source": "github-tags", "repo": "apache/solr", "prefix": "releases/solr/"},
   "solr-vuln-demo": {"source": "pinned", "reason": "Intentionally vulnerable training release."},
   "suricata": {"source": "github-tags", "repo": "OISF/suricata", "prefix": "suricata-"},
-  "vaultwarden": {"source": "github", "repo": "dani-garcia/vaultwarden"},
+  "vaultwarden": {"source": "github", "repo": "dani-garcia/vaultwarden", "components": {"web-vault-version": {"prefix": "v", "repo": "dani-garcia/bw_web_builds", "source": "github"}}},
   "velociraptor": {"source": "github", "repo": "Velocidex/velociraptor", "prefix": "v"},
+  "wordpress-sqlite": {"prefix": "v", "repo": "WordPress/sqlite-database-integration", "source": "github"},
   "zot": {"source": "github", "repo": "project-zot/zot", "prefix": "v"}
 }

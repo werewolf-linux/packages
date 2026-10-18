@@ -1,0 +1,30 @@
+package:
+  name: wordpress-sqlite-integration
+  version: 3.1.0
+  epoch: 0
+  description: WordPress SQLite database integration and drop-in
+  copyright:
+    - license: GPL-2.0-or-later
+
+environment:
+  contents:
+    repositories:
+      - https://packages.wolfi.dev/os
+    keyring:
+      - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    packages:
+      - busybox
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: https://github.com/WordPress/sqlite-database-integration/releases/download/v${{package.version}}/plugin-sqlite-database-integration.zip
+      expected-sha256: 02a7958a27959c00f2d579ea27f2047ad2fe6a2c4758c2459d36d0b0ae0b6624
+  - runs: |
+      content=${{targets.destdir}}/usr/src/wordpress/wp-content
+      plugin=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration
+      mkdir -p "$content/plugins/sqlite-database-integration"
+      cp -a . "$content/plugins/sqlite-database-integration/"
+      sed -e "s|{SQLITE_IMPLEMENTATION_FOLDER_PATH}|$plugin|g" \
+          -e 's|{SQLITE_PLUGIN}|sqlite-database-integration/load.php|g' \
+          db.copy >"$content/db.php"

@@ -26,6 +26,9 @@ type Policy struct {
 	Branch  string `json:"branch,omitempty"`
 	Lock    string `json:"lock,omitempty"`
 	Reason  string `json:"reason,omitempty"`
+	// Components are keyed by the recipe variable holding their version.
+	Components map[string]Policy `json:"components,omitempty"`
+	CommitVar  string            `json:"commit-var,omitempty"`
 }
 
 type Release struct {

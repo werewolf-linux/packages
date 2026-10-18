@@ -305,6 +305,56 @@ func TestRepositoryCoverage(t *testing.T) {
 	}
 }
 
+func TestComponentUpdateIsTransactionalAndBumpsParentEpoch(t *testing.T) {
+	for _, outcome := range []string{"success", "download", "parser", "downgrade", "dry-run"} {
+		t.Run(outcome, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "example", "recipe.yaml")
+			text := fetchRecipe + "vars:\n  web-version: 1.0.0\nsubpackages:\n  - name: web\n    pipeline:\n      - uses: fetch\n        with:\n          uri: https://example.org/web-${{vars.web-version}}.tar.gz\n          expected-sha256: old-web\n"
+			mustWrite(t, path, text)
+			latest := "1.1.0"
+			if outcome == "downgrade" {
+				latest = "0.9.0"
+			}
+			routes := map[string]string{
+				"https://api.github.com/repos/a/b/releases/latest":   `{"tag_name":"1.9.0"}`,
+				"https://api.github.com/repos/a/web/releases/latest": `{"tag_name":"` + latest + `"}`,
+			}
+			if outcome != "download" {
+				routes["https://example.org/web-1.1.0.tar.gz"] = "web"
+			}
+			p := Policy{Source: "github", Repo: "a/b", Lock: "npm", Components: map[string]Policy{"web-version": {Source: "github", Repo: "a/web"}}}
+			run := func(_ context.Context, _, command string, _ ...string) error {
+				if command != "melange" {
+					t.Fatalf("component-only update ran %s", command)
+				}
+				if outcome == "parser" {
+					return errors.New("invalid recipe")
+				}
+				return nil
+			}
+			result := mockClient(t, routes).Update(context.Background(), root, "example", p, outcome != "dry-run", run)
+			data, _ := os.ReadFile(path)
+			if outcome == "success" {
+				if result.Status != "updated" || !strings.Contains(string(data), "epoch: 8") || !strings.Contains(string(data), hash("web")) || !strings.Contains(string(data), "expected-sha256: old-arm") {
+					t.Fatalf("%+v\n%s", result, data)
+				}
+				if again := mockClient(t, routes).Update(context.Background(), root, "example", p, true, run); again.Status != "current" {
+					t.Fatalf("repeat: %+v", again)
+				}
+			} else {
+				want := "failed"
+				if outcome == "dry-run" {
+					want = "available"
+				}
+				if result.Status != want || string(data) != text {
+					t.Fatalf("partial update: %+v\n%s", result, data)
+				}
+			}
+		})
+	}
+}
+
 func TestWheelHashAndRequirementBlocks(t *testing.T) {
 	c := mockClient(t, map[string]string{
 		"https://pypi.org/pypi/lfx/1.0.0/json": `{"info":{"version":"1.0.0"},"urls":[{"filename":"lfx-1.0.0-py3-none-any.whl","url":"https://example.org/wheel","digests":{"sha256":"wrong"}}]}`,

@@ -122,14 +122,17 @@ func (r *recipe) expand(text, version string) (string, error) {
 
 // sources refreshes every version-dependent fetch, including both architectures
 // and nested pipelines, and pins git-checkout to the release's actual commit.
-func (c *Client) sources(ctx context.Context, r *recipe, p Policy, release Release) error {
-	return walk(field(r.root, "pipeline"), func(n *yaml.Node) error {
+func (c *Client) sources(ctx context.Context, r *recipe, p Policy, release Release, primaryChanged bool, variables map[string]string) error {
+	return walk(r.root, func(n *yaml.Node) error {
 		if n == nil || n.Kind != yaml.MappingNode {
 			return nil
 		}
 		with := field(n, "with")
 		switch value(n, "uses") {
 		case "git-checkout":
+			if !primaryChanged {
+				return nil
+			}
 			commit := release.Commit
 			if commit == "" {
 				tag, err := r.expand(value(with, "tag"), release.Version)
@@ -151,7 +154,11 @@ func (c *Client) sources(ctx context.Context, r *recipe, p Policy, release Relea
 			if uri == nil {
 				return fmt.Errorf("fetch has no URI")
 			}
-			if !strings.Contains(uri.Value, "${{package.version}}") && p.Source != "content" && p.Source != "minecraft" {
+			refresh := primaryChanged && strings.Contains(uri.Value, "${{package.version}}")
+			for name := range variables {
+				refresh = refresh || strings.Contains(uri.Value, "${{vars."+name+"}}")
+			}
+			if !refresh && p.Source != "content" && p.Source != "minecraft" {
 				return nil
 			}
 			address, err := r.expand(uri.Value, release.Version)
@@ -205,6 +212,19 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 	for name, p := range policies {
 		if contexts[name] != 1 {
 			return nil, fmt.Errorf("%s needs exactly one recipe", name)
+		}
+		recipePaths, _ := filepath.Glob(filepath.Join(root, name, "*.yaml"))
+		r, err := readRecipe(recipePaths[0])
+		if err != nil {
+			return nil, err
+		}
+		for variable, component := range p.Components {
+			if field(field(r.root, "vars"), variable) == nil || (component.CommitVar != "" && field(field(r.root, "vars"), component.CommitVar) == nil) {
+				return nil, fmt.Errorf("%s: missing component variable %s", name, variable)
+			}
+			if component.Source != "github" || !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(component.Repo) || len(component.Components) != 0 || component.Lock != "" {
+				return nil, fmt.Errorf("%s: component %s needs a stable GitHub release source", name, variable)
+			}
 		}
 		if strings.HasSuffix(name, "-vuln-demo") != (p.Source == "pinned") {
 			return nil, fmt.Errorf("only vuln-demo contexts may be pinned: %s", name)
@@ -341,6 +361,31 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	if release.Build != "" {
 		changed = changed || value(field(original.root, "vars"), "build") != release.Build
 	}
+	primaryChanged := changed
+	variables := map[string]string{}
+	for _, variable := range Names(p.Components) {
+		component := p.Components[variable]
+		current := value(field(original.root, "vars"), variable)
+		latest, err := c.Discover(ctx, component, current)
+		if err != nil {
+			return fail(fmt.Errorf("%s: %w", variable, err))
+		}
+		if Compare(latest.Version, current) < 0 {
+			return fail(fmt.Errorf("%s: upstream %s is older than pinned %s", variable, latest.Version, current))
+		}
+		if Compare(latest.Version, current) == 0 {
+			continue
+		}
+		variables[variable] = latest.Version
+		if component.CommitVar != "" {
+			commit, err := c.commit(ctx, component.Repo, latest.Tag)
+			if err != nil {
+				return fail(err)
+			}
+			variables[component.CommitVar] = commit
+		}
+	}
+	changed = changed || len(variables) != 0
 	if !changed && p.Source != "content" {
 		return result
 	}
@@ -360,6 +405,11 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	r, err := readRecipe(filepath.Join(scratch, filepath.Base(paths[0])))
 	if err != nil {
 		return fail(err)
+	}
+	for variable, version := range variables {
+		if err := r.set(field(field(r.root, "vars"), variable), version); err != nil {
+			return fail(err)
+		}
 	}
 	if release.Build != "" {
 		if err := r.set(field(field(r.root, "vars"), "build"), release.Build); err != nil {
@@ -391,7 +441,7 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 			return fail(err)
 		}
 	}
-	if err := c.sources(ctx, r, p, release); err != nil {
+	if err := c.sources(ctx, r, p, release, primaryChanged, variables); err != nil {
 		return fail(err)
 	}
 	if p.Source == "content" {
@@ -425,8 +475,10 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	if err := os.WriteFile(r.path, []byte(text), 0o644); err != nil {
 		return fail(err)
 	}
-	if err := c.locks(ctx, scratch, p, release, run); err != nil {
-		return fail(err)
+	if primaryChanged {
+		if err := c.locks(ctx, scratch, p, release, run); err != nil {
+			return fail(err)
+		}
 	}
 	if err := run(ctx, scratch, "melange", "query", r.path, "{{.Package.Version}}{{println}}"); err != nil {
 		return fail(err)
