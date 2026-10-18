@@ -54,7 +54,8 @@ the license declared by each recipe.
 `publish.yml` runs on main pushes, hourly retries and manual dispatch. It builds
 unpublished recipe inputs natively on x86_64 and ARM64. A failed context leaves
 other contexts free to publish. Pull requests run the publisher tests and parse
-every recipe without access to release credentials.
+every recipe without access to release credentials. Both hosted architectures also
+build the small ONNX model package as a real native runner smoke test.
 
 The signed application feed is `https://dist.werewolf-linux.org/apk/packages`,
 with `x86_64/APKINDEX.tar.gz` and `aarch64/APKINDEX.tar.gz`. Its trust root is

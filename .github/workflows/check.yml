@@ -19,3 +19,14 @@ jobs:
       - run: PATH="$PWD/build/tools:$PATH" make test check
       - name: Validate every context and its APK names
         run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --offline
+  native-smoke:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    uses: ./.github/workflows/build.yml
+    with:
+      package: onnx-minilm
+      arch: ${{ matrix.arch }}
+      trusted: false
