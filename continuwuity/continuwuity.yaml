@@ -7,7 +7,7 @@
 # ships it, the form names the package and this file goes.
 package:
   name: continuwuity
-  version: 26.7.3
+  version: "26.9.1"
   epoch: 0
   description: A Matrix homeserver, the continuation of conduwuit
   copyright:
@@ -34,7 +34,7 @@ pipeline:
     with:
       repository: https://github.com/continuwuity/continuwuity
       tag: v${{package.version}}
-      expected-commit: 6957ff7689a3184903a717159287acdcd6a79d23
+      expected-commit: "046074bbc2c8d1af6dd86f93e1c512fbd8b78da8"
 
   - runs: |
       cargo auditable build --release --locked --no-default-features \
