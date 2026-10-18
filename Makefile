@@ -5,7 +5,7 @@ ARCH ?= $(shell uname -m | sed 's/arm64/aarch64/;s/amd64/x86_64/')
 RECIPES = $(wildcard $(PACKAGE)/*.yaml)
 SOURCE ?= ../packages
 
-.PHONY: build check test
+.PHONY: build check test updates
 build:
 	@test -n "$(RECIPES)" || { echo "no recipes for $(PACKAGE)" >&2; exit 1; }
 	$(MAKE) -C $(WEREWOLF) howl
@@ -19,4 +19,9 @@ check:
 	done
 
 test:
+	go test ./...
 	python3 -m unittest discover -s tests -p 'test_*.py'
+
+# Discovery is read-only; --write also refreshes pins and dependency locks.
+updates:
+	go run ./cmd/package-update $(if $(filter command line,$(origin PACKAGE)),--package $(PACKAGE))

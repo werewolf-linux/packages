@@ -28,6 +28,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version-file: go.mod
+      - name: Compile the native package smoke runner
+        run: go build -o build/tools/package-smoke ./cmd/package-smoke
       - name: Install the native builder
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
@@ -53,6 +58,11 @@ jobs:
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
             python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee build/build.log
+      - name: Exercise installed packages before uploading artifacts
+        run: |
+          set -o pipefail
+          scripts/ci-root env PATH="$PWD/build/tools:$PATH" \
+            build/tools/package-smoke --package "$PACKAGE" --arch "$ARCH" 2>&1 | tee -a build/build.log
       - name: Restore artifact ownership
         if: always()
         run: |
