@@ -11,8 +11,8 @@
 # the form names the package and this file goes.
 package:
   name: open-webui
-  version: 0.11.4
-  epoch: 1
+  version: "0.12.3"
+  epoch: 0
   description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
   copyright:
     - license: LicenseRef-Open-WebUI
@@ -42,13 +42,13 @@ pipeline:
   - uses: fetch
     with:
       uri: https://raw.githubusercontent.com/open-webui/open-webui/v${{package.version}}/backend/requirements-slim.txt
-      expected-sha256: d64e5a7971200320c46ca457f64154ba4b7b50b0caa018e5a66f5ee3378a77eb
+      expected-sha256: "6dc3e004a3935f4bcc19f804f791e536c1f4be381049d866f842b2c2e4a88509"
       extract: false
 
   - uses: fetch
     with:
       uri: https://files.pythonhosted.org/packages/py3/o/open-webui/open_webui-${{package.version}}-py3-none-any.whl
-      expected-sha256: e4c2b02607ae984ec8ec08f3f9e02a8de06b1226af0f2df37fe2fab7f9d52523
+      expected-sha256: "6d716039a5c15ecdb1db12f99dd9c79ea5c86d3d7bbd9a67054dd26f1f534747"
       extract: false
 
   # Built where it runs, since a virtual environment records its path.
@@ -60,7 +60,7 @@ pipeline:
   - runs: |
       uv venv --python /usr/bin/python3.12 /usr/lib/open-webui
       export VIRTUAL_ENV=/usr/lib/open-webui
-      uv pip install --exclude-newer 2026-10-10T00:00:00Z \
+      uv pip install --exclude-newer 2026-10-18T10:44:22Z \
         -r requirements-slim.txt
       uv pip install --no-deps \
         open_webui-${{package.version}}-py3-none-any.whl
