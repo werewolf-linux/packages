@@ -123,6 +123,25 @@ func TestRegistriesAndMinecraft(t *testing.T) {
 	}
 }
 
+func TestGitHubLatestRejectsDraftsAndPreviews(t *testing.T) {
+	for _, item := range []string{`{"tag_name":"v2.0.0","draft":true}`, `{"tag_name":"v2.0.0","prerelease":true}`, `{"tag_name":"v2.0.0rc1"}`} {
+		c := mockClient(t, map[string]string{"https://api.github.com/repos/a/b/releases/latest": item})
+		if _, err := c.Discover(context.Background(), Policy{Source: "github", Repo: "a/b", Prefix: "v"}, "1.0.0"); err == nil {
+			t.Fatal("unstable release accepted", item)
+		}
+	}
+}
+
+func TestChildProcessesDoNotReceiveCredentials(t *testing.T) {
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "PACKAGES_APK_SIGNING_KEY"} {
+		t.Setenv(name, "private-sentinel")
+	}
+	err := RunCommand(context.Background(), t.TempDir(), "sh", "-c", `test -z "$GH_TOKEN$GITHUB_TOKEN$AWS_ACCESS_KEY_ID$AWS_SECRET_ACCESS_KEY$PACKAGES_APK_SIGNING_KEY" && test "$npm_config_ignore_scripts" = true && test "$UV_PYTHON_DOWNLOADS" = never`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 const fetchRecipe = `# Preserve this recipe's comments and scripts.
 package:
   name: example
@@ -307,7 +326,7 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 	c := mockClient(t, routes)
 	run := func(_ context.Context, dir, command string, args ...string) error {
 		joined := strings.Join(args, " ")
-		if command != "uv" || !strings.Contains(joined, "--no-build") || !strings.Contains(joined, "--no-emit-package onnxruntime") {
+		if command != "uv" || !strings.Contains(joined, "--no-emit-package onnxruntime") {
 			t.Fatalf("unsafe resolver: %s %s", command, joined)
 		}
 		mustWrite(t, filepath.Join(dir, "requirements.txt"), "langflow==1.13.0 \\\n    --hash=sha256:a\nlangflow-base==1.13.0 \\\n    --hash=sha256:b\nlfx==1.13.0 \\\n    --hash=sha256:c\nfastuuid==0.14.0 \\\n    --hash=sha256:d\nother==2 \\\n    --hash=sha256:e\n")

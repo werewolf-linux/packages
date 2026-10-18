@@ -425,7 +425,7 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	if err := c.locks(ctx, scratch, p, release, run); err != nil {
 		return fail(err)
 	}
-	if err := run(ctx, scratch, "melange", "query", r.path, "{{.Package.Version}}"); err != nil {
+	if err := run(ctx, scratch, "melange", "query", r.path, "{{.Package.Version}}{{println}}"); err != nil {
 		return fail(err)
 	}
 	// Nothing in the real context is touched until downloads, locks and parsing

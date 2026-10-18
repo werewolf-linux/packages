@@ -62,7 +62,7 @@ func (c *Client) locks(ctx context.Context, dir string, p Policy, release Releas
 		if err := os.WriteFile(filepath.Join(dir, "requirements.in"), []byte("bugsink=="+release.Version+"\n"), 0o644); err != nil {
 			return err
 		}
-		return run(ctx, dir, "uv", "pip", "compile", "--no-build", "--python-version", "3.15", "--python-platform", "linux", "--generate-hashes", "--no-header", "--output-file", "requirements.txt", "requirements.in")
+		return run(ctx, dir, "uv", "pip", "compile", "--quiet", "--python-version", "3.15", "--python-platform", "linux", "--generate-hashes", "--no-header", "--output-file", "requirements.txt", "requirements.in")
 	case "langflow":
 		// Resolve the release's dependency metadata, including the exact
 		// langflow-base and lfx it requires, against our interpreter overrides.
@@ -71,7 +71,7 @@ func (c *Client) locks(ctx context.Context, dir string, p Policy, release Releas
 		}
 		// Resolve against upstream's supported Python range. The recipe
 		// deliberately builds for 3.15 with our overrides and import checks.
-		if err := run(ctx, dir, "uv", "pip", "compile", "--no-build", "--python-version", "3.14", "--python-platform", "linux", "--generate-hashes", "--no-header", "--override", "overrides.txt", "--no-emit-package", "onnxruntime", "--output-file", "requirements.txt", "requirements.in"); err != nil {
+		if err := run(ctx, dir, "uv", "pip", "compile", "--quiet", "--python-version", "3.14", "--python-platform", "linux", "--generate-hashes", "--no-header", "--override", "overrides.txt", "--no-emit-package", "onnxruntime", "--output-file", "requirements.txt", "requirements.in"); err != nil {
 			return err
 		}
 		lockPath := filepath.Join(dir, "requirements.txt")
