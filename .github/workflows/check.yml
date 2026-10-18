@@ -14,7 +14,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
-    runs-on: ubuntu-26.04
+    runs-on: >-
+      ${{ fromJSON(github.repository == 'werewolf-linux/packages' &&
+          (github.event_name == 'workflow_dispatch' ||
+           github.event.pull_request.head.repo.full_name == github.repository) &&
+          vars.WEREWOLF_X86_64_BUILD_RUNNER || '["ubuntu-26.04"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,7 +41,9 @@ jobs:
     with:
       package: ${{ inputs.package || 'onnx-minilm' }}
       arch: ${{ matrix.arch }}
-      trusted: false
+      trusted: ${{ github.repository == 'werewolf-linux/packages' &&
+        (github.event_name == 'workflow_dispatch' ||
+         github.event.pull_request.head.repo.full_name == github.repository) }}
 
   wordpress-smoke:
     needs: check
@@ -49,4 +55,6 @@ jobs:
     with:
       package: wordpress-sqlite
       arch: ${{ matrix.arch }}
-      trusted: false
+      trusted: ${{ github.repository == 'werewolf-linux/packages' &&
+        (github.event_name == 'workflow_dispatch' ||
+         github.event.pull_request.head.repo.full_name == github.repository) }}

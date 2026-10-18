@@ -19,6 +19,7 @@ import (
 type spec struct {
 	Packages []string `json:"packages"`
 	Runs     string   `json:"runs"`
+	Allow    []string `json:"allow,omitempty"`
 }
 
 func main() {
@@ -101,14 +102,24 @@ func check(name, arch string) error {
 		return err
 	}
 	packages := append([]string{"busybox", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
+	mutations := []map[string]any{}
+	if len(s.Allow) != 0 {
+		mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node", "type": "directory", "permissions": 0o755})
+		for _, allow := range s.Allow {
+			if allow != "native" && allow != "writable-source" {
+				return fmt.Errorf("unsupported Node test allowance: %s", allow)
+			}
+			mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node/" + allow, "type": "empty-file", "permissions": 0o444})
+		}
+	}
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"environment": map[string]any{"contents": map[string]any{
+			"environment": map[string]any{"accounts": map[string]any{"run-as": "1000"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
-			"pipeline": []map[string]string{{"runs": strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version)}},
+			"pipeline": []map[string]string{{"runs": "test \"$(id -u)\" -ne 0\n" + strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version)}},
 		},
 	}
 	data, err = yaml.Marshal(config)

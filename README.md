@@ -83,6 +83,11 @@ The `release` GitHub environment needs these secrets:
 Allow deployments only from `main`. Optional repository variables
 `WEREWOLF_X86_64_BUILD_RUNNER` and `WEREWOLF_ARM64_BUILD_RUNNER` are JSON arrays of
 runner labels; defaults are `ubuntu-26.04` and `ubuntu-26.04-arm`. Self-hosted
+builders are used for main, manually dispatched checks and pull requests from
+this repository. Fork pull requests use hosted runners; external fork workflows
+require maintainer approval before they can run. Unit checks and publication
+planning use the configured amd64 runner too. Signing and R2 publication remain
+on a separate hosted job in the protected release environment. Self-hosted
 builders run as dedicated non-root accounts with subordinate UID/GID mappings,
 using the same `scripts/ci-root` and private bubblewrap profile as hardened-packages.
 No signing or R2 keys are needed by the builder accounts.

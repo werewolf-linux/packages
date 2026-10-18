@@ -19,7 +19,7 @@ concurrency:
 jobs:
   plan:
     if: github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-26.04
+    runs-on: ${{ fromJSON(vars.WEREWOLF_X86_64_BUILD_RUNNER || '["ubuntu-26.04"]') }}
     timeout-minutes: 20
     outputs:
       publish: ${{ steps.plan.outputs.publish }}
@@ -55,7 +55,7 @@ jobs:
   result:
     needs: [plan, release]
     if: always() && !cancelled()
-    runs-on: ubuntu-26.04
+    runs-on: ${{ fromJSON(vars.WEREWOLF_X86_64_BUILD_RUNNER || '["ubuntu-26.04"]') }}
     steps:
       - name: Report failures without preventing other packages from publishing
         env:
