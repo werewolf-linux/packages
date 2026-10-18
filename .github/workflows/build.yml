@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
-          go-version-file: go.mod
+          go-version: '1.27.x'
       - name: Compile the native package smoke runner
         run: go build -o build/tools/package-smoke ./cmd/package-smoke
       - name: Install the native builder
