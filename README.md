@@ -92,6 +92,8 @@ make test check
 python3 scripts/plan.py --offline
 # Rebuild/publish only one context, or retry its staged snapshot:
 gh workflow run publish.yml -f package=onnx-minilm
+# Exercise a context on both hosted architectures without publication:
+gh workflow run check.yml --ref BRANCH -f package=CONTEXT
 ```
 
 Published APKs can be installed from this feed by consumers using its public key.
