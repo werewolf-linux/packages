@@ -73,8 +73,8 @@ class Publisher(unittest.TestCase):
     def setUpClass(cls):
         cls.keys = tempfile.TemporaryDirectory()
         cls.key, cls.trust = Path(cls.keys.name) / 'werewolf-packages.rsa', Path(cls.keys.name) / 'werewolf-packages.rsa.pub'
-        subprocess.run(['openssl', 'genrsa', '-out', cls.key, '2048'], check=True, capture_output=True)
-        subprocess.run(['openssl', 'pkey', '-in', cls.key, '-pubout', '-out', cls.trust], check=True, capture_output=True)
+        # Melange emits PKCS#1 on every host; OpenSSL 3 genrsa defaults to PKCS#8.
+        subprocess.run([os.environ.get('MELANGE', 'melange'), 'keygen', str(cls.key)], check=True, capture_output=True)
 
     @classmethod
     def tearDownClass(cls):
