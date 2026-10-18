@@ -1,0 +1,76 @@
+name: update stable packages
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Context directory; empty checks every package
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: update-stable-packages
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@c97f06e356bcca1b426f396ef93ec35ce149ce7b
+        with:
+          version: '0.12.23'
+      - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - name: Test update and publication logic
+        run: PATH="$PWD/build/tools:$PATH" make test check
+      - name: Prepare each complete update independently
+        id: update
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          PATH="$PWD/build/tools:$PATH" go run ./cmd/package-update --write --package "$PACKAGE" --report build/updates.json
+      - name: Commit successful updates and use the regular publisher
+        if: always() && steps.update.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f build/updates.json
+          jq -r '.[] | select(.status == "updated") | [.package, .latest] | @tsv' build/updates.json >build/changed.tsv
+          while IFS="$(printf '\t')" read -r package version; do
+            git add -- "$package"
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "update: $package to $version"
+          done <build/changed.tsv
+          if [ -s build/changed.tsv ]; then
+            git -c 'credential.helper=!gh auth git-credential' push origin HEAD:main
+            # GITHUB_TOKEN pushes do not trigger push workflows. Dispatch the
+            # existing publisher explicitly, with its normal native build gates.
+            gh workflow run publish.yml --ref main
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: upstream-update-report
+          path: build/updates.json
+          if-no-files-found: ignore
+      - name: Report upstream failures after committing other updates
+        if: always()
+        env:
+          OUTCOME: ${{ steps.update.outcome }}
+        run: test "$OUTCOME" = success
