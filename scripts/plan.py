@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--offline', action='store_true', help='parse all selected recipes without network')
     parser.add_argument('--package', default='', help='one context, or every context when empty')
     args = parser.parse_args()
-    build, publish, failed = [], [], []
+    build, publish, releases, failed = [], [], [], []
     for name in [args.package] if args.package else common.contexts():
         try:
             meta = common.metadata(name)
@@ -55,10 +55,11 @@ def main():
                 build.extend(dict(package=name, arch=arch) for arch in common.ARCHES)
             if selected != 'complete':
                 publish.append(name)
+                releases.append(dict(package=name, build=selected == 'build'))
         except Exception as error:
             failed.append(name)
             print(name + ': ' + str(error), file=sys.stderr, flush=True)
-    result = dict(build=dict(include=build), publish=publish, failed=failed)
+    result = dict(build=dict(include=build), publish=publish, releases=dict(include=releases), failed=failed)
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
             for key, value in result.items():

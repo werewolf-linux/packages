@@ -22,10 +22,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     outputs:
-      build: ${{ steps.plan.outputs.build }}
       publish: ${{ steps.plan.outputs.publish }}
+      releases: ${{ steps.plan.outputs.releases }}
       failed: ${{ steps.plan.outputs.failed }}
-      has_build: ${{ steps.plan.outputs.has_build }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,75 +37,28 @@ jobs:
         env:
           PACKAGE: ${{ inputs.package }}
         run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --package "$PACKAGE"
-  build:
+  release:
     needs: plan
-    if: needs.plan.outputs.has_build == 'true'
-    strategy:
-      fail-fast: false
-      max-parallel: 6
-      matrix: ${{ fromJSON(needs.plan.outputs.build) }}
-    uses: ./.github/workflows/build.yml
-    with:
-      package: ${{ matrix.package }}
-      arch: ${{ matrix.arch }}
-      trusted: true
-  publish:
-    needs: [plan, build]
-    if: >-
-      always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.publish != '[]'
+    if: needs.plan.outputs.publish != '[]'
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix:
-        package: ${{ fromJSON(needs.plan.outputs.publish) }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 60
-    environment: release
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: python3 scripts/install-melange.py --dest build/tools/melange
-      - name: Download this run's native build outputs when available
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          pattern: ${{ matrix.package }}-*
-          path: artifacts
-      - name: Arrange the two architecture artifacts
-        env:
-          PACKAGE: ${{ matrix.package }}
-        run: |
-          for arch in x86_64 aarch64; do
-            if [ -d "artifacts/$PACKAGE-$arch" ]; then mv "artifacts/$PACKAGE-$arch" "artifacts/$arch"; fi
-          done
-      - name: Validate, sign and publish this package
-        env:
-          PACKAGE: ${{ matrix.package }}
-          PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_EC2_METADATA_DISABLED: 'true'
-        run: |
-          test -n "$AWS_ACCESS_KEY_ID"
-          test -n "$AWS_SECRET_ACCESS_KEY"
-          PATH="$PWD/build/tools:$PATH" python3 scripts/publish.py "$PACKAGE"
-      - name: Remove any unfinished signing key
-        if: always()
-        run: rm -f build/keys/werewolf-packages.rsa
+      matrix: ${{ fromJSON(needs.plan.outputs.releases) }}
+    uses: ./.github/workflows/release.yml
+    with:
+      package: ${{ matrix.package }}
+      build: ${{ matrix.build }}
   result:
-    needs: [plan, build, publish]
+    needs: [plan, release]
     if: always() && !cancelled()
     runs-on: ubuntu-26.04
     steps:
       - name: Report failures without preventing other packages from publishing
         env:
           PLAN: ${{ needs.plan.result }}
-          BUILD: ${{ needs.build.result }}
-          PUBLISH: ${{ needs.publish.result }}
+          RELEASE: ${{ needs.release.result }}
           FAILED: ${{ needs.plan.outputs.failed }}
         run: |
           test "$PLAN" = success
-          test "$BUILD" = success || test "$BUILD" = skipped
-          test "$PUBLISH" = success || test "$PUBLISH" = skipped
+          test "$RELEASE" = success || test "$RELEASE" = skipped
           test "$FAILED" = '[]'
