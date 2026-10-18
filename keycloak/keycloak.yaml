@@ -10,7 +10,7 @@
 # AF_UNIX channels: no native library, no TCP port, peer authentication.
 package:
   name: keycloak-werewolf
-  version: 26.8.0
+  version: "26.8.1"
   epoch: 0
   description: Open Source Identity and Access Management, built for PostgreSQL by its socket
   copyright:
@@ -34,7 +34,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://github.com/keycloak/keycloak/releases/download/${{package.version}}/keycloak-${{package.version}}.tar.gz
-      expected-sha256: 9e41da899f838a58cd510fc98ed4f7cadc715aed5683e42aca20a0c9a2a3980a
+      expected-sha256: "4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8"
 
   # The socket factory, in providers/ so the build puts it on the
   # server's class path, where pgjdbc finds it by name.
