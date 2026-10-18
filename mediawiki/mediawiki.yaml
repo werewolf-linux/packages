@@ -9,7 +9,7 @@
 # goes.
 package:
   name: mediawiki
-  version: 1.43.11
+  version: "1.46.2"
   epoch: 0
   description: The wiki engine of Wikipedia, long-term release
   copyright:
@@ -29,8 +29,8 @@ pipeline:
 
   - uses: fetch
     with:
-      uri: https://releases.wikimedia.org/mediawiki/1.43/mediawiki-${{package.version}}.tar.gz
-      expected-sha256: 86a5b8e2fb7ca10228d66c8b2659a0a692958e5c520fd023c78bd713a68142f0
+      uri: "https://releases.wikimedia.org/mediawiki/1.46/mediawiki-${{package.version}}.tar.gz"
+      expected-sha256: "8f7f937f8bbc1acd4cef1c5362a95f248dcd242020f2588798eb2f73ac2e69ba"
       directory: mediawiki
 
   # Left out besides: the bundled extensions that run a program (Scribunto
