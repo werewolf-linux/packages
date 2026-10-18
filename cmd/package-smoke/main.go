@@ -108,7 +108,7 @@ func check(name, arch string) error {
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
-			"pipeline": []map[string]string{{"runs": strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version)}},
+			"pipeline": []map[string]string{{"runs": "test \"$(id -u)\" -ne 0\n" + strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version)}},
 		},
 	}
 	data, err = yaml.Marshal(config)
