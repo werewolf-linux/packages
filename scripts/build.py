@@ -22,8 +22,8 @@ def main():
     pin = json.loads((common.ROOT / 'tools.lock.json').read_text())['melange']['version']
     if 'v' + pin not in subprocess.check_output([melange, 'version'], text=True):
         raise ValueError('install pinned Melange with scripts/install-melange.py')
-    commit = os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-    timestamp = subprocess.check_output(['git', 'log', '-1', '--format=%ct', '--', args.package], text=True).strip()
+    commit = os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', '-c', 'safe.directory=' + str(common.ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+    timestamp = subprocess.check_output(['git', '-c', 'safe.directory=' + str(common.ROOT), 'log', '-1', '--format=%ct', '--', args.package], text=True).strip()
     if not timestamp.isdigit():
         raise ValueError('missing source commit timestamp')
     output = common.ROOT / 'build/artifacts' / args.package

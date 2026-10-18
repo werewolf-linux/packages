@@ -50,7 +50,8 @@ jobs:
       - name: Build and validate unsigned APKs
         run: |
           set -o pipefail
-          scripts/ci-root env PATH="$PWD/build/tools:$PATH" python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
+          scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee build/build.log
       - name: Restore artifact ownership
         if: always()
@@ -58,6 +59,17 @@ jobs:
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ] && [ -d build ]; then
             scripts/ci-root chown -R "$(id -u):$(id -g)" build
           fi
+      - name: Verify native provenance as the workflow user
+        run: |
+          PATH="$PWD/build/tools:$PATH" python3 - "$PACKAGE" "$ARCH" <<'PYVERIFY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          import common, publish
+          package, arch = sys.argv[1:]
+          publish.validate(Path('build/artifacts') / package / arch, common.metadata(package), arch,
+                           os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ID'])
+          PYVERIFY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.package }}-${{ inputs.arch }}
