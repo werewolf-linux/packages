@@ -195,6 +195,23 @@ class Publisher(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'bump package.epoch'):
                 plan.state(changed)
 
+    def test_plan_releases_new_and_staged_contexts_independently(self):
+        output = self.root / 'github-output'
+        def metadata(name):
+            return dict(self.meta, context=name)
+        with patch.object(sys, 'argv', ['plan.py']), \
+             patch.object(common, 'contexts', return_value=['new', 'staged', 'existing']), \
+             patch.object(common, 'metadata', side_effect=metadata), \
+             patch.object(plan, 'state', side_effect=lambda m: {'new': 'build', 'staged': 'resume', 'existing': 'complete'}[m['context']]), \
+             patch.dict(os.environ, {'GITHUB_OUTPUT': str(output)}), \
+             patch('sys.stdout', new_callable=io.StringIO):
+            plan.main()
+        found = dict(line.split('=', 1) for line in output.read_text().splitlines())
+        self.assertEqual({'include': [{'package': 'new', 'build': True}, {'package': 'staged', 'build': False}]},
+                         json.loads(found['releases']))
+        self.assertEqual(['new', 'staged'], json.loads(found['publish']))
+        self.assertEqual(2, len(json.loads(found['build'])['include']))
+
     def verify_production(self, value, signature):
         path = self.root / 'sig'
         path.write_bytes(signature)

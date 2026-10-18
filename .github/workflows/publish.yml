@@ -45,6 +45,7 @@ jobs:
       max-parallel: 4
       matrix: ${{ fromJSON(needs.plan.outputs.releases) }}
     uses: ./.github/workflows/release.yml
+    secrets: inherit
     with:
       package: ${{ matrix.package }}
       build: ${{ matrix.build }}
