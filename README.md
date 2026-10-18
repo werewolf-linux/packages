@@ -123,6 +123,11 @@ avoid anonymous rate limits; the token is never sent to download hosts or child
 processes. endoflife.date is useful for lifecycle information, but direct release
 sources also cover the applications it does not track.
 
+The explicitly versioned `neo4j-4.4` package follows stable patches in the 4.4
+stream. BloodHound requires APIs removed in newer Neo4j majors; migrating that
+form is separate from maintaining its named compatibility package. A stream
+policy requires an explicit reason and still checks upstream for new releases.
+
 New versions reset the APK epoch to zero. Every version-dependent archive hash,
 architecture-specific fetch and Git checkout commit is refreshed. npm locks are
 regenerated without installing packages or running lifecycle scripts. Bugsink's

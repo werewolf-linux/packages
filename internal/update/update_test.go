@@ -104,6 +104,16 @@ func TestPaginationAndNonVersionTags(t *testing.T) {
 	}
 }
 
+func TestNamedCompatibilityStreamStillTracksNewStablePatches(t *testing.T) {
+	c := mockClient(t, map[string]string{
+		"https://api.github.com/repos/a/b/tags?per_page=100&page=1": `[{"name":"2026.09.0"},{"name":"5.0.0"},{"name":"4.40.0"},{"name":"4.4.44-rc1"},{"name":"4.4.43"},{"name":"4.4.42"}]`,
+	})
+	r, err := c.Discover(context.Background(), Policy{Source: "github-tags", Repo: "a/b", Series: "4.4"}, "4.4.42")
+	if err != nil || r.Version != "4.4.43" {
+		t.Fatalf("%+v %v", r, err)
+	}
+}
+
 func TestRegistriesAndMinecraft(t *testing.T) {
 	c := mockClient(t, map[string]string{
 		"https://pypi.org/pypi/app/json":                                  `{"releases":{"1.9.0":[{}],"1.10.0":[{}],"2.0.0":[{"yanked":true}],"3.0.0rc1":[{}],"4.0.0":[]}}`,

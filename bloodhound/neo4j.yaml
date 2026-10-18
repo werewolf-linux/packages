@@ -6,7 +6,7 @@
 # so Neo4j cannot unpack the library there.
 package:
   name: neo4j-4.4
-  version: "2026.09.0"
+  version: 4.4.42
   epoch: 0
   description: Neo4j 4.4 community, which BloodHound's image still speaks
   copyright:
@@ -29,7 +29,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://dist.neo4j.org/neo4j-community-${{package.version}}-unix.tar.gz
-      expected-sha256: "cdaa0905d9a533bbbc474d239c268f69978982eb5ca3177666c04c9792d1c399"
+      expected-sha256: 2c1ebb4d40d657d8c735ddf5b2144b8c84d1f79b05c12ac662bedd78e6608214
 
   - runs: |
       src=.
