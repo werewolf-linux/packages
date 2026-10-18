@@ -38,3 +38,15 @@ jobs:
       package: ${{ inputs.package || 'onnx-minilm' }}
       arch: ${{ matrix.arch }}
       trusted: false
+
+  wordpress-smoke:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    uses: ./.github/workflows/build.yml
+    with:
+      package: wordpress-sqlite
+      arch: ${{ matrix.arch }}
+      trusted: false

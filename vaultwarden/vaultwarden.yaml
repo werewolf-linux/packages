@@ -8,10 +8,13 @@
 package:
   name: vaultwarden
   version: 1.37.4
-  epoch: 0
+  epoch: 1
   description: Bitwarden-compatible password manager server
   copyright:
     - license: AGPL-3.0-only
+
+vars:
+  web-vault-version: "2026.7.0"
 
 environment:
   contents:
@@ -50,7 +53,7 @@ subpackages:
       - runs: mkdir -p web-vault
       - uses: fetch
         with:
-          uri: https://github.com/dani-garcia/bw_web_builds/releases/download/v2026.7.0/bw_web_v2026.7.0.tar.gz
+          uri: https://github.com/dani-garcia/bw_web_builds/releases/download/v${{vars.web-vault-version}}/bw_web_v${{vars.web-vault-version}}.tar.gz
           expected-sha256: 002e972bf0d0487ec0324b06d916de33e29de4c29bffd92ee3b843084c300570
           directory: web-vault
       - runs: |

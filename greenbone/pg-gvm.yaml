@@ -4,10 +4,13 @@
 package:
   name: pg-gvm
   version: 22.6.18
-  epoch: 0
+  epoch: 1
   description: Greenbone PostgreSQL 17 extension and its base library
   copyright:
     - license: GPL-3.0-or-later
+
+vars:
+  gvm-libs-version: "23.13.0"
 
 environment:
   contents:
@@ -30,7 +33,7 @@ pipeline:
   - runs: mkdir -p gvm-libs pg-gvm
   - uses: fetch
     with:
-      uri: https://github.com/greenbone/gvm-libs/archive/refs/tags/v23.13.0.tar.gz
+      uri: https://github.com/greenbone/gvm-libs/archive/refs/tags/v${{vars.gvm-libs-version}}.tar.gz
       expected-sha256: dda4ff261c6083dc6b9a7eab3cf1f531456698b24b9d446b316b3572ad8caeb8
       directory: gvm-libs
   - uses: fetch

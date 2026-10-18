@@ -14,5 +14,6 @@
   "suricata": {"runs": "suricata -V | grep -F '${{package.version}}'\nsuricata --build-info"},
   "vaultwarden": {"runs": "vaultwarden --version | grep -F '${{package.version}}'"},
   "velociraptor": {"runs": "velociraptor version"},
+  "wordpress-sqlite": {"packages": ["php-8.4", "php-8.4-pdo", "php-8.4-pdo_sqlite"], "runs": "plugin=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration\nphp -l /usr/src/wordpress/wp-content/db.php\nfind \"$plugin\" -name '*.php' -exec php -l '{}' ';'\ntest -s \"$plugin/wp-includes/sqlite/db.php\"\ngrep -F '${{package.version}}' \"$plugin/load.php\"\n! grep -E '\\{SQLITE_(PLUGIN|IMPLEMENTATION_FOLDER_PATH)\\}' /usr/src/wordpress/wp-content/db.php\nphp -r '$db=new PDO(\"sqlite::memory:\"); if ($db->query(\"select 42\")->fetchColumn()!=42) exit(1);'\n"},
   "zot": {"runs": "zot --version | grep -F '${{package.version}}'"}
 }
