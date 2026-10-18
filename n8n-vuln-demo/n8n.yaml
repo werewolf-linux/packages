@@ -1,5 +1,5 @@
 package:
-  name: n8n
+  name: n8n-vuln-demo
   version: 1.120.0
   epoch: 0
   description: n8n workflow automation on hardened Node.js

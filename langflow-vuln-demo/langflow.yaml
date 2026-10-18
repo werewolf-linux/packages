@@ -1,5 +1,5 @@
 package:
-  name: langflow
+  name: langflow-vuln-demo
   version: 1.8.1
   epoch: 0
   description: Langflow editor, API and local CPU inference on hardened Python
