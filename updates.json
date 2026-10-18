@@ -1,6 +1,6 @@
 {
   "authelia": {"source": "github", "repo": "authelia/authelia", "prefix": "v"},
-  "bloodhound": {"source": "github-tags", "repo": "neo4j/neo4j"},
+  "bloodhound": {"source": "github-tags", "repo": "neo4j/neo4j", "series": "4.4", "reason": "The package is neo4j-4.4: BloodHound requires APIs removed in Neo4j 5 and later. Track stable patches of the named compatibility stream."},
   "bugsink": {"source": "pypi", "project": "bugsink", "lock": "bugsink"},
   "continuwuity": {"source": "github-tags", "repo": "continuwuity/continuwuity", "prefix": "v"},
   "galene": {"source": "github-tags", "repo": "jech/galene", "prefix": "galene-"},

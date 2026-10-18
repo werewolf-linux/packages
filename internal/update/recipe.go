@@ -232,6 +232,9 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 				return nil, fmt.Errorf("invalid release pattern: %s", name)
 			}
 		}
+		if p.Series != "" && (!stable.MatchString(p.Series) || p.Source != "github-tags" || p.Reason == "") {
+			return nil, fmt.Errorf("version stream needs a numeric series, tag source and explanation: %s", name)
+		}
 		if p.Source == "git" && (p.Branch == "" || p.Reason == "") {
 			return nil, fmt.Errorf("snapshot policy needs a branch and explanation")
 		}

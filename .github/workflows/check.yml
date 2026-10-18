@@ -2,6 +2,11 @@ name: check
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      package:
+        description: Context to build and smoke-test on both native architectures
+        type: string
+        default: onnx-minilm
 permissions:
   contents: read
 concurrency:
@@ -30,6 +35,6 @@ jobs:
         arch: [x86_64, aarch64]
     uses: ./.github/workflows/build.yml
     with:
-      package: onnx-minilm
+      package: ${{ inputs.package || 'onnx-minilm' }}
       arch: ${{ matrix.arch }}
       trusted: false

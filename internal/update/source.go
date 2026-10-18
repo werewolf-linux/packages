@@ -22,6 +22,7 @@ type Policy struct {
 	Project string `json:"project,omitempty"`
 	Prefix  string `json:"prefix,omitempty"`
 	Pattern string `json:"pattern,omitempty"`
+	Series  string `json:"series,omitempty"`
 	Branch  string `json:"branch,omitempty"`
 	Lock    string `json:"lock,omitempty"`
 	Reason  string `json:"reason,omitempty"`
@@ -165,6 +166,9 @@ func candidate(tag string, p Policy) (Release, bool) {
 			return Release{}, false
 		}
 		r.Version, r.Build = m[1], m[2]
+	}
+	if p.Series != "" && r.Version != p.Series && !strings.HasPrefix(r.Version, p.Series+".") {
+		return Release{}, false
 	}
 	return r, stable.MatchString(v)
 }
