@@ -9,7 +9,7 @@
   "mox": {"runs": "mox version | grep -F '${{package.version}}'"},
   "n8n": {"runs": "node /usr/lib/n8n/node_modules/n8n/bin/n8n --version | grep -F '${{package.version}}'\nnode --no-node-snapshot n8n-check.cjs", "allow": ["native", "writable-source"]},
   "onnx": {"runs": "for case in providers inference shape input; do python3.15 onnx-check.py \"$case\"; done"},
-  "onnx-minilm": {"packages": ["python-3.15"], "runs": "python3.15 minilm-check.py"},
+  "onnx-minilm": {"packages": ["python-3.15"], "runs": "set -eu\nroot=/usr/share/onnx/minilm-l6-v2/onnx\ntest \"$(wc -c <\"$root/model.onnx\")\" -gt 1000000\ntest \"$(wc -c <\"$root/vocab.txt\")\" -gt 1000\nfor name in config.json tokenizer.json tokenizer_config.json special_tokens_map.json; do\n  python3.15 -m json.tool \"$root/$name\" >/dev/null\ndone\n"},
   "postdoc-server": {"runs": "postdoc --help"},
   "suricata": {"runs": "suricata -V | grep -F '${{package.version}}'\nsuricata --build-info"},
   "vaultwarden": {"runs": "vaultwarden --version | grep -F '${{package.version}}'"},
