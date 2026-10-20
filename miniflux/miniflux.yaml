@@ -6,7 +6,7 @@
 # goes.
 package:
   name: miniflux
-  version: 2.3.3
+  version: "2.3.4"
   epoch: 0
   description: Minimalist and opinionated feed reader
   copyright:
@@ -29,7 +29,7 @@ pipeline:
     with:
       repository: https://github.com/miniflux/v2
       tag: ${{package.version}}
-      expected-commit: c4d54f87a81b30aa173fddf05d7ff83ae7da5796
+      expected-commit: "238c5614e584ebc87894e7d9f10bc91373a0b2c2"
 
   - runs: |
       CGO_ENABLED=0 go build -trimpath \
