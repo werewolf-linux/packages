@@ -9,7 +9,7 @@
 package:
   name: mastodon
   version: 4.7.3
-  epoch: 0
+  epoch: 1
   description: Decentralized social network server
   copyright:
     - license: AGPL-3.0-or-later
@@ -89,6 +89,8 @@ pipeline:
   - runs: |
       cd /usr/lib/mastodon
       rm -rf .corepack .yarn/cache .github log spec tmp/cache/vite vendor/bundle/ruby/*/cache
+      # Some native gems rewrite metadata with mode 0666 during installation.
+      find vendor/bundle -type f -name '*.gemspec' -exec chmod 0644 {} +
       mkdir -p ${{targets.destdir}}/usr/lib
       cp -a /usr/lib/mastodon ${{targets.destdir}}/usr/lib/mastodon
 
