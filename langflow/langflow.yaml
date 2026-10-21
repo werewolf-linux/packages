@@ -1,6 +1,6 @@
 package:
   name: langflow
-  version: 1.12.6
+  version: "1.12.7"
   epoch: 0
   description: Langflow editor, API and local CPU inference on hardened Python
   copyright:
@@ -39,20 +39,20 @@ environment:
 pipeline:
   - uses: fetch
     with:
-      uri: https://files.pythonhosted.org/packages/15/4d/2c1b8c66885e4a0ba9084622c290e2381464a0a9e58a41cf23c64a8ca3ba/langflow-1.12.6-py3-none-any.whl
-      expected-sha256: 37ae2d1ce05687c64d6f345320b3547f774e90fb57b05b683a8f620f9759870e
+      uri: "https://files.pythonhosted.org/packages/8c/bb/2e16a28f3a8a0aa2ea5ad38fb58da3ec4a9dc9601078a30c4832286a9e68/langflow-1.12.7-py3-none-any.whl"
+      expected-sha256: "75850b81bbb9db7de4c1754f0256bbdf8477229955373a31424785bd7293a713"
       extract: false
 
   - uses: fetch
     with:
-      uri: https://files.pythonhosted.org/packages/ea/10/ed0d9b8f63c363c0986e7fc73674bdc6630f2ae0c1a25e385c75e9e6938b/langflow_base-1.12.6-py3-none-any.whl
-      expected-sha256: 716ca9ac5d6a85e3e2c3c4eab5100aee719cef47ec4c5dac39e8704e308d0144
+      uri: "https://files.pythonhosted.org/packages/00/ed/f08b2f353d27e3527d3a2efefe6e95ecd8cd93a841b60c3a5d923170a458/langflow_base-1.12.7-py3-none-any.whl"
+      expected-sha256: "7cecd028a65beea45c6eba73a3fd20c42545077cee493775b757324bc6b54c70"
       extract: false
 
   - uses: fetch
     with:
-      uri: https://files.pythonhosted.org/packages/8b/5d/90860a8147deb6136948ae52adf167d14bdac7d4f58bc5074e33bba2141f/lfx-1.12.6-py3-none-any.whl
-      expected-sha256: a24995df70df9e505c2355b50b17bfc6865c8d0fc0d49a6d1d80addcea7403d4
+      uri: "https://files.pythonhosted.org/packages/6c/84/d33576724ec189c3bd9caf2db5c29a3371765350b8f487817165b3a1910b/lfx-1.12.7-py3-none-any.whl"
+      expected-sha256: "90d652d9410a43e9dab6755614da8cbae05b3889d63132105ed62f024f5937b8"
       extract: false
 
   - runs: |
@@ -66,7 +66,7 @@ pipeline:
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
         --require-hashes --prefer-binary -r requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
-        langflow-1.12.6-py3-none-any.whl langflow_base-1.12.6-py3-none-any.whl lfx-1.12.6-py3-none-any.whl
+        langflow-1.12.7-py3-none-any.whl langflow_base-1.12.7-py3-none-any.whl lfx-1.12.7-py3-none-any.whl
       /usr/lib/langflow/bin/python -P -c 'import fastuuid; value=fastuuid.uuid4(); assert fastuuid.UUID(str(value)) == value'
       /usr/lib/langflow/bin/python port-python.py /usr/lib/langflow/lib/python3.15/site-packages
       # Import the complete API during packaging, so missing runtime providers
