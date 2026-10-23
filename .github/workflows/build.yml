@@ -25,6 +25,13 @@ jobs:
       PACKAGE: ${{ inputs.package }}
       ARCH: ${{ inputs.arch }}
     steps:
+      # A cancelled build can leave files its user namespace owns, which
+      # neither this account nor checkout's clean can remove: remove them as
+      # that namespace first, as checkout would. Hosted runners start clean.
+      - name: Remove what a cancelled build left
+        if: runner.environment == 'self-hosted'
+        run: |
+          if [ -d build ]; then unshare --user --map-auto --map-root-user rm -rf -- build; fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
