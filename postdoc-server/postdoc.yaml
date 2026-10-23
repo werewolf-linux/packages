@@ -7,7 +7,7 @@
 # rebuilds when this file changes.
 package:
   name: postdoc
-  version: "0.2.0_git20261022"
+  version: "0.2.0_git20261023"
   epoch: 0
   description: Worker and server coordination for the Atomdrift analysis fleet
   copyright:
@@ -36,7 +36,7 @@ pipeline:
     with:
       repository: https://github.com/atomdrift-project/postdoc
       branch: main
-      expected-commit: "316585a95a2c15ca585a4be8a610e9a66260dc17"
+      expected-commit: "7854e4c40c053e38342aca5ea70d47d9ab12a718"
 
   # Cargo's own git, not libgit2, fetches the engines: it follows the
   # environment's CA bundle and proxy as the rest of the build does.
