@@ -9,7 +9,7 @@
 package:
   name: zot
   version: 2.1.22
-  epoch: 1
+  epoch: 2
   description: OCI-native container image registry
   copyright:
     - license: Apache-2.0
@@ -25,6 +25,7 @@ environment:
       - ca-certificates-bundle
       - git
       - go-1.27
+      - patch
 
 pipeline:
   - uses: git-checkout
@@ -32,6 +33,9 @@ pipeline:
       repository: https://github.com/project-zot/zot
       tag: v${{package.version}}
       expected-commit: 6bbc7e56db2b7a64eee589324efe5813245e3a28
+
+  # Upstream's --version prints build details but omits the injected release tag.
+  - runs: patch -p1 < version.patch
 
   - runs: |
       b=zotregistry.dev/zot/v2/pkg/buildinfo
@@ -41,7 +45,7 @@ pipeline:
         -X $b.BinaryType=minimal \
         -X $b.GoVersion=$(go env GOVERSION)" \
         -o zot ./cmd/zot
-      ./zot --version
+      ./zot --version | grep -F 'v${{package.version}}'
       install -Dm755 zot ${{targets.destdir}}/usr/bin/zot
 
 update:
