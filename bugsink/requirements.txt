@@ -110,13 +110,15 @@ brotli==1.2.0 \
     --hash=sha256:fc1530af5c3c275b8524f2e24841cbe2599d74462455e9bae5109e9ff42e9361 \
     --hash=sha256:ff09cd8c5eec3b9d02d2408db41be150d8891c5566addce57513bf546e3d6c6d
     # via bugsink
-bugsink==2.6.1 \
-    --hash=sha256:696d363e6539be2aaecb70cba71e63fc5821489d6e2fda0e245df282b8d48268 \
-    --hash=sha256:92686575d72d3b6b957400773f9b9a044019416114a1d4ef22a2dcd50372a2bd
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+bugsink==2.6.2 \
+    --hash=sha256:72bb40d7ce6e3c70ccd1e6ac07e9ecfa9521bd1719cdb768799c3b287fc9333e \
+    --hash=sha256:752ce5712f8f8be98d5c33bce9a79cb8b9998361ef90077ed7a926cf59092e7c
+    # via -r requirements.in
+certifi==2026.10.19 \
+    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
+    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
     # via
+    #   bugsink
     #   requests
     #   sentry-sdk
 cffi==2.1.1 \
