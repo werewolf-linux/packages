@@ -18,12 +18,17 @@ werewolf/
 hardened-packages/
 ```
 
-A form selects recipes with paths relative to its directory:
+A form names a package from the signed feed below, as it names Wolfi's; Werewolf
+images list the feed and refuse a name it covers from anywhere else:
 
 ```yaml
-recipes:
-  - ../../../packages/solr/solr.yaml
+packages:
+  - solr
 ```
+
+Add a package only for what Wolfi does not ship, or ships unfit for a form (old,
+bringing a shell, built for one CPU, or at a fixed address); name it `NAME-werewolf`
+when Wolfi ships `NAME`. Its header says why, and when it can go.
 
 Build and inspect a package using Werewolf's existing QEMU or bubblewrap runner:
 
@@ -35,14 +40,15 @@ howl build-apk ../packages/solr/solr.yaml
 
 `make check` parses every recipe with Melange. `make PACKAGE=NAME check` checks
 one context. `ARCH=aarch64` or `ARCH=x86_64` selects an architecture for a build.
-Package outputs and caches stay in `../werewolf/build/vendor`. Form builds discover
-these declared recipes, build them, check their shared-library dependencies and
-include the resulting files. Changes to a context invalidate the image cache.
+Package outputs and caches stay in `../werewolf/build/vendor`. To try a change in a
+form before it is published, the form may declare the recipe
+(`recipes: [../../../packages/solr/solr.yaml]`): the build makes it and lays its files
+over the image. Published forms name the package instead.
 
 Distro-specific packages remain in Werewolf alongside their source, including
 `forms/vuln-demo/melange` (the Go console and SSH server) and
-`boot/tpm-stub.melange.yaml` (the measured EFI stub builder). The static-trampoline
-libffi hardening port is in `../hardened-packages/ports/libffi`.
+`boot/tpm-stub.melange.yaml` (the measured EFI stub builder). libffi, built with
+static trampolines for MDWE, is a hardened package (`../hardened-packages/packages/libffi`).
 
 CI checkout and reviewed source pins are described in
 [Werewolf's contribution guide](../werewolf/CONTRIBUTING.md#package-sources).

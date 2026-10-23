@@ -2,6 +2,7 @@
   "authelia": {"source": "github", "repo": "authelia/authelia", "prefix": "v"},
   "bloodhound": {"source": "github-tags", "repo": "neo4j/neo4j", "series": "4.4", "reason": "The package is neo4j-4.4: BloodHound requires APIs removed in Neo4j 5 and later. Track stable patches of the named compatibility stream."},
   "bugsink": {"source": "pypi", "project": "bugsink", "lock": "bugsink"},
+  "caddy": {"source": "github", "repo": "caddyserver/caddy", "prefix": "v"},
   "continuwuity": {"source": "github-tags", "repo": "continuwuity/continuwuity", "prefix": "v"},
   "galene": {"source": "github-tags", "repo": "jech/galene", "prefix": "galene-"},
   "greenbone": {"source": "github", "repo": "greenbone/pg-gvm", "prefix": "v", "components": {"gvm-libs-version": {"prefix": "v", "repo": "greenbone/gvm-libs", "source": "github"}}},

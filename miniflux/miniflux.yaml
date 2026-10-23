@@ -32,7 +32,7 @@ pipeline:
       expected-commit: "238c5614e584ebc87894e7d9f10bc91373a0b2c2"
 
   - runs: |
-      CGO_ENABLED=0 go build -trimpath \
+      CGO_ENABLED=0 go build -buildmode=pie -trimpath \
         -ldflags="-s -w -X miniflux.app/v2/internal/version.Version=${{package.version}}" \
         -o miniflux .
       ./miniflux -version
