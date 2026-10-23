@@ -1,6 +1,7 @@
 {
   "authelia": {"runs": "authelia --version | grep -F '${{package.version}}'"},
   "bugsink": {"runs": "/usr/lib/bugsink/bin/python -c 'import bugsink; from django.core.management import execute_from_command_line; assert callable(execute_from_command_line)'"},
+  "caddy": {"runs": "caddy version | grep -F 'v${{package.version}}'\ncaddy list-modules >/dev/null"},
   "continuwuity": {"runs": "conduwuit --version | grep -F '${{package.version}}'"},
   "keycloak": {"packages": ["openjdk-21-default-jvm"], "runs": "java @/usr/lib/keycloak/java.args --version | grep -F '${{package.version}}'"},
   "langflow": {"runs": "/usr/lib/langflow/bin/python -P -c 'from langflow.main import setup_app; assert callable(setup_app)'"},
@@ -11,7 +12,7 @@
   "onnx": {"runs": "for case in providers inference shape input; do python3.15 onnx-check.py \"$case\"; done"},
   "onnx-minilm": {"packages": ["python-3.15"], "runs": "set -eu\nroot=/usr/share/onnx/minilm-l6-v2/onnx\ntest \"$(wc -c <\"$root/model.onnx\")\" -gt 1000000\ntest \"$(wc -c <\"$root/vocab.txt\")\" -gt 1000\nfor name in config.json tokenizer.json tokenizer_config.json special_tokens_map.json; do\n  python3.15 -m json.tool \"$root/$name\" >/dev/null\ndone\n"},
   "postdoc-server": {"runs": "postdoc --help"},
-  "suricata": {"runs": "suricata -V | grep -F '${{package.version}}'\nsuricata --build-info"},
+  "suricata": {"runs": "suricata -V | grep -F '${{package.version}}'\nsuricata --build-info\ntest -f /etc/suricata/suricata.yaml\ntest -f /usr/share/suricata/classification.config\ntest -f /usr/share/suricata/reference.config\ntest -f /usr/share/suricata/rules/decoder-events.rules"},
   "vaultwarden": {"runs": "vaultwarden --version | grep -F '${{package.version}}'"},
   "velociraptor": {"runs": "velociraptor version"},
   "wordpress-sqlite": {"packages": ["php-8.4", "php-8.4-pdo", "php-8.4-pdo_sqlite"], "runs": "plugin=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration\nphp -l /usr/src/wordpress/wp-content/db.php\nfind \"$plugin\" -name '*.php' -exec php -l '{}' ';'\ntest -s \"$plugin/wp-includes/sqlite/db.php\"\ngrep -F '${{package.version}}' \"$plugin/load.php\"\n! grep -E '\\{SQLITE_(PLUGIN|IMPLEMENTATION_FOLDER_PATH)\\}' /usr/src/wordpress/wp-content/db.php\nphp -r '$db=new PDO(\"sqlite::memory:\"); if ($db->query(\"select 42\")->fetchColumn()!=42) exit(1);'\n"},

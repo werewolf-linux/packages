@@ -1,14 +1,14 @@
-# Suricata for werewolf's suricata form. Wolfi's package is built with
-# gcc -march=native, Suricata's configure default, so a builder with SVE
-# emits CNTB and the binary dies with SIGILL on a machine without it.
-# This builds the release for the baseline architecture, whole: the
-# engine, its configuration in /etc/suricata and its bundled rules and
-# reference files in /usr/share/suricata, as Wolfi's has them, but not
-# suricatactl and suricatasc, the control socket's tools (the form turns
-# the socket off), or suricata-update, which is Python. Named as
-# Wolfi's, so werewolf's application feed, which a form's image prefers
-# by name, replaces it whole. When Wolfi builds for the baseline, the form
-# names Wolfi's and this file goes.
+# Suricata for werewolf's suricata form, whole: the engine, its configuration
+# in /etc/suricata and its bundled rules and reference files in
+# /usr/share/suricata, but not suricatactl and suricatasc, the control
+# socket's tools (the form turns the socket off), or suricata-update, which
+# is Python. Wolfi withdrew suricata and suricata-update (wolfi-dev/os#76917):
+# its last build, 8.0.4, links libhtp, whose upstream is archived, and was
+# built with gcc -march=native, Suricata's configure default, so a builder
+# with SVE emitted CNTB and the binary died with SIGILL on a machine without
+# it. This one uses Suricata 8's own HTTP parser and the baseline
+# architecture, and is named as Wolfi's, so werewolf's application feed,
+# which a form's image prefers by name, replaces Wolfi's frozen build.
 package:
   name: suricata
   version: "8.0.7"
@@ -53,9 +53,11 @@ pipeline:
         x86_64) march=x86-64; cpu=x86-64 ;;
         *) exit 1 ;;
       esac
-      export CFLAGS="-O2 -march=$march"
-      export CXXFLAGS="$CFLAGS"
-      export RUSTFLAGS="-C target-cpu=$cpu"
+      # Added to the toolchain's flags (its hardening and branch protection),
+      # not in place of them.
+      export CFLAGS="${CFLAGS:--O2} -march=$march"
+      export CXXFLAGS="${CXXFLAGS:--O2} -march=$march"
+      export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-cpu=$cpu"
       ./configure \
         --prefix=/usr \
         --sysconfdir=/etc \
