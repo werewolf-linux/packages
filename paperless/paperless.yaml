@@ -10,7 +10,7 @@
 # this file goes.
 package:
   name: paperless
-  version: "3.3.3"
+  version: "3.3.4"
   epoch: 0
   description: Document management with OCR, tags and full-text search
   copyright:
@@ -51,7 +51,7 @@ pipeline:
   - uses: fetch
     with:
       uri: https://github.com/paperless-ngx/paperless-ngx/releases/download/v${{package.version}}/paperless-ngx-v${{package.version}}.tar.xz
-      expected-sha256: "114e10456e03106b0abefc6bac17335349d6db22fa7b80c2c2234a54746301fc"
+      expected-sha256: "21adc0f1b9966605bde9d097b366ea65bd86ebe406b649e21cfe04356307a0c2"
       directory: paperless
 
   # The lock is the release's. --no-emit-package drops the assistant's
