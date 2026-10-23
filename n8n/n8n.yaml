@@ -1,7 +1,7 @@
 package:
   name: n8n
   version: 2.43.7
-  epoch: 1
+  epoch: 2
   description: n8n workflow automation on hardened Node.js
   copyright:
     - license: LicenseRef-Sustainable-Use
@@ -65,7 +65,7 @@ pipeline:
       tar -xzf ${{vars.launcher-commit}} -C launcher --strip-components=1
       # The launcher otherwise binds its private health endpoint on all interfaces.
       sed -i 's/fmt.Sprintf(":%s", port)/fmt.Sprintf("127.0.0.1:%s", port)/' launcher/internal/http/healthcheck_server.go
-      (cd launcher && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
+      (cd launcher && CGO_ENABLED=0 go build -buildmode=pie -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
       cp task-runners.json "$dest/"
       install -Dm644 launcher/LICENSE.md "$dest/licenses/task-runner-launcher.LICENSE.md"
       install -Dm644 launcher/LICENSE_EE.md "$dest/licenses/task-runner-launcher.LICENSE_EE.md"

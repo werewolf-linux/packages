@@ -9,7 +9,7 @@
 package:
   name: mox
   version: 0.0.17
-  epoch: 0
+  epoch: 1
   description: Modern full-featured open source secure mail server
   copyright:
     - license: MIT
@@ -124,7 +124,7 @@ pipeline:
       EOF
 
   - runs: |
-      CGO_ENABLED=0 GOFLAGS=-mod=vendor go build -trimpath -ldflags='-s -w' -o mox .
+      CGO_ENABLED=0 GOFLAGS=-mod=vendor go build -buildmode=pie -trimpath -ldflags='-s -w' -o mox .
       ./mox version
       install -Dm755 mox ${{targets.destdir}}/usr/bin/mox
 

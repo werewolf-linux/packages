@@ -1,7 +1,7 @@
 package:
   name: n8n-vuln-demo
   version: 1.120.0
-  epoch: 0
+  epoch: 1
   description: n8n workflow automation on hardened Node.js
   copyright:
     - license: LicenseRef-Sustainable-Use
@@ -67,7 +67,7 @@ pipeline:
       tar -xzf 871cb76bc35c990f368eaa788f0b4ce7b145e143 -C launcher --strip-components=1
       # The launcher otherwise binds its private health endpoint on all interfaces.
       sed -i 's/fmt.Sprintf(":%s", port)/fmt.Sprintf("127.0.0.1:%s", port)/' launcher/internal/http/healthcheck_server.go
-      (cd launcher && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
+      (cd launcher && CGO_ENABLED=0 go build -buildmode=pie -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
       cp task-runners.json "$dest/"
       install -Dm644 launcher/LICENSE.md "$dest/licenses/task-runner-launcher.LICENSE.md"
       install -Dm644 launcher/LICENSE_EE.md "$dest/licenses/task-runner-launcher.LICENSE_EE.md"

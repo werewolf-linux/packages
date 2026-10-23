@@ -3,7 +3,7 @@
 package:
   name: solr
   version: 10.0.0
-  epoch: 0
+  epoch: 1
   description: Apache Solr, directly launched with hardened OpenJDK 27
   copyright:
     - license: Apache-2.0
@@ -34,7 +34,7 @@ pipeline:
       mkdir -p "$dest"
       cp -a server lib licenses LICENSE.txt NOTICE.txt "$dest/"
       # The shell launchers, Docker entrypoints and bundled examples stay out.
-      CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o "$dest/setup" setup.go
+      CGO_ENABLED=0 go build -buildmode=pie -trimpath -ldflags='-s -w' -o "$dest/setup" setup.go
       install -m644 log4j2.xml "$dest/log4j2.xml"
 
 update:

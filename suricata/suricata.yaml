@@ -1,13 +1,18 @@
-# Suricata's engine for werewolf's suricata form. Wolfi's package is built
-# with gcc -march=native, Suricata's configure default, so a builder with
-# SVE emits CNTB and the binary dies with SIGILL on a machine without it.
-# This rebuilds the same release for the baseline architecture and lays
-# the binary over Wolfi's package, which still provides the libraries,
-# the configuration and the user.
+# Suricata for werewolf's suricata form. Wolfi's package is built with
+# gcc -march=native, Suricata's configure default, so a builder with SVE
+# emits CNTB and the binary dies with SIGILL on a machine without it.
+# This builds the release for the baseline architecture, whole: the
+# engine, its configuration in /etc/suricata and its bundled rules and
+# reference files in /usr/share/suricata, as Wolfi's has them, but not
+# suricatactl and suricatasc, the control socket's tools (the form turns
+# the socket off), or suricata-update, which is Python. Named as
+# Wolfi's, so werewolf's application feed, which a form's image prefers
+# by name, replaces it whole. When Wolfi builds for the baseline, the form
+# names Wolfi's and this file goes.
 package:
   name: suricata
   version: "8.0.7"
-  epoch: 0
+  epoch: 1
   description: Network IDS, IPS and security monitoring engine
   copyright:
     - license: GPL-2.0-only
@@ -60,6 +65,16 @@ pipeline:
         --disable-suricata-update \
         --disable-libmagic
       make -j"$(nproc)"
-      install -Dm755 src/suricata "${{targets.destdir}}/usr/bin/suricata"
+      make install install-conf DESTDIR="${{targets.destdir}}"
+      # A library for embedding Suricata, which nothing here does, the control
+      # socket's tools, and the log and run directories install-conf makes:
+      # the form writes /data.
+      rm -rf "${{targets.destdir}}/usr/include" "${{targets.destdir}}"/usr/lib/*.a \
+        "${{targets.destdir}}/usr/bin/libsuricata-config" "${{targets.destdir}}/var" \
+        "${{targets.destdir}}"/usr/bin/suricatactl "${{targets.destdir}}"/usr/bin/suricatasc \
+        "${{targets.destdir}}"/usr/share/man/man1/suricatactl* "${{targets.destdir}}"/usr/share/man/man1/suricatasc*
+      test -x "${{targets.destdir}}/usr/bin/suricata"
+      test -f "${{targets.destdir}}/usr/share/suricata/classification.config"
+      test -f "${{targets.destdir}}/etc/suricata/suricata.yaml"
 
   - uses: strip

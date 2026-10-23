@@ -2,13 +2,14 @@
 # in Wolfi's environment with Wolfi's Go, static (no cgo), from the release
 # tag's commit, as upstream's Makefile builds zot-minimal: the registry
 # alone, with no extensions (search, sync, UI, metrics exporter), so none
-# can be turned on by a config line. Go fetches its modules, which go.sum
-# pins. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form
-# names the package and this file goes.
+# can be turned on by a config line, and as a PIE, which ASLR moves. Go
+# fetches its modules, which go.sum pins. Wolfi's zot is the full build,
+# every extension in it, at a fixed address; when Wolfi ships zot-minimal
+# as a PIE, the form names it and this file goes.
 package:
   name: zot
   version: 2.1.22
-  epoch: 0
+  epoch: 1
   description: OCI-native container image registry
   copyright:
     - license: Apache-2.0
@@ -34,7 +35,7 @@ pipeline:
 
   - runs: |
       b=zotregistry.dev/zot/v2/pkg/buildinfo
-      CGO_ENABLED=0 GOEXPERIMENT=jsonv2 go build -trimpath -ldflags="-s -w \
+      CGO_ENABLED=0 GOEXPERIMENT=jsonv2 go build -buildmode=pie -trimpath -ldflags="-s -w \
         -X $b.ReleaseTag=v${{package.version}} \
         -X $b.Commit=$(git rev-parse HEAD) \
         -X $b.BinaryType=minimal \

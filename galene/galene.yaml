@@ -7,7 +7,7 @@
 package:
   name: galene
   version: 1.2.1
-  epoch: 0
+  epoch: 1
   description: Videoconference server for lectures and seminars
   copyright:
     - license: MIT
@@ -68,7 +68,7 @@ pipeline:
       EOF
 
   - runs: |
-      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o galene .
+      CGO_ENABLED=0 go build -buildmode=pie -trimpath -ldflags="-s -w" -o galene .
       install -Dm755 galene ${{targets.destdir}}/usr/bin/galene
       mkdir -p ${{targets.destdir}}/usr/share/galene
       cp -R static ${{targets.destdir}}/usr/share/galene/static
