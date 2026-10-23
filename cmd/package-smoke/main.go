@@ -101,7 +101,7 @@ func check(name, arch string) error {
 	if err := update.RunCommand(ctx, root, "melange", index...); err != nil {
 		return err
 	}
-	packages := append([]string{"busybox", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
+	packages := append([]string{"busybox", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
 	mutations := []map[string]any{}
 	if len(s.Allow) != 0 {
 		mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node", "type": "directory", "permissions": 0o755})
@@ -115,11 +115,12 @@ func check(name, arch string) error {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
+			"capabilities": map[string]any{"drop": []string{"ALL"}},
 			"environment": map[string]any{"accounts": map[string]any{"run-as": "1000"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
-			"pipeline": []map[string]string{{"runs": "test \"$(id -u)\" -ne 0\n" + strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version)}},
+			"pipeline": []map[string]string{{"runs": smokeCommand(strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version))}},
 		},
 	}
 	data, err = yaml.Marshal(config)
@@ -131,4 +132,15 @@ func check(name, arch string) error {
 		return err
 	}
 	return update.RunCommand(ctx, root, "melange", "test", path, meta.Name, "--arch", arch, "--runner", "bubblewrap", "--ignore-signatures", "--source-dir", filepath.Join(root, "tests/smoke"), "--timeout", "10m")
+}
+
+// Installed scripts must run from a read-only filesystem, as they do in an
+// appliance. Melange's package-installation root is writable. A nested mount
+// namespace makes the runtime and fixtures read-only, with scratch in /tmp.
+func smokeCommand(runs string) string {
+	runs = "test \"$(id -u)\" -ne 0\n" + runs
+	return "exec bwrap --unshare-user --unshare-pid --die-with-parent " +
+		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
+		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
+		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
 }

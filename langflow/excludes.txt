@@ -1,2 +1,4 @@
 # Built from source as py3.15-onnxruntime, rather than a CPython 3.14 wheel.
 onnxruntime
+# IBM's native Db2 client is unavailable on Linux ARM64. Other IBM providers remain.
+ibm-db

@@ -27,6 +27,7 @@ environment:
       - ca-certificates-bundle
       - python-3.15
       - python-3.15-dev
+      - libev-dev
       - uv
   environment:
     CC: clang

@@ -71,7 +71,9 @@ func (c *Client) locks(ctx context.Context, dir string, p Policy, release Releas
 		}
 		// Resolve against upstream's supported Python range. The recipe
 		// deliberately builds for 3.15 with our overrides and import checks.
-		if err := run(ctx, dir, "uv", "pip", "compile", "--quiet", "--python-version", "3.14", "--python-platform", "linux", "--generate-hashes", "--no-header", "--override", "overrides.txt", "--no-emit-package", "onnxruntime", "--output-file", "requirements.txt", "requirements.in"); err != nil {
+		// ONNX is our native package. IBM's optional native Db2 client is
+		// unavailable on Linux ARM64, so the shared image omits that connector.
+		if err := run(ctx, dir, "uv", "pip", "compile", "--quiet", "--python-version", "3.14", "--python-platform", "linux", "--generate-hashes", "--no-header", "--override", "overrides.txt", "--no-emit-package", "onnxruntime", "--no-emit-package", "ibm-db", "--output-file", "requirements.txt", "requirements.in"); err != nil {
 			return err
 		}
 		lockPath := filepath.Join(dir, "requirements.txt")

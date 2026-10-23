@@ -386,7 +386,7 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 	c := mockClient(t, routes)
 	run := func(_ context.Context, dir, command string, args ...string) error {
 		joined := strings.Join(args, " ")
-		if command != "uv" || !strings.Contains(joined, "--no-emit-package onnxruntime") {
+		if command != "uv" || !strings.Contains(joined, "--no-emit-package onnxruntime") || !strings.Contains(joined, "--no-emit-package ibm-db") {
 			t.Fatalf("unsafe resolver: %s %s", command, joined)
 		}
 		mustWrite(t, filepath.Join(dir, "requirements.txt"), "langflow==1.13.0 \\\n    --hash=sha256:a\nlangflow-base==1.13.0 \\\n    --hash=sha256:b\nlfx==1.13.0 \\\n    --hash=sha256:c\nfastuuid==0.14.0 \\\n    --hash=sha256:d\nother==2 \\\n    --hash=sha256:e\n")
