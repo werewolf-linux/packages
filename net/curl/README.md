@@ -23,6 +23,9 @@ dependencies remain. OpenSSL and zlib remain for HTTPS and gzip/deflate.
 `tests/probe.py` exercises local HTTP/HTTPS, rejected encodings/protocols, uploads,
 authentication, cookies, ETags and certificate failures in the APK test guest.
 Wolfi's Git HTTPS authentication, linkage, CLI and development-package tests remain.
+The upstream build suite excludes the `netrc` keyword because loading netrc
+credentials is disabled; the package probe verifies those credentials are ignored.
+Wolfi's existing numbered exception and test failure reporting remain.
 Derivation refuses changed upstream configure options, checkout or subpackage layout.
 
 This is a Wolfi/glibc package. It cannot replace curl inside Pi-hole's Alpine/musl

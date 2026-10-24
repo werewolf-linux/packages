@@ -32,6 +32,16 @@ OPTIONS = '''--enable-ipv6 --enable-threaded-resolver --disable-ares --with-open
 --without-zsh-functions-dir'''
 FEATURE_TEST = 'curl --version | grep -F "ldap ldaps"\ncurl --version | grep -F "HTTP3"'
 PROBE = 'HTTP works and unsupported protocols and encodings fail closed'
+TEST_FLAGS = 'TFLAGS="-j$(nproc) !2095"'
+
+
+def upstream_tests(step):
+    result = deepcopy(step)
+    if result['runs'].count(TEST_FLAGS) != 1:
+        raise ValueError('Review changed curl upstream test selection')
+    # netrc is deliberately compiled out; these tests require loading its credentials.
+    result['runs'] = result['runs'].replace(TEST_FLAGS, 'TFLAGS="-j$(nproc) !2095 !netrc"')
+    return result
 
 
 def source_commit(config):
@@ -90,6 +100,7 @@ def derive(pkg, config, lock):
     if sorted(s['name'] for s in config['subpackages']) != sorted(SUBPACKAGES):
         raise ValueError('Review changed upstream curl subpackages')
     pipeline[1]['with']['opts'] = configure(pipeline[1]['with']['opts'])
+    pipeline[3] = upstream_tests(pipeline[3])
     pipeline[0] = fetch(lock['source_commit'], SOURCES)
     pipeline.append(prune())
     build = config['environment']['contents']['packages']
@@ -123,7 +134,9 @@ def derive(pkg, config, lock):
 
 def check(pkg, upstream, derived):
     assert sorted(s['name'] for s in derived['subpackages']) == sorted(KEPT)
-    assert derived['pipeline'][2:] == upstream['pipeline'][2:] + [prune()], 'upstream build changed'
+    expected_build = deepcopy(upstream['pipeline'][2:])
+    expected_build[1] = upstream_tests(expected_build[1])
+    assert derived['pipeline'][2:] == expected_build + [prune()], 'upstream build changed'
     assert derived['package']['dependencies']['runtime'] == upstream['package']['dependencies']['runtime'] + [
         'libcurl-hardened=${{package.full-version}}'], 'CLI must use the matching hardened library'
     assert derived['pipeline'][1]['with']['opts'] == configure(upstream['pipeline'][1]['with']['opts'])

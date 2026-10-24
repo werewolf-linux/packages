@@ -28,7 +28,9 @@ class Curl(unittest.TestCase):
 
     def test_upstream_build_tests_are_retained_and_required(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
-        self.assertEqual(FIXTURE['pipeline'][3], result['pipeline'][3])
+        expected = copy.deepcopy(FIXTURE['pipeline'][3])
+        expected['runs'] = expected['runs'].replace(' !2095"', ' !2095 !netrc"')
+        self.assertEqual(expected, result['pipeline'][3])
         source = copy.deepcopy(FIXTURE)
         source['pipeline'].pop(3)
         with self.assertRaises(ValueError):
@@ -37,6 +39,15 @@ class Curl(unittest.TestCase):
         with self.assertRaises(AssertionError):
             verify.check(PKG, FIXTURE, result)
 
+    def test_test_selection_cannot_hide_failures_for_supported_features(self):
+        for replacement in (' !2095"', ' !2095 !netrc !HTTP"'):
+            with self.subTest(replacement=replacement):
+                result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
+                result['pipeline'][3]['runs'] = result['pipeline'][3]['runs'].replace(
+                    ' !2095 !netrc"', replacement)
+                with self.assertRaises(AssertionError):
+                    verify.check(PKG, FIXTURE, result)
+
     def test_upstream_changes_cannot_silently_add_a_feature(self):
         for mutate in (
             lambda c: c['pipeline'][1]['with'].update(opts=c['pipeline'][1]['with']['opts'] + ' --enable-new-protocol'),
@@ -44,6 +55,7 @@ class Curl(unittest.TestCase):
             lambda c: c['subpackages'].append({'name': 'curl-extra'}),
             lambda c: c['pipeline'][0]['with'].update(branch='main'),
             lambda c: c['test']['pipeline'].pop(3),
+            lambda c: c['pipeline'][3].update(runs=c['pipeline'][3]['runs'].replace('!2095', '!2096')),
         ):
             with self.subTest(mutate=mutate):
                 source = copy.deepcopy(FIXTURE)
