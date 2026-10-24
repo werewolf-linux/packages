@@ -2,6 +2,7 @@
 
 The hooks scripts/packages.py names. Packages keep Wolfi's names; their epoch
 sorts above every Wolfi rebuild of the same JDK release."""
+from copy import deepcopy
 from pathlib import Path
 import re
 import shutil
@@ -79,6 +80,7 @@ def prune():
 def probe(pkg):
     java = (pkg.dir / 'tests/Probe.java').read_text()
     sh = (pkg.dir / 'tests/probe.sh').read_text()
+    sh += "\ncat > Headless.java <<'WEREWOLF_HEADLESS_JAVA'\n" + (pkg.dir / 'tests/Headless.java').read_text() + "\nWEREWOLF_HEADLESS_JAVA\njavac Headless.java\njava -Djava.awt.headless=true Headless\n"
     for text in (java, sh):
         if '${{' in text or PROBE_JAVA in text or PROBE_SH in text:
             raise ValueError('tests/Probe.java and tests/probe.sh cannot be embedded in a Melange recipe')
@@ -104,9 +106,18 @@ def derive(pkg, config, lock):
         raise ValueError('Review changed upstream patch steps before deriving')
     pipeline.insert(patched[-1] + 1, patching.step(PATCHES))
     pipeline.insert(patched[-1] + 2, {'name': ALLOW_ROOT, 'runs': runtime.build_root()})
+    configure = [s for s in pipeline if s.get('uses') == 'autoconf/configure']
+    if len(configure) != 1 or 'headless-only' in configure[0]['with']['opts']:
+        raise ValueError('Review changed upstream headless configuration')
+    configure[0]['with']['opts'] = configure[0]['with']['opts'].rstrip() + ' --enable-headless-only'
     omit_jmods(pipeline)
     pipeline.append(prune())
     config['subpackages'] = retained_subpackages(config)
+    # libfontmanager loads Fontconfig dynamically, so ELF scanning misses it.
+    for section in [config['package'], config['subpackages'][0]]:
+        runtime_deps = section['dependencies']['runtime']
+        if 'libfontconfig1' not in runtime_deps:
+            runtime_deps.append('libfontconfig1')
     # Only the omitted entrypoint's fetch used this variable.
     if 'cacert-entrypoint-hash' not in config.get('vars', {}):
         raise ValueError('Review changed upstream OCI entrypoint hash')
@@ -138,7 +149,9 @@ def test_recipe(config, repository):
 def check(pkg, upstream, derived):
     """Keep Wolfi's JDK/JRE build and tests, with documented package omissions."""
     configure = lambda c: [x for x in c['pipeline'] if x.get('uses') == 'autoconf/configure']
-    assert configure(upstream) == configure(derived), 'upstream configure changed'
+    expected = deepcopy(configure(upstream))
+    expected[0]['with']['opts'] = expected[0]['with']['opts'].rstrip() + ' --enable-headless-only'
+    assert expected == configure(derived), 'upstream configure changed'
     assert derived['environment'] == upstream['environment'], 'upstream build environment changed'
     patches = lambda c: [x for x in c['pipeline'] if x.get('uses') == 'patch']
     assert patches(upstream) == patches(derived), "Wolfi's patches changed"
@@ -146,7 +159,8 @@ def check(pkg, upstream, derived):
     assert derived['pipeline'][ours - 1] == patches(upstream)[-1], "our patches must follow Wolfi's"
     assert derived['pipeline'][-1] == prune(), 'demos must be removed before packaging'
     assert sum(s.get('name') == PRUNE for s in derived['pipeline']) == 1, 'one demo cleanup step'
-    expected = {'pipeline': [dict(step) for step in upstream['pipeline']]}
+    expected = {'pipeline': deepcopy(upstream['pipeline'])}
+    configure(expected)[0]['with']['opts'] = configure(expected)[0]['with']['opts'].rstrip() + ' --enable-headless-only'
     omit_jmods(expected['pipeline'])
     steps = lambda c: [x for x in c['pipeline']
                        if x.get('uses') != 'git-checkout'
@@ -158,7 +172,9 @@ def check(pkg, upstream, derived):
     strip = lambda subs: [{**s, 'dependencies': {**s.get('dependencies', {}), 'provides': [
         p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]}}
         for s in subs]
-    assert strip(retained_subpackages(upstream)) == strip(derived['subpackages']), 'an upstream subpackage changed'
+    expected_subpackages = deepcopy(retained_subpackages(upstream))
+    expected_subpackages[0]['dependencies']['runtime'].append('libfontconfig1')
+    assert strip(expected_subpackages) == strip(derived['subpackages']), 'an upstream subpackage changed'
     for test in upstream['test']['pipeline']:
         assert test in derived['test']['pipeline'], "Wolfi's package test removed"
     assert upstream['test']['environment'] == derived['test']['environment'], 'upstream test environment changed'

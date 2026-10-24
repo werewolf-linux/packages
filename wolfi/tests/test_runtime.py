@@ -2,6 +2,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -142,9 +143,12 @@ int main(int argc, char **argv) {
     @unittest.skipUnless(shutil.which('javac') and shutil.which('java') and shutil.which('patch'),
                          'Java compiler and patch required')
     def test_java_uses_original_stderr_and_emits_the_same_fields(self):
-        version = subprocess.run(['javac', '-version'], capture_output=True)
+        version = subprocess.run(['javac', '-version'], capture_output=True, text=True)
         if version.returncode:
             self.skipTest('Java compiler is unavailable')
+        major = re.search(r'javac (?:1\.)?(\d+)', version.stdout + version.stderr)
+        if major and int(major[1]) < 11:
+            self.skipTest('Java 11+ is required for module patching and the runtime logging APIs')
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
             name = 'src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java'

@@ -27,6 +27,7 @@ class Builder(unittest.TestCase):
             (root / 'example').mkdir()
             (root / 'example/recipe.yaml').touch()
             (root / 'tools.lock.json').write_text('{"melange":{"version":"0.62.1"}}')
+            melange = str(root / 'tools/melange')
             meta = dict(context='example', names=['example'], version='1-r0', inputs='a' * 64)
             calls = []
             def run(args, **kwargs):
@@ -35,7 +36,10 @@ class Builder(unittest.TestCase):
                 out.mkdir()
                 unsigned(out / 'example-1-r0.apk', 'example', 'aarch64')
             def capture(args, **kwargs):
-                return 'GitVersion: v0.62.1' if Path(args[0]).name == 'melange' else '1700000000'
+                if args == [melange, 'version']:
+                    return 'GitVersion: v0.62.1'
+                self.assertEqual('git', args[0])
+                return '1700000000'
             old = Path.cwd()
             try:
                 with patch.object(sys, 'argv', ['build.py', 'example', '--arch', 'aarch64']), \
@@ -44,13 +48,14 @@ class Builder(unittest.TestCase):
                      patch.object(build.platform, 'machine', return_value='aarch64'), \
                      patch.object(build.subprocess, 'run', side_effect=run), \
                      patch.object(build.subprocess, 'check_output', side_effect=capture), \
-                     patch.dict(os.environ, dict(GITHUB_SHA='b' * 40, GITHUB_RUN_ID='123', GH_TOKEN='PRIVATE_SENTINEL',
+                     patch.dict(os.environ, dict(MELANGE=melange, GITHUB_SHA='b' * 40, GITHUB_RUN_ID='123', GH_TOKEN='PRIVATE_SENTINEL',
                          PACKAGES_APK_SIGNING_KEY='PRIVATE_SENTINEL', AWS_SECRET_ACCESS_KEY='PRIVATE_SENTINEL')):
                     build.main()
             finally:
                 os.chdir(old)
             self.assertEqual(1, len(calls))
             args, kwargs = calls[0]
+            self.assertEqual(melange, args[0])
             self.assertNotIn('--signing-key', args)
             self.assertNotIn('PRIVATE_SENTINEL', str(kwargs['env']))
             self.assertEqual('1700000000', kwargs['env']['SOURCE_DATE_EPOCH'])

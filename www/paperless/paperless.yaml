@@ -11,7 +11,7 @@
 package:
   name: paperless
   version: "3.3.4"
-  epoch: 1
+  epoch: 2
   description: Document management with OCR, tags and full-text search
   copyright:
     - license: GPL-3.0-only
@@ -36,6 +36,7 @@ environment:
       - python-3.13
       - qpdf
       - tesseract
+      - ttf-dejavu
       - tesseract-eng
       - python-3.13-dev
       - postgresql-17-dev
@@ -64,6 +65,10 @@ pipeline:
       else find paperless -maxdepth 2 -type d -print; exit 1; fi
       uv export --frozen --python /usr/bin/python3.13 --no-dev --extra webserver --extra postgres \
         --no-emit-project \
+        --no-emit-package flower \
+        --no-emit-package azure-ai-documentintelligence \
+        --no-emit-package azure-core \
+        --no-emit-package sqlite-vec \
         --no-emit-package torch \
         --no-emit-package sentence-transformers \
         --no-emit-package llama-index-core \
@@ -91,6 +96,7 @@ pipeline:
       mkdir -p "$PAPERLESS_MEDIA_ROOT" "$PAPERLESS_CONSUMPTION_DIR" "$PAPERLESS_STATICDIR"
       /usr/lib/paperless/bin/python manage.py collectstatic --no-input
       /usr/lib/paperless/bin/python manage.py check
+      /usr/lib/paperless/bin/python /home/build/consumers.py
       rm -rf /tmp/paperless-build
 
   - runs: |
