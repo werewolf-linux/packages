@@ -1,0 +1,107 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Gate optional process, namespace, listener and diagnostic functions
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 678778973bb4d4185c06ef1320de50f1a975d3c8
+
+--- a/main/main.c
++++ b/main/main.c
+@@ -851,40 +851,45 @@
+ /* Set once at startup, before any script runs; false until then. */
+ PHPAPI bool php_werewolf_unserialize_objects = false;
+ 
+-/* {{{ php_werewolf_disable_floor
+- * The exec group (programs) and the native group (dl, loading a shared object)
+- * stay disabled whatever php.ini says, unless the image allows the group.
+- * Grouping means moving from popen to system needs no new grant. */
++/* One table drives both the function floor and denial logging. Optional
++ * extension/platform functions are harmless entries when they are absent. */
++static const struct {
++	const char *name;
++	const char *group;
++} php_werewolf_functions[] = {
++	{"exec", "exec"}, {"passthru", "exec"}, {"pcntl_exec", "exec"},
++	{"popen", "exec"}, {"proc_open", "exec"}, {"shell_exec", "exec"},
++	{"system", "exec"}, {"mail", "exec"}, {"mb_send_mail", "exec"},
++	{"dl", "native"},
++	{"pcntl_unshare", "namespace"}, {"pcntl_setns", "namespace"},
++	{"pcntl_fork", "process"}, {"pcntl_rfork", "process"},
++	{"pcntl_forkx", "process"}, {"posix_setsid", "process"},
++	{"posix_setpgid", "process"},
++	{"stream_socket_server", "listen"}, {"stream_socket_accept", "listen"},
++	{"posix_mkfifo", "special-files"}, {"posix_mknod", "special-files"},
++	{"phpinfo", "diagnostics"},
++};
++
+ static void php_werewolf_undefined_function(const char *name)
+ {
+-    static const char *const spawn[] = {
+-        "exec", "passthru", "pcntl_exec", "popen", "proc_open", "shell_exec", "system",
+-    };
+-    const char *group = NULL;
+-    for (size_t i = 0; i < sizeof(spawn) / sizeof(spawn[0]); i++) {
+-        if (strcasecmp(name, spawn[i]) == 0) group = "exec";
+-    }
+-    if (strcasecmp(name, "dl") == 0) group = "native";
+-    if (group && !php_werewolf_allowed(group)) {
+-        char location[256];
+-        snprintf(location, sizeof(location), "%s:%u", zend_get_executed_filename(), zend_get_executed_lineno());
+-        runtime_hardening_denied("php", group, name, location);
+-    }
++	for (size_t i = 0; i < sizeof(php_werewolf_functions) / sizeof(php_werewolf_functions[0]); i++) {
++		const char *group = php_werewolf_functions[i].group;
++		if (strcasecmp(name, php_werewolf_functions[i].name) == 0
++				&& !php_werewolf_allowed(group)) {
++			char location[256];
++			snprintf(location, sizeof(location), "%s:%u", zend_get_executed_filename(), zend_get_executed_lineno());
++			runtime_hardening_denied("php", group, name, location);
++			return;
++		}
++	}
+ }
+ 
+ static void php_werewolf_disable_floor(void)
+ {
+-	static const char *const spawn[] = {
+-		"exec", "passthru", "pcntl_exec", "popen", "proc_open", "shell_exec", "system",
+-	};
+-
+-	if (!php_werewolf_allowed("exec")) {
+-		for (size_t i = 0; i < sizeof(spawn) / sizeof(spawn[0]); i++) {
+-			zend_disable_functions(spawn[i]);
+-		}
+-	}
+-	if (!php_werewolf_allowed("native")) {
+-		zend_disable_functions("dl");
++	for (size_t i = 0; i < sizeof(php_werewolf_functions) / sizeof(php_werewolf_functions[0]); i++) {
++		if (!php_werewolf_allowed(php_werewolf_functions[i].group)) {
++			zend_disable_functions(php_werewolf_functions[i].name);
++		}
+ 	}
+ }
+ /* }}} */
+--- a/ext/standard/info.c
++++ b/ext/standard/info.c
+@@ -17,6 +17,7 @@
+ */
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "php_ini.h"
+ #include "php_globals.h"
+ #include "ext/standard/head.h"
+@@ -759,6 +760,14 @@
+ /* {{{ php_print_info */
+ PHPAPI ZEND_COLD void php_print_info(int flag)
+ {
++	/* CLI -i and embedded callers bypass the phpinfo() function table. */
++	if (!php_werewolf_allowed("diagnostics")) {
++		runtime_hardening_denied("php", "diagnostics", "phpinfo", "");
++		php_error_docref(NULL, E_WARNING, "PHP information is refused: "
++			"the image allows it only by php:diagnostics");
++		return;
++	}
++
+ 	char **env, *tmp1, *tmp2;
+ 	zend_string *php_uname;
+ 

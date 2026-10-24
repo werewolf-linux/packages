@@ -1,0 +1,27 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Gate disk compilation caches with writable source
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 26e72d85a611e222e3f06025de8a3c496923bacd
+
+diff --git a/src/env.cc b/src/env.cc
+--- a/src/env.cc
++++ b/src/env.cc
+@@ -1,4 +1,5 @@
+ #include "env.h"
++#include "node_hardening.h"
+ #include "async_wrap.h"
+ #include "base_object-inl.h"
+ #include "debug_utils-inl.h"
+@@ -1372,6 +1373,11 @@
+ CompileCacheEnableResult Environment::EnableCompileCache(
+     const std::string& cache_dir, EnableOption option) {
+   CompileCacheEnableResult result;
++  if (!hardening::Allowed("writable-source")) {
++    result.status = CompileCacheEnableStatus::DISABLED;
++    result.message = "node:writable-source required for disk compilation caches";
++    return result;
++  }
+   std::string disable_env;
+   if (credentials::SafeGetenv(
+           "NODE_DISABLE_COMPILE_CACHE", &disable_env, this)) {

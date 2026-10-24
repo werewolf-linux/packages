@@ -1,0 +1,217 @@
+SPDX-License-Identifier: PSF-2.0
+Subject: [PATCH] Log actual hardening denials to stderr with bounded context
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 626fb7612218cf10fbcf0525fce6b37c8a60d4be
+
+diff --git a/Include/internal/runtime_hardening_log.h b/Include/internal/runtime_hardening_log.h
+new file mode 100644
+--- /dev/null
++++ b/Include/internal/runtime_hardening_log.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: MIT
++ * Keep the copies carried by each runtime's logging patch identical.
++ * stderr is inherited from the supervisor (Werewolf sends it to the console).
++ * No interpreter callbacks, application logging settings or syslog required.
++ */
++#ifndef RUNTIME_HARDENING_LOG_H
++#define RUNTIME_HARDENING_LOG_H
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++static inline char *rh_log_quote(char *out, const char *text, size_t size,
++                                 size_t limit, int *truncated) {
++    static const char hex[] = "0123456789abcdef";
++    size_t i;
++    if (size > limit) { size = limit; *truncated = 1; }
++    *out++ = '"';
++    for (i = 0; i < size; i++) {
++        unsigned char c = (unsigned char)text[i];
++        if (c == '"' || c == '\\') { *out++ = '\\'; *out++ = (char)c; }
++        else if (c < 32 || c > 126) {
++            memcpy(out, "\\u00", 4); out += 4;
++            *out++ = hex[c >> 4]; *out++ = hex[c & 15];
++        } else { *out++ = (char)c; }
++    }
++    *out++ = '"';
++    return out;
++}
++
++/* The limits below keep the entire escaped record below PIPE_BUF (4096 on
++ * Linux). One write prevents concurrent workers from interleaving records.
++ * Never read the environment or the contents of a serialized payload.
++ */
++static inline void runtime_hardening_denied(const char *runtime, const char *group,
++                                           const char *operation, const char *detail) {
++    int saved_errno = errno, truncated = 0, fd;
++    char line[4096], cmdline[257], *p = line;
++    ssize_t n = -1, result;
++    size_t i, start, length = 0;
++    if (!detail) detail = "";
++    p += snprintf(p, 256,
++        "{\"event\":\"runtime-denial\",\"time\":%lld,\"pid\":%ld,\"euid\":%ld,\"runtime\":",
++        (long long)time(NULL), (long)getpid(), (long)geteuid());
++    p = rh_log_quote(p, runtime, strlen(runtime), 16, &truncated);
++    memcpy(p, ",\"group\":", 9); p += 9;
++    p = rh_log_quote(p, group, strlen(group), 24, &truncated);
++    memcpy(p, ",\"operation\":", 13); p += 13;
++    p = rh_log_quote(p, operation, strlen(operation), 48, &truncated);
++    memcpy(p, ",\"detail\":", 10); p += 10;
++    p = rh_log_quote(p, detail, strlen(detail), 192, &truncated);
++    memcpy(p, ",\"argv\":[", 9); p += 9;
++    fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
++    if (fd >= 0) { n = read(fd, cmdline, sizeof(cmdline)); close(fd); }
++    if (n > 0) {
++        length = (size_t)n;
++        if (length > 256) { length = 256; truncated = 1; }
++    }
++    for (i = 0, start = 0; i < length; i++) {
++        if (cmdline[i] == '\0' || i + 1 == length) {
++            size_t end = cmdline[i] == '\0' ? i : i + 1;
++            if (start) *p++ = ',';
++            p = rh_log_quote(p, cmdline + start, end - start, 256, &truncated);
++            start = i + 1;
++        }
++    }
++    p += snprintf(p, 32, "],\"truncated\":%s}\n", truncated ? "true" : "false");
++    do { result = write(STDERR_FILENO, line, (size_t)(p - line)); }
++    while (result < 0 && errno == EINTR);
++    errno = saved_errno;
++}
++#endif
+diff --git a/Python/pylifecycle.c b/Python/pylifecycle.c
+--- a/Python/pylifecycle.c
++++ b/Python/pylifecycle.c
+@@ -2,6 +2,7 @@
+ 
+ #include "Python.h"
+ #include "runtime_hardening_root.h"
++#include "internal/runtime_hardening_log.h"
+ #include "pycore_audit.h"         // _PySys_ClearAuditHooks()
+ #include "pycore_call.h"          // _PyObject_CallMethod()
+ #include "pycore_ceval.h"         // _PyEval_FiniGIL()
+@@ -1047,6 +1048,7 @@
+ _Py_PreInitializeFromPyArgv(const PyPreConfig *src_config, const _PyArgv *args)
+ {
+     if (runtime_hardening_root_refused()) {
++        runtime_hardening_denied("python", "root", "startup", "effective UID 0");
+         return _PyStatus_ERR("python: refusing effective UID 0");
+     }
+     PyStatus status;
+diff --git a/Modules/main.c b/Modules/main.c
+--- a/Modules/main.c
++++ b/Modules/main.c
+@@ -1,6 +1,7 @@
+ /* Python interpreter main program */
+ 
+ #include "Python.h"
++#include "internal/runtime_hardening_log.h"
+ #include "pycore_call.h"          // _PyObject_CallNoArgs()
+ #include "pycore_fileutils.h"     // struct _Py_stat_struct
+ #include "pycore_import.h"        // _PyImport_Fini2()
+@@ -759,6 +760,7 @@
+     if (config->run_command != NULL ||
+         (config_run_code(config) == 0 && !stdin_is_interactive(config))) {
+         if (!_Py_RuntimeHardeningAllowed("inline")) {
++            runtime_hardening_denied("python", "inline", "execute", "-c or piped stdin");
+             fprintf(stderr, "python: inline code (-c or piped stdin) is "
+                     "refused; the image allows it only by python:inline\n");
+             *exitcode = 1;
+@@ -768,6 +770,9 @@
+     if (config->run_filename != NULL &&
+         !_Py_RuntimeHardeningAllowed("writable-source") &&
+         werewolf_source_is_writable(config->run_filename)) {
++        char *denied_path = _Py_EncodeLocaleRaw(config->run_filename, NULL);
++        runtime_hardening_denied("python", "writable-source", "execute", denied_path);
++        PyMem_RawFree(denied_path);
+         fprintf(stderr, "python: running a script from a writable mount is "
+                 "refused; the image allows it only by python:writable-source\n");
+         *exitcode = 1;
+diff --git a/Modules/_ctypes/_ctypes.c b/Modules/_ctypes/_ctypes.c
+--- a/Modules/_ctypes/_ctypes.c
++++ b/Modules/_ctypes/_ctypes.c
+@@ -101,6 +101,7 @@
+ #endif
+ 
+ #include "Python.h"
++#include "internal/runtime_hardening_log.h"
+ // windows.h must be included before pycore internal headers
+ #ifdef MS_WIN32
+ #  include <windows.h>
+@@ -6462,6 +6463,7 @@
+ _ctypes_mod_exec(PyObject *mod)
+ {
+     if (!werewolf_allowed("native")) {
++        runtime_hardening_denied("python", "native", "import", "_ctypes");
+         PyErr_SetString(PyExc_ImportError,
+             "ctypes is refused: the image allows native code access only by "
+             "python:native (form.yaml allow: [python:native])");
+diff --git a/Modules/_pickle.c b/Modules/_pickle.c
+--- a/Modules/_pickle.c
++++ b/Modules/_pickle.c
+@@ -9,6 +9,7 @@
+ #endif
+ 
+ #include "Python.h"
++#include "internal/runtime_hardening_log.h"
+ #include "pycore_bytesobject.h"   // _PyBytesWriter
+ #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
+ #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
+@@ -7488,6 +7489,13 @@
+     PyObject *module;
+ 
+     if (!werewolf_allowed("deserialize")) {
++        const char *module_text = PyUnicode_AsUTF8(module_name);
++        const char *global_text = module_text ? PyUnicode_AsUTF8(global_name) : NULL;
++        char target[256];
++        if (!global_text) PyErr_Clear();
++        snprintf(target, sizeof(target), "%s.%s", module_text ? module_text : "?",
++                 global_text ? global_text : "?");
++        runtime_hardening_denied("python", "deserialize", "pickle.find_class", target);
+         PickleState *st = _Pickle_GetStateByClass(cls);
+         PyErr_SetString(st->UnpicklingError,
+             "unpickling an object is refused: the image allows deserializing "
+diff --git a/Python/sysmodule.c b/Python/sysmodule.c
+--- a/Python/sysmodule.c
++++ b/Python/sysmodule.c
+@@ -15,6 +15,7 @@
+ */
+ 
+ #include "Python.h"
++#include "internal/runtime_hardening_log.h"
+ #include "pycore_audit.h"         // _Py_AuditHookEntry
+ #include "pycore_call.h"          // _PyObject_CallNoArgs()
+ #include "pycore_ceval.h"         // _PyEval_SetAsyncGenFinalizer()
+@@ -2909,7 +2910,17 @@
+     }
+ }
+ 
++/* Used by the pure-Python unpickler; bypasses sys.stderr replacements. */
++static PyObject *sys_runtime_hardening_denied(PyObject *self, PyObject *args)
++{
++    const char *group, *operation, *detail;
++    if (!PyArg_ParseTuple(args, "sss", &group, &operation, &detail)) return NULL;
++    runtime_hardening_denied("python", group, operation, detail);
++    Py_RETURN_NONE;
++}
++
+ static PyMethodDef sys_methods[] = {
++    {"_runtime_hardening_denied", sys_runtime_hardening_denied, METH_VARARGS, NULL},
+     /* Might as well keep this in alphabetic order */
+     SYS_ADDAUDITHOOK_METHODDEF
+     SYS_AUDIT_METHODDEF
+diff --git a/Lib/pickle.py b/Lib/pickle.py
+--- a/Lib/pickle.py
++++ b/Lib/pickle.py
+@@ -1734,6 +1734,7 @@
+     def find_class(self, module, name):
+         # Subclasses may override this.
+         if not _werewolf_deserialize_allowed():
++            sys._runtime_hardening_denied('deserialize', 'pickle.find_class', module + '.' + name)
+             raise UnpicklingError(
+                 "unpickling an object is refused: the image allows "
+                 "deserializing untrusted bytes only by python:deserialize")

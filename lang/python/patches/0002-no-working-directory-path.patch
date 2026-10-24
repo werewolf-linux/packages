@@ -1,0 +1,33 @@
+SPDX-License-Identifier: PSF-2.0
+Subject: [PATCH 2/3] Put no working directory on sys.path for -m, -c or stdin
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 626fb7612218cf10fbcf0525fce6b37c8a60d4be
+
+diff --git a/Python/pathconfig.c b/Python/pathconfig.c
+--- a/Python/pathconfig.c
++++ b/Python/pathconfig.c
+@@ -362,6 +362,12 @@
+     int have_module_arg = (wcscmp(argv0, L"-m") == 0);
+     int have_script_arg = (!have_module_arg && (wcscmp(argv0, L"-c") != 0));
+ 
++    /* Werewolf: a module (-m), a command (-c) or stdin gets no entry for
++       the working directory, which for a service is its writable data. */
++    if (!have_script_arg || argv0[0] == L'\0' || wcscmp(argv0, L"-") == 0) {
++        return 0;
++    }
++
+     wchar_t *path0 = argv0;
+     Py_ssize_t n = 0;
+ 
+@@ -467,6 +473,10 @@
+     }
+ #endif /* All others */
+ 
++    if (n == 0) {
++        /* Werewolf: nor does a script that resolves to no directory. */
++        return 0;
++    }
+     PyObject *path0_obj = PyUnicode_FromWideChar(path0, n);
+     if (path0_obj == NULL) {
+         return -1;

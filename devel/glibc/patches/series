@@ -1,0 +1,5 @@
+0001-deny-internal-environment.patch
+0002-disable-loader-injection.patch
+0003-builtin-nss.patch
+0004-builtin-converters.patch
+0005-remove-audit-dispatch.patch

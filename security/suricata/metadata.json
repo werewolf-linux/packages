@@ -1,0 +1,32 @@
+{
+  "update": {
+    "source": "github-tags",
+    "repo": "OISF/suricata",
+    "prefix": "suricata-"
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "suricata.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "replacement",
+    "recipes": [
+      "suricata.yaml"
+    ],
+    "changes": [
+      {
+        "what": "Suricata for werewolf's suricata form, whole: the engine, its configuration in /etc/suricata and its bundled rules and reference files in /usr/share/suricata, but not suricatactl and suricatasc, the control socket's tools (the form turns the socket off), or suricata-update, which is Python. Wolfi withdrew suricata and suricata-update (wolfi-dev/os#76917): its last build, 8.0.4, links libhtp, whose upstream is archived, and was built with gcc -march=native, Suricata's configure default, so a builder with SVE emitted CNTB and the binary died with SIGILL on a machine without it. This one uses Suricata 8's own HTTP parser and the baseline architecture, and is named as Wolfi's, so werewolf's application feed, which a form's image prefers by name, replaces Wolfi's frozen build.",
+        "why": "Continue native builds after Wolfi withdrew maintenance; keep runtime dependencies separately updatable.",
+        "evidence": [
+          "suricata.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

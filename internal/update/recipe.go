@@ -136,6 +136,12 @@ func (c *Client) sources(ctx context.Context, r *recipe, p Policy, release Relea
 			commit := release.Commit
 			if commit == "" {
 				tag, err := r.expand(value(with, "tag"), release.Version)
+				if p.Separator != "" {
+					tag = release.Tag
+					if err := r.set(field(with, "tag"), tag); err != nil {
+						return err
+					}
+				}
 				if err != nil {
 					return err
 				}
@@ -184,19 +190,29 @@ func (c *Client) sources(ctx context.Context, r *recipe, p Policy, release Relea
 // LoadPolicies requires every context to declare a policy. Adding a package
 // without tracking it, or disabling a production package, fails the offline CI.
 func LoadPolicies(root string) (map[string]Policy, error) {
-	data, err := os.ReadFile(filepath.Join(root, "updates.json"))
-	if err != nil {
-		return nil, err
-	}
+	var data []byte
+	var err error
+	var paths []string
 	policies := map[string]Policy{}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&policies); err != nil {
-		return nil, err
-	}
-	paths, err := filepath.Glob(filepath.Join(root, "*", "*.yaml"))
-	if err != nil {
-		return nil, err
+	if _, statErr := os.Stat(filepath.Join(root, "wolfi")); statErr == nil {
+		policies, paths, err = catalogPolicies(root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		data, err = os.ReadFile(filepath.Join(root, "updates.json"))
+		if err != nil {
+			return nil, err
+		}
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&policies); err != nil {
+			return nil, err
+		}
+		paths, err = filepath.Glob(filepath.Join(root, "*", "*.yaml"))
+		if err != nil {
+			return nil, err
+		}
 	}
 	contexts := map[string]int{}
 	for _, path := range paths {
@@ -213,7 +229,11 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 		if contexts[name] != 1 {
 			return nil, fmt.Errorf("%s needs exactly one recipe", name)
 		}
-		recipePaths, _ := filepath.Glob(filepath.Join(root, name, "*.yaml"))
+		directory, err := ContextPath(root, name)
+		if err != nil {
+			return nil, err
+		}
+		recipePaths, _ := filepath.Glob(filepath.Join(directory, "*.yaml"))
 		r, err := readRecipe(recipePaths[0])
 		if err != nil {
 			return nil, err
@@ -226,7 +246,7 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 				return nil, fmt.Errorf("%s: component %s needs a stable GitHub release source", name, variable)
 			}
 		}
-		if strings.HasSuffix(name, "-vuln-demo") != (p.Source == "pinned") {
+		if strings.HasSuffix(name, "-vuln-demo") != (p.Source == "pinned" || p.Hold != "") {
 			return nil, fmt.Errorf("only vuln-demo contexts may be pinned: %s", name)
 		}
 		switch p.Source {
@@ -242,9 +262,12 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 			if p.Reason == "" {
 				return nil, fmt.Errorf("%s needs an explanation", name)
 			}
-		case "minecraft":
+		case "minecraft", "plex":
 		default:
 			return nil, fmt.Errorf("unknown source for %s", name)
+		}
+		if p.Separator != "" && (p.Separator != "_" || (p.Source != "github" && p.Source != "github-tags")) {
+			return nil, fmt.Errorf("unsupported version separator: %s", name)
 		}
 		if p.Pattern != "" {
 			re, err := regexp.Compile(p.Pattern)
@@ -325,11 +348,15 @@ func copyContext(source, dest string) error {
 func (c *Client) Update(ctx context.Context, root, name string, p Policy, write bool, run Runner) (result Result) {
 	result = Result{Package: name, Status: "failed"}
 	fail := func(err error) Result { result.Status = "failed"; result.Error = err.Error(); return result }
-	if p.Source == "pinned" {
+	if p.Source == "pinned" || p.Hold != "" {
 		result.Status = "pinned"
 		return result
 	}
-	paths, err := filepath.Glob(filepath.Join(root, name, "*.yaml"))
+	directory, err := ContextPath(root, name)
+	if err != nil {
+		return fail(err)
+	}
+	paths, err := filepath.Glob(filepath.Join(directory, "*.yaml"))
 	if err != nil || len(paths) != 1 {
 		return fail(fmt.Errorf("expected one recipe"))
 	}
@@ -338,6 +365,61 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 		return fail(err)
 	}
 	result.Current = value(field(original.root, "package"), "version")
+	if p.Source == "plex" {
+		release, err := c.Discover(ctx, p, result.Current)
+		if err != nil {
+			return fail(err)
+		}
+		result.Latest = release.Version
+		data, err := os.ReadFile(filepath.Join(directory, "sources.json"))
+		if err != nil {
+			return fail(err)
+		}
+		var captured struct {
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(data, &captured); err != nil {
+			return fail(err)
+		}
+		if Compare(release.Version, result.Current) < 0 {
+			return fail(fmt.Errorf("vendor release would downgrade Plex"))
+		}
+		if captured.Version == release.Build {
+			result.Status = "current"
+			return result
+		}
+		result.Status = "available"
+		if !write {
+			return result
+		}
+		scratch, err := os.MkdirTemp("", "plex-update-")
+		if err != nil {
+			return fail(err)
+		}
+		defer os.RemoveAll(scratch)
+		if err := copyContext(directory, scratch); err != nil {
+			return fail(err)
+		}
+		if err := run(ctx, scratch, "python3", "update.py", "--expected-version", release.Build); err != nil {
+			return fail(err)
+		}
+		prepared, err := readRecipe(filepath.Join(scratch, filepath.Base(paths[0])))
+		if err != nil {
+			return fail(err)
+		}
+		if value(field(prepared.root, "package"), "version") != release.Version {
+			return fail(fmt.Errorf("Plex update did not prepare the discovered release"))
+		}
+		if err := run(ctx, scratch, "melange", "query", prepared.path, "{{.Package.Version}}{{println}}"); err != nil {
+			return fail(err)
+		}
+		if err := installContext(scratch, directory); err != nil {
+			return fail(err)
+		}
+		result.Status = "updated"
+		return result
+	}
+
 	release, err := c.Discover(ctx, p, result.Current)
 	if err != nil {
 		return fail(err)
@@ -399,7 +481,7 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 		return fail(err)
 	}
 	defer os.RemoveAll(scratch)
-	if err := copyContext(filepath.Join(root, name), scratch); err != nil {
+	if err := copyContext(directory, scratch); err != nil {
 		return fail(err)
 	}
 	r, err := readRecipe(filepath.Join(scratch, filepath.Base(paths[0])))
@@ -485,7 +567,7 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	}
 	// Nothing in the real context is touched until downloads, locks and parsing
 	// all succeed. Resolver failures leave even the recipe's bytes unchanged.
-	if err := installContext(scratch, filepath.Join(root, name)); err != nil {
+	if err := installContext(scratch, directory); err != nil {
 		return fail(err)
 	}
 	result.Status = "updated"

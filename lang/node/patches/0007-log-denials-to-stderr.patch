@@ -1,0 +1,271 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Log actual hardening denials to stderr with bounded context
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 26e72d85a611e222e3f06025de8a3c496923bacd
+
+diff --git a/src/runtime_hardening_log.h b/src/runtime_hardening_log.h
+new file mode 100644
+--- /dev/null
++++ b/src/runtime_hardening_log.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: MIT
++ * Keep the copies carried by each runtime's logging patch identical.
++ * stderr is inherited from the supervisor (Werewolf sends it to the console).
++ * No interpreter callbacks, application logging settings or syslog required.
++ */
++#ifndef RUNTIME_HARDENING_LOG_H
++#define RUNTIME_HARDENING_LOG_H
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++static inline char *rh_log_quote(char *out, const char *text, size_t size,
++                                 size_t limit, int *truncated) {
++    static const char hex[] = "0123456789abcdef";
++    size_t i;
++    if (size > limit) { size = limit; *truncated = 1; }
++    *out++ = '"';
++    for (i = 0; i < size; i++) {
++        unsigned char c = (unsigned char)text[i];
++        if (c == '"' || c == '\\') { *out++ = '\\'; *out++ = (char)c; }
++        else if (c < 32 || c > 126) {
++            memcpy(out, "\\u00", 4); out += 4;
++            *out++ = hex[c >> 4]; *out++ = hex[c & 15];
++        } else { *out++ = (char)c; }
++    }
++    *out++ = '"';
++    return out;
++}
++
++/* The limits below keep the entire escaped record below PIPE_BUF (4096 on
++ * Linux). One write prevents concurrent workers from interleaving records.
++ * Never read the environment or the contents of a serialized payload.
++ */
++static inline void runtime_hardening_denied(const char *runtime, const char *group,
++                                           const char *operation, const char *detail) {
++    int saved_errno = errno, truncated = 0, fd;
++    char line[4096], cmdline[257], *p = line;
++    ssize_t n = -1, result;
++    size_t i, start, length = 0;
++    if (!detail) detail = "";
++    p += snprintf(p, 256,
++        "{\"event\":\"runtime-denial\",\"time\":%lld,\"pid\":%ld,\"euid\":%ld,\"runtime\":",
++        (long long)time(NULL), (long)getpid(), (long)geteuid());
++    p = rh_log_quote(p, runtime, strlen(runtime), 16, &truncated);
++    memcpy(p, ",\"group\":", 9); p += 9;
++    p = rh_log_quote(p, group, strlen(group), 24, &truncated);
++    memcpy(p, ",\"operation\":", 13); p += 13;
++    p = rh_log_quote(p, operation, strlen(operation), 48, &truncated);
++    memcpy(p, ",\"detail\":", 10); p += 10;
++    p = rh_log_quote(p, detail, strlen(detail), 192, &truncated);
++    memcpy(p, ",\"argv\":[", 9); p += 9;
++    fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
++    if (fd >= 0) { n = read(fd, cmdline, sizeof(cmdline)); close(fd); }
++    if (n > 0) {
++        length = (size_t)n;
++        if (length > 256) { length = 256; truncated = 1; }
++    }
++    for (i = 0, start = 0; i < length; i++) {
++        if (cmdline[i] == '\0' || i + 1 == length) {
++            size_t end = cmdline[i] == '\0' ? i : i + 1;
++            if (start) *p++ = ',';
++            p = rh_log_quote(p, cmdline + start, end - start, 256, &truncated);
++            start = i + 1;
++        }
++    }
++    p += snprintf(p, 32, "],\"truncated\":%s}\n", truncated ? "true" : "false");
++    do { result = write(STDERR_FILENO, line, (size_t)(p - line)); }
++    while (result < 0 && errno == EINTR);
++    errno = saved_errno;
++}
++#endif
+diff --git a/src/node.cc b/src/node.cc
+--- a/src/node.cc
++++ b/src/node.cc
+@@ -20,6 +20,7 @@
+ // USE OR OTHER DEALINGS IN THE SOFTWARE.
+ 
+ #include "runtime_hardening_root.h"
++#include "runtime_hardening_log.h"
+ #include "node.h"
+ #include "node_config_file.h"
+ #include "node_dotenv.h"
+@@ -383,6 +384,7 @@
+   if (!hardening::Allowed("inline") &&
+       (env->options()->has_eval_string || env->options()->force_repl ||
+        first_argv.empty() || first_argv == "-")) {
++    runtime_hardening_denied("node", "inline", "execute", "eval, REPL or stdin");
+     fprintf(stderr, "node:inline required for eval, REPL or stdin\n");
+     env->set_exit_code(ExitCode::kGenericUserError);
+     return MaybeLocal<Value>();
+@@ -777,6 +779,7 @@
+ 
+   std::string revert_error;
+   if (!per_process::cli_options->security_reverts.empty()) {
++    runtime_hardening_denied("node", "security-revert", "configure", per_process::cli_options->security_reverts.front().c_str());
+     errors->emplace_back("node: security reverts are disabled");
+     return ExitCode::kInvalidCommandLineArgument;
+   }
+@@ -1062,6 +1065,7 @@
+ 
+   if (per_process::cli_options->per_isolate->build_snapshot ||
+       !per_process::cli_options->snapshot_blob.empty()) {
++    runtime_hardening_denied("node", "snapshot", "configure", per_process::cli_options->snapshot_blob.c_str());
+     errors->emplace_back("node: custom startup snapshots are disabled");
+   }
+   CheckGlobalBenchOptions(errors);
+@@ -1196,6 +1200,7 @@
+   auto result = std::make_shared<InitializationResultImpl>();
+   result->args_ = args;
+   if (runtime_hardening_root_refused()) {
++    runtime_hardening_denied("node", "root", "startup", "effective UID 0");
+     result->errors_.emplace_back("node: refusing effective UID 0");
+     result->exit_code_ = ExitCode::kGenericUserError;
+     result->early_return_ = true;
+@@ -1234,6 +1239,7 @@
+ 
+   // A bare `--run` (empty value) lists the available scripts; a value runs it.
+   if (per_process::cli_options->has_run && !hardening::Allowed("exec")) {
++    runtime_hardening_denied("node", "exec", "--run", per_process::cli_options->run.c_str());
+     result->errors_.emplace_back("node: --run requires node:exec");
+     result->exit_code_ = ExitCode::kGenericUserError;
+     result->early_return_ = true;
+@@ -1323,6 +1329,7 @@
+     }
+     if (!per_process::cli_options->openssl_config.empty() &&
+         !hardening::Allowed("native")) {
++    runtime_hardening_denied("node", "native", "--openssl-config", per_process::cli_options->openssl_config.c_str());
+       result->errors_.emplace_back("node:native required for --openssl-config");
+       result->exit_code_ = ExitCode::kGenericUserError;
+       result->early_return_ = true;
+diff --git a/src/api/environment.cc b/src/api/environment.cc
+--- a/src/api/environment.cc
++++ b/src/api/environment.cc
+@@ -6,6 +6,7 @@
+ #include "env_properties.h"
+ #include "node.h"
+ #include "runtime_hardening_root.h"
++#include "runtime_hardening_log.h"
+ #include "node_builtins.h"
+ #include "node_context_data.h"
+ #include "node_debug.h"
+@@ -464,6 +465,7 @@
+     std::unique_ptr<InspectorParentHandle> inspector_parent_handle,
+     std::string_view thread_name) {
+   if (runtime_hardening_root_refused()) {
++    runtime_hardening_denied("node", "root", "startup", "effective UID 0");
+     fprintf(stderr, "node: refusing effective UID 0\n");
+     return nullptr;
+   }
+diff --git a/src/permission/permission.cc b/src/permission/permission.cc
+--- a/src/permission/permission.cc
++++ b/src/permission/permission.cc
+@@ -1,4 +1,5 @@
+ #include "permission.h"
++#include "runtime_hardening_log.h"
+ #include "env-inl.h"
+ #include "node.h"
+ #include "node_debug.h"
+@@ -259,6 +260,10 @@
+ MaybeLocal<Value> CreateAccessDeniedError(Environment* env,
+                                           PermissionScope perm,
+                                           std::string_view res) {
++  const std::string target(res);
++  runtime_hardening_denied("node",
++      !HardeningGranted(perm) ? (perm == PermissionScope::kChildProcess ? "exec" : "native") : "permission",
++      std::string(GetDiagnosticsChannelName(perm)).c_str(), target.c_str());
+   const char* suggestion = !HardeningGranted(perm)
+       ? (perm == PermissionScope::kChildProcess
+              ? "The image must grant node:exec; command-line flags grant nothing."
+diff --git a/src/node_credentials.cc b/src/node_credentials.cc
+--- a/src/node_credentials.cc
++++ b/src/node_credentials.cc
+@@ -1,5 +1,6 @@
+ #include "env-inl.h"
+ #include "node_hardening.h"
++#include "runtime_hardening_log.h"
+ #include "node_errors.h"
+ #include "node_external_reference.h"
+ #include "node_internals.h"
+@@ -111,6 +112,7 @@
+ static void WerewolfInline(const FunctionCallbackInfo<Value>& args) {
+   Environment* env = Environment::GetCurrent(args);
+   if (!hardening::Allowed("inline")) {
++    runtime_hardening_denied("node", "inline", "execute", "code from strings or stdin");
+     THROW_ERR_ACCESS_DENIED(env, "node:inline required for code from strings or stdin");
+   }
+ }
+@@ -120,6 +122,7 @@
+   CHECK(args[0]->IsString());
+   Utf8Value filename(env->isolate(), args[0]);
+   if (!hardening::SourceAllowed(*filename)) {
++    runtime_hardening_denied("node", "writable-source", "module.load", *filename);
+     THROW_ERR_ACCESS_DENIED(env, "node:writable-source required for code on a writable or unknown mount");
+   }
+ }
+diff --git a/src/node_options.cc b/src/node_options.cc
+--- a/src/node_options.cc
++++ b/src/node_options.cc
+@@ -1,4 +1,5 @@
+ #include "node_options.h"
++#include "runtime_hardening_log.h"
+ #include "node_hardening.h"  // NOLINT(build/include_inline)
+ #include "node_options-inl.h"
+ 
+@@ -303,6 +304,7 @@
+ void EnvironmentOptions::CheckOptions(std::vector<std::string>* errors,
+                                       std::vector<std::string>* argv) {
+   if ((experimental_vfs || vfs_load) && !hardening::Allowed("writable-source")) {
++    runtime_hardening_denied("node", "writable-source", "configure", "virtual module filesystem");
+     errors->emplace_back("node:writable-source required for virtual module filesystems");
+   }
+   if (!input_type.empty()) {
+diff --git a/src/env.cc b/src/env.cc
+--- a/src/env.cc
++++ b/src/env.cc
+@@ -1,5 +1,6 @@
+ #include "env.h"
+ #include "node_hardening.h"
++#include "runtime_hardening_log.h"
+ #include "async_wrap.h"
+ #include "base_object-inl.h"
+ #include "debug_utils-inl.h"
+@@ -1375,6 +1376,7 @@
+   CompileCacheEnableResult result;
+   if (!hardening::Allowed("writable-source")) {
+     result.status = CompileCacheEnableStatus::DISABLED;
++    runtime_hardening_denied("node", "writable-source", "compile-cache", cache_dir.c_str());
+     result.message = "node:writable-source required for disk compilation caches";
+     return result;
+   }
+diff --git a/src/spawn_sync.cc b/src/spawn_sync.cc
+--- a/src/spawn_sync.cc
++++ b/src/spawn_sync.cc
+@@ -382,7 +382,7 @@
+   Local<Context> context = env->context();
+ 
+   std::string resource = "";
+-  if (env->permission()->enabled() && args[0]->IsObject()) {
++  if (args[0]->IsObject()) {
+     Local<Object> js_options = args[0].As<Object>();
+     Local<Value> js_file;
+     if (!js_options->Get(context, env->file_string()).ToLocal(&js_file)) {
+diff --git a/src/node_binding.cc b/src/node_binding.cc
+--- a/src/node_binding.cc
++++ b/src/node_binding.cc
+@@ -753,8 +753,10 @@
+     return THROW_ERR_DLOPEN_DISABLED(
+       env, "Cannot load native addon because loading addons is disabled.");
+   }
++  node::Utf8Value denied_filename(env->isolate(),
++      args.Length() > 1 && args[1]->IsString() ? args[1] : Local<Value>());
+   THROW_IF_INSUFFICIENT_PERMISSIONS(
+-      env, permission::PermissionScope::kAddon, "");
++      env, permission::PermissionScope::kAddon, denied_filename.ToStringView());
+ 
+   auto context = env->context();
+ 

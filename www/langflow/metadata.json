@@ -1,0 +1,30 @@
+{
+  "update": {
+    "source": "pypi",
+    "project": "langflow",
+    "lock": "langflow"
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "langflow.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Package the editor and API with coordinated wheel pins, Python 3.15 dependency overrides and a separately compiled fastuuid dependency.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "langflow.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

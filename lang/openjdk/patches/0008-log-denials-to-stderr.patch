@@ -1,0 +1,207 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Log actual hardening denials to stderr with bounded context
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/hotspot/share/runtime/runtime_hardening_log.h b/src/hotspot/share/runtime/runtime_hardening_log.h
+new file mode 100644
+--- /dev/null
++++ b/src/hotspot/share/runtime/runtime_hardening_log.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: MIT
++ * Keep the copies carried by each runtime's logging patch identical.
++ * stderr is inherited from the supervisor (Werewolf sends it to the console).
++ * No interpreter callbacks, application logging settings or syslog required.
++ */
++#ifndef RUNTIME_HARDENING_LOG_H
++#define RUNTIME_HARDENING_LOG_H
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++static inline char *rh_log_quote(char *out, const char *text, size_t size,
++                                 size_t limit, int *truncated) {
++    static const char hex[] = "0123456789abcdef";
++    size_t i;
++    if (size > limit) { size = limit; *truncated = 1; }
++    *out++ = '"';
++    for (i = 0; i < size; i++) {
++        unsigned char c = (unsigned char)text[i];
++        if (c == '"' || c == '\\') { *out++ = '\\'; *out++ = (char)c; }
++        else if (c < 32 || c > 126) {
++            memcpy(out, "\\u00", 4); out += 4;
++            *out++ = hex[c >> 4]; *out++ = hex[c & 15];
++        } else { *out++ = (char)c; }
++    }
++    *out++ = '"';
++    return out;
++}
++
++/* The limits below keep the entire escaped record below PIPE_BUF (4096 on
++ * Linux). One write prevents concurrent workers from interleaving records.
++ * Never read the environment or the contents of a serialized payload.
++ */
++static inline void runtime_hardening_denied(const char *runtime, const char *group,
++                                           const char *operation, const char *detail) {
++    int saved_errno = errno, truncated = 0, fd;
++    char line[4096], cmdline[257], *p = line;
++    ssize_t n = -1, result;
++    size_t i, start, length = 0;
++    if (!detail) detail = "";
++    p += snprintf(p, 256,
++        "{\"event\":\"runtime-denial\",\"time\":%lld,\"pid\":%ld,\"euid\":%ld,\"runtime\":",
++        (long long)time(NULL), (long)getpid(), (long)geteuid());
++    p = rh_log_quote(p, runtime, strlen(runtime), 16, &truncated);
++    memcpy(p, ",\"group\":", 9); p += 9;
++    p = rh_log_quote(p, group, strlen(group), 24, &truncated);
++    memcpy(p, ",\"operation\":", 13); p += 13;
++    p = rh_log_quote(p, operation, strlen(operation), 48, &truncated);
++    memcpy(p, ",\"detail\":", 10); p += 10;
++    p = rh_log_quote(p, detail, strlen(detail), 192, &truncated);
++    memcpy(p, ",\"argv\":[", 9); p += 9;
++    fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
++    if (fd >= 0) { n = read(fd, cmdline, sizeof(cmdline)); close(fd); }
++    if (n > 0) {
++        length = (size_t)n;
++        if (length > 256) { length = 256; truncated = 1; }
++    }
++    for (i = 0, start = 0; i < length; i++) {
++        if (cmdline[i] == '\0' || i + 1 == length) {
++            size_t end = cmdline[i] == '\0' ? i : i + 1;
++            if (start) *p++ = ',';
++            p = rh_log_quote(p, cmdline + start, end - start, 256, &truncated);
++            start = i + 1;
++        }
++    }
++    p += snprintf(p, 32, "],\"truncated\":%s}\n", truncated ? "true" : "false");
++    do { result = write(STDERR_FILENO, line, (size_t)(p - line)); }
++    while (result < 0 && errno == EINTR);
++    errno = saved_errno;
++}
++#endif
+diff --git a/src/hotspot/share/runtime/threads.cpp b/src/hotspot/share/runtime/threads.cpp
+--- a/src/hotspot/share/runtime/threads.cpp
++++ b/src/hotspot/share/runtime/threads.cpp
+@@ -64,6 +64,7 @@
+ #include "prims/jvmtiAgentList.hpp"
+ #include "prims/jvmtiEnvBase.hpp"
+ #include "runtime_hardening_root.h"
++#include "runtime_hardening_log.h"
+ #include "runtime/arguments.hpp"
+ #include "runtime/fieldDescriptor.inline.hpp"
+ #include "runtime/flags/jvmFlagLimit.hpp"
+@@ -447,6 +448,7 @@
+ 
+ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
+   if (runtime_hardening_root_refused()) {
++    runtime_hardening_denied("java", "root", "startup", "effective UID 0");
+     fprintf(stderr, "java: refusing effective UID 0\n");
+     *canTryAgain = false;
+     return JNI_ERR;
+diff --git a/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java b/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java
+--- a/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java
++++ b/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java
+@@ -23,6 +23,63 @@
+     private static final ConcurrentHashMap<String, Boolean> FOUND = new ConcurrentHashMap<>();
+ 
+     private WerewolfAllowance() { }
++
++    private static String quote(String text, int limit, boolean[] truncated) {
++        if (text == null) text = "";
++        if (text.length() > limit) { text = text.substring(0, limit); truncated[0] = true; }
++        StringBuilder out = new StringBuilder("\"");
++        for (int i = 0; i < text.length(); i++) {
++            char c = text.charAt(i);
++            if (c == '"' || c == '\\') out.append('\\').append(c);
++            else if (c < 32 || c > 126) {
++                out.append("\\u");
++                for (int shift = 12; shift >= 0; shift -= 4) out.append("0123456789abcdef".charAt((c >> shift) & 15));
++            } else out.append(c);
++        }
++        return out.append('"').toString();
++    }
++
++    private static final class DenialOutput {
++        static final java.io.OutputStream ERR = new java.io.FileOutputStream(java.io.FileDescriptor.err);
++    }
++
++    /** Record actual refusals, even when the caller catches the exception. */
++    public static void denied(String group, String operation, String detail) {
++        try {
++            boolean[] truncated = {false};
++            StringBuilder args = new StringBuilder();
++            try (var input = Files.newInputStream(Path.of("/proc/self/cmdline"))) {
++                byte[] raw = input.readNBytes(257);
++                int length = Math.min(raw.length, 256), start = 0;
++                truncated[0] = raw.length > 256;
++                for (int i = 0; i < length; i++) {
++                    if (raw[i] == 0 || i + 1 == length) {
++                        int end = raw[i] == 0 ? i : i + 1;
++                        if (start > 0) args.append(',');
++                        args.append(quote(new String(raw, start, end - start, java.nio.charset.StandardCharsets.UTF_8), 256, truncated));
++                        start = i + 1;
++                    }
++                }
++            } catch (IOException ignored) { }
++            long euid = -1;
++            try {
++                for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
++                    if (line.startsWith("Uid:")) { euid = Long.parseLong(line.trim().split("\\s+")[2]); break; }
++                }
++            } catch (IOException | RuntimeException ignored) { }
++            String record = "{\"event\":\"runtime-denial\",\"time\":" + (System.currentTimeMillis() / 1000)
++                    + ",\"pid\":" + ProcessHandle.current().pid() + ",\"euid\":" + euid + ",\"runtime\":\"java\",\"group\":"
++                    + quote(group, 24, truncated) + ",\"operation\":" + quote(operation, 48, truncated)
++                    + ",\"detail\":" + quote(detail, 192, truncated) + ",\"argv\":[" + args
++                    + "],\"truncated\":" + truncated[0] + "}\n";
++            // Do not close or wrap System.err: applications may replace it.
++            synchronized (DenialOutput.ERR) {
++                DenialOutput.ERR.write(record.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
++            }
++        } catch (IOException | RuntimeException | LinkageError ignored) {
++            // Failure to log must never turn a refusal into permission.
++        }
++    }
+ 
+     /** Whether the image allows group: deserialize or native. */
+     public static boolean allowed(String group) {
+diff --git a/src/java.base/share/classes/java/io/ObjectInputStream.java b/src/java.base/share/classes/java/io/ObjectInputStream.java
+--- a/src/java.base/share/classes/java/io/ObjectInputStream.java
++++ b/src/java.base/share/classes/java/io/ObjectInputStream.java
+@@ -1319,8 +1319,9 @@
+                 type = type.getComponentType();
+             }
+             if (!type.isPrimitive()) {
++                jdk.internal.misc.WerewolfAllowance.denied("deserialize", "ObjectInputStream.readObject", clazz.getName());
+                 throw new InvalidClassException(clazz.getName(),
+-                        "refused: werewolf deserializes only with /etc/werewolf/allow/java/deserialize");
++                        "refused: the image must grant java:deserialize");
+             }
+         }
+         // Info about the stream is not available if overridden by subclass, return 0
+diff --git a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
+--- a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
++++ b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
+@@ -1819,6 +1819,7 @@
+                 log(sb.toString());
+             }
+             case DENY -> {
++                jdk.internal.misc.WerewolfAllowance.denied("native", "sun.misc.Unsafe", methodName);
+                 throw new UnsupportedOperationException(methodName);
+             }
+         }
+diff --git a/src/java.base/share/classes/java/lang/Module.java b/src/java.base/share/classes/java/lang/Module.java
+--- a/src/java.base/share/classes/java/lang/Module.java
++++ b/src/java.base/share/classes/java/lang/Module.java
+@@ -309,6 +309,7 @@
+                 }
+             }
+             if (illegalNativeAccess == ModuleBootstrap.IllegalNativeAccess.DENY) {
++                jdk.internal.misc.WerewolfAllowance.denied("native", owner.getName() + "::" + methodName, mod);
+                 throw new IllegalCallerException("Illegal native access from " + mod);
+             } else if (EnableNativeAccess.trySetEnableNativeAccess(target)) {
+                 // warn and set flag, so that only one warning is reported per module

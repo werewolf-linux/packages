@@ -1,0 +1,53 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Refuse runtime initialization with effective UID 0
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+
+diff --git a/src/hotspot/share/runtime/threads.cpp b/src/hotspot/share/runtime/threads.cpp
+--- a/src/hotspot/share/runtime/threads.cpp
++++ b/src/hotspot/share/runtime/threads.cpp
+@@ -63,6 +63,7 @@
+ #include "prims/jvm_misc.hpp"
+ #include "prims/jvmtiAgentList.hpp"
+ #include "prims/jvmtiEnvBase.hpp"
++#include "runtime_hardening_root.h"
+ #include "runtime/arguments.hpp"
+ #include "runtime/fieldDescriptor.inline.hpp"
+ #include "runtime/flags/jvmFlagLimit.hpp"
+@@ -445,6 +446,11 @@
+ };
+ 
+ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
++  if (runtime_hardening_root_refused()) {
++    fprintf(stderr, "java: refusing effective UID 0\n");
++    *canTryAgain = false;
++    return JNI_ERR;
++  }
+   extern void JDK_Version_init();
+ 
+   // Preinitialize version info.
+diff --git a/src/hotspot/share/runtime/runtime_hardening_root.h b/src/hotspot/share/runtime/runtime_hardening_root.h
+--- /dev/null
++++ b/src/hotspot/share/runtime/runtime_hardening_root.h
+@@ -0,0 +1,21 @@
++/* Runtime startup refuses effective root. The build marker is never packaged.
++ * No argv, environment variable, or supported runtime allowance opens this. */
++#ifndef RUNTIME_HARDENING_ROOT_H
++#define RUNTIME_HARDENING_ROOT_H
++#ifndef _WIN32
++#include <sys/stat.h>
++#include <unistd.h>
++#ifndef RUNTIME_HARDENING_BUILD_ROOT
++#define RUNTIME_HARDENING_BUILD_ROOT "/etc/runtime-hardening/build-root"
++#endif
++static int runtime_hardening_root_refused(void) {
++    struct stat st;
++    if (geteuid() != 0) return 0;
++    return !(lstat(RUNTIME_HARDENING_BUILD_ROOT, &st) == 0 &&
++             S_ISREG(st.st_mode) && st.st_uid == 0 &&
++             (st.st_mode & 0022) == 0);
++}
++#else
++static int runtime_hardening_root_refused(void) { return 1; }
++#endif
++#endif

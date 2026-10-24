@@ -1,0 +1,37 @@
+{
+  "update": {
+    "source": "npm",
+    "project": "n8n",
+    "lock": "npm",
+    "components": {
+      "launcher-version": {
+        "commit-var": "launcher-commit",
+        "repo": "n8n-io/task-runner-launcher",
+        "source": "github"
+      }
+    }
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Prune optional native profilers and watchers while retaining workflow backends and pinned dependency locks.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "n8n.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Package the npm release with a pinned dependency lock; omit optional native profilers and watchers while retaining workflow backends.",
+        "why": "Prune optional native profilers and watchers while retaining workflow backends and pinned dependency locks.",
+        "evidence": [
+          "n8n.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

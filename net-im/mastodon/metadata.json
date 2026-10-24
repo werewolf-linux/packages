@@ -1,0 +1,30 @@
+{
+  "update": {
+    "source": "github",
+    "repo": "mastodon/mastodon",
+    "prefix": "v"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Mastodon for werewolf's mastodon form, as Wolfi would package it: built by melange in Wolfi's environment with Wolfi's Ruby 4.0 and Node 24, its gems' native parts linked to Wolfi's libpq, ICU, libidn, libyaml and OpenSSL, so their fixes reach a machine with the rest of its packages (howl unpacks it into the image and checks what it links: cmd/howl/melange.zig). The assets are built here, so the machine runs Node only for the streaming server. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form names the package and this file goes.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "mastodon.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Mastodon for werewolf's mastodon form, as Wolfi would package it: built by melange in Wolfi's environment with Wolfi's Ruby 4.0 and Node 24, its gems' native parts linked to Wolfi's libpq, ICU, libidn, libyaml and OpenSSL, so their fixes reach a machine with the rest of its packages (howl unpacks it into the image and checks what it links: cmd/howl/melange.zig). The assets are built here, so the machine runs Node only for the streaming server. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form names the package and this file goes.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "mastodon.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

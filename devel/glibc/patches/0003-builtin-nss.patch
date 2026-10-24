@@ -1,0 +1,23 @@
+SPDX-License-Identifier: LGPL-2.1-or-later
+Subject: [PATCH 3/4] Retain only built-in files and DNS NSS providers
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: docs/glibc-vuln-audit.md; docs/design/glibc-neutered.md
+Base-Commit: 34106fee698c83eb0af71d4d0381e66b399be746
+
+diff --git a/nss/nss_module.c b/nss/nss_module.c
+index cb8fde38..ff59474b 100644
+--- a/nss/nss_module.c
++++ b/nss/nss_module.c
+@@ -174,6 +174,12 @@ module_load (struct nss_module *module)
+   if (strcmp (module->name, "dns") == 0)
+     return module_load_nss_dns (module);
+ 
++  /* Only the built-in files and dns providers are available.  */
++  __libc_lock_lock (nss_module_list_lock);
++  atomic_store_release (&module->state, nss_module_failed);
++  __libc_lock_unlock (nss_module_list_lock);
++  return false;
++
+   void *handle;
+   {
+     char *shlib_name;

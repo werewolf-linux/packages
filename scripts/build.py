@@ -18,12 +18,13 @@ def main():
         raise ValueError('CI packages require a native Linux runner for ' + args.arch)
     os.chdir(common.ROOT)
     meta = common.metadata(args.package)
+    recipe = common.context(args.package)
     melange = os.environ.get('MELANGE', 'melange')
     pin = json.loads((common.ROOT / 'tools.lock.json').read_text())['melange']['version']
     if 'v' + pin not in subprocess.check_output([melange, 'version'], text=True):
         raise ValueError('install pinned Melange with scripts/install-melange.py')
     commit = os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', '-c', 'safe.directory=' + str(common.ROOT), 'rev-parse', 'HEAD'], text=True).strip()
-    timestamp = subprocess.check_output(['git', '-c', 'safe.directory=' + str(common.ROOT), 'log', '-1', '--format=%ct', '--', args.package], text=True).strip()
+    timestamp = subprocess.check_output(['git', '-c', 'safe.directory=' + str(common.ROOT), 'log', '-1', '--format=%ct', '--', str(recipe.parent.relative_to(common.ROOT))], text=True).strip()
     if not timestamp.isdigit():
         raise ValueError('missing source commit timestamp')
     output = common.ROOT / 'build/artifacts' / args.package
@@ -36,7 +37,7 @@ def main():
     env = {k: os.environ[k] for k in ['PATH', 'HOME', 'LANG', 'SSL_CERT_FILE'] if k in os.environ}
     env.update(SOURCE_DATE_EPOCH=timestamp, TMPDIR=str(scratch))
     subprocess.run([melange, 'build', str(common.context(args.package)), '--runner', 'bubblewrap', '--arch', args.arch,
-                    '--source-dir', str(common.ROOT / args.package), '--out-dir', str(output),
+                    '--source-dir', str(recipe.parent), '--out-dir', str(output),
                     '--cache-dir', str(common.ROOT / 'build/cache/melange'),
                     '--apk-cache-dir', str(common.ROOT / 'build/cache/apk'), '--generate-index=false',
                     '--namespace', 'werewolf', '--git-commit', commit,

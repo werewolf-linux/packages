@@ -35,8 +35,12 @@ jobs:
         with:
           version: '0.12.23'
       - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - name: Install package test dependencies
+        run: |
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r wolfi/requirements.txt
       - name: Test update and publication logic
-        run: PATH="$PWD/build/tools:$PATH" make test check
+        run: PATH="$PWD/build/tools:$PATH" make PYTHON=build/venv/bin/python test check
       - name: Prepare each complete update independently
         id: update
         continue-on-error: true
@@ -53,7 +57,8 @@ jobs:
           test -f build/updates.json
           jq -r '.[] | select(.status == "updated") | [.package, .latest] | @tsv' build/updates.json >build/changed.tsv
           while IFS="$(printf '\t')" read -r package version; do
-            git add -- "$package"
+            directory=$(python3 scripts/catalog.py path "$package" --engine upstream)
+            git add -- "$directory"
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m "update: $package to $version"
           done <build/changed.tsv

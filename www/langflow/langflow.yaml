@@ -1,0 +1,92 @@
+package:
+  name: langflow
+  version: "1.13.0"
+  epoch: 3
+  description: Langflow editor, API and local CPU inference on hardened Python
+  copyright:
+    - license: MIT
+  dependencies:
+    runtime:
+      - python-3.15>=3.15.0_git20261010-r2000
+      - py3.15-onnxruntime=1.31.0-r1
+      - libstdc++
+
+environment:
+  contents:
+    repositories:
+      - https://packages.wolfi.dev/os
+    keyring:
+      - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - clang-23
+      - cmake
+      - ninja-build
+      - rust-1.98
+      - ca-certificates-bundle
+      - python-3.15
+      - python-3.15-dev
+      - libev-dev
+      - uv
+  environment:
+    CC: clang
+    CXX: clang++
+    CMAKE_BUILD_PARALLEL_LEVEL: "4"
+    PATH: /usr/lib/ninja-build/bin:/usr/local/bin:/usr/bin:/bin
+    UV_PYTHON_DOWNLOADS: never
+    UV_LINK_MODE: copy
+
+pipeline:
+  - uses: fetch
+    with:
+      uri: "https://files.pythonhosted.org/packages/4e/8f/0efed9dad31b319494ac9e8bb04574e9e350de59b613cd1a539c838cb00f/langflow-1.13.0-py3-none-any.whl"
+      expected-sha256: "fc35c2c13b4fea4f64c842ca609cf262e52a7d1a4b4e5aa0286526cbddb67a00"
+      extract: false
+
+  - uses: fetch
+    with:
+      uri: "https://files.pythonhosted.org/packages/48/5f/4766c4d4ea355ee026e8ca6f3aee7e0656bd57280912fc7b59730b135619/langflow_base-1.13.0-py3-none-any.whl"
+      expected-sha256: "e15db23e16cf27d6d1ac8fcc5030cf25ad3a04356a9581862b4e97de739dd3a2"
+      extract: false
+
+  - uses: fetch
+    with:
+      uri: "https://files.pythonhosted.org/packages/14/09/fcd474a6426eabf93531ec6e6198032f2aad63eddb5ab2d4741ba07d3a06/lfx-1.13.0-py3-none-any.whl"
+      expected-sha256: "8d2e90f6438a4c6258256086676dd4d7b9f6ded2110d51ad1c96afa37eb8ac3b"
+      extract: false
+
+  - runs: |
+      # Use CP315 wheel tags. Only metadata's Python upper bounds are bypassed;
+      # no CP314 binary or alternate interpreter is installed.
+      python3.15 -m venv --system-site-packages /usr/lib/langflow
+      # FastUUID's PyO3 0.26 supports Python through 3.14. Its documented
+      # stable ABI mode is forward compatible; scope this to that build alone.
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 /usr/lib/langflow/bin/python -m pip install \
+        --no-deps --require-hashes --no-binary=fastuuid -r fastuuid-requirements.txt
+      /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
+        --require-hashes --prefer-binary --only-binary=apsw,chromadb -r requirements.txt
+      /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
+        langflow-1.13.0-py3-none-any.whl langflow_base-1.13.0-py3-none-any.whl lfx-1.13.0-py3-none-any.whl
+      # APSW's wheel bundles non-PIE SQLite diagnostic executables. Langflow
+      # uses the binding, not those command-line tools.
+      rm -rf /usr/lib/langflow/lib/python3.15/site-packages/apsw/sqlite_extra_binaries
+      /usr/lib/langflow/bin/python -P -c 'import fastuuid; value=fastuuid.uuid4(); assert fastuuid.UUID(str(value)) == value'
+      /usr/lib/langflow/bin/python port-python.py /usr/lib/langflow/lib/python3.15/site-packages
+      # Import the complete API during packaging, so missing runtime providers
+      # and interpreter compatibility errors fail before an image is shipped.
+      cp check-import.py /usr/lib/langflow/check-import.py
+      /usr/lib/langflow/bin/python -P /usr/lib/langflow/check-import.py
+      cp server.py /usr/lib/langflow/server.py
+      cp check-embedding.py /usr/lib/langflow/check-embedding.py
+      PYTHONHASHSEED=0 /usr/lib/langflow/bin/python -m compileall \
+        -q -f -j 1 --invalidation-mode checked-hash /usr/lib/langflow
+      # Remove installer entrypoints and their implementations from the runtime.
+      rm -rf /usr/lib/langflow/lib/python3.15/site-packages/pip \
+        /usr/lib/langflow/lib/python3.15/site-packages/pip-*.dist-info
+      rm -f /usr/lib/langflow/bin/activate* /usr/lib/langflow/bin/pip*
+      mkdir -p ${{targets.destdir}}/usr/lib
+      cp -a /usr/lib/langflow ${{targets.destdir}}/usr/lib/langflow
+
+update:
+  enabled: false

@@ -20,7 +20,6 @@ type spec struct {
 	Packages []string `json:"packages"`
 	Runs     string   `json:"runs"`
 	Allow    []string `json:"allow,omitempty"`
-	Runtime  string   `json:"runtime,omitempty"`
 }
 
 func main() {
@@ -61,7 +60,11 @@ func check(name, arch string) error {
 		fmt.Println(name + ": native build and APK validation passed; no additional runtime smoke test")
 		return nil
 	}
-	paths, _ := filepath.Glob(filepath.Join(name, "*.yaml"))
+	directory, err := update.ContextPath(root, name)
+	if err != nil {
+		return err
+	}
+	paths, _ := filepath.Glob(filepath.Join(directory, "*.yaml"))
 	if len(paths) != 1 {
 		return fmt.Errorf("expected one recipe")
 	}
@@ -114,23 +117,9 @@ func check(name, arch string) error {
 		return err
 	}
 	packages := append([]string{"busybox", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
-	mutations := []map[string]any{}
-	if len(s.Allow) != 0 {
-		runtime := s.Runtime
-		if runtime == "" {
-			runtime = "node"
-		}
-		if runtime != "node" && runtime != "python" {
-			return fmt.Errorf("unsupported test runtime: %s", runtime)
-		}
-		allowDir := "/etc/runtime-hardening/allow/all/" + runtime
-		mutations = append(mutations, map[string]any{"path": allowDir, "type": "directory", "permissions": 0o755})
-		for _, allow := range s.Allow {
-			if allow != "native" && !(runtime == "node" && allow == "writable-source") {
-				return fmt.Errorf("unsupported %s test allowance: %s", runtime, allow)
-			}
-			mutations = append(mutations, map[string]any{"path": allowDir + "/" + allow, "type": "empty-file", "permissions": 0o444})
-		}
+	mutations, err := runtimePaths(s)
+	if err != nil {
+		return err
 	}
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
@@ -163,4 +152,23 @@ func smokeCommand(runs string) string {
 		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
+}
+
+// Allowances name both the runtime and the group, such as python:native.
+func runtimePaths(s spec) ([]map[string]any, error) {
+	mutations := []map[string]any{}
+	directories := map[string]bool{}
+	for _, allow := range s.Allow {
+		language, group, qualified := strings.Cut(allow, ":")
+		if !qualified || (language != "node" && language != "python") || (group != "native" && group != "writable-source") {
+			return nil, fmt.Errorf("unsupported runtime test allowance: %s", allow)
+		}
+		directory := "/etc/runtime-hardening/allow/all/" + language
+		if !directories[directory] {
+			mutations = append(mutations, map[string]any{"path": directory, "type": "directory", "permissions": 0o755})
+			directories[directory] = true
+		}
+		mutations = append(mutations, map[string]any{"path": directory + "/" + group, "type": "empty-file", "permissions": 0o444})
+	}
+	return mutations, nil
 }

@@ -1,0 +1,21 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH 5/6] Deny sun.misc.Unsafe memory access unless allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
+--- a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
++++ b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
+@@ -1853,6 +1853,11 @@
+          * Return the value.
+          */
+         static MemoryAccessOption value() {
++            // Werewolf: denied unless the image allows java:unsafe, whatever
++            // --sun-misc-unsafe-memory-access says.
++            if (!jdk.internal.misc.WerewolfAllowance.allowed("native")) {
++                return MemoryAccessOption.DENY;
++            }
+             String value = VM.getSavedProperty("sun.misc.unsafe.memory.access");
+             if (value != null) {
+                 return switch (value) {

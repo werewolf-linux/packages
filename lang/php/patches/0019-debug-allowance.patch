@@ -1,0 +1,150 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Require debug for fatal backtrace capture and diagnostic output
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
+Base-Commit: 136e049ac10b032c83018e65b63b6df858943750
+
+Keep ordinary logging, exception traces, programmatic debug_backtrace() and
+var_export() available. Rename diagnostics to debug for phpinfo and CLI -i.
+The fatal guard runs before capture, independent of INI settings, and observes
+revocation without allocating from the PHP heap or entering PHP error handling.
+
+--- a/main/main.c
++++ b/main/main.c
+@@ -891,8 +891,22 @@
+ 	{"posix_setpgid", "process"},
+ 	{"stream_socket_server", "listen"}, {"stream_socket_accept", "listen"},
+ 	{"posix_mkfifo", "special-files"}, {"posix_mknod", "special-files"},
+-	{"phpinfo", "diagnostics"},
++	{"phpinfo", "debug"}, {"phpcredits", "debug"},
++	{"var_dump", "debug"}, {"print_r", "debug"},
++	{"debug_zval_dump", "debug"}, {"debug_print_backtrace", "debug"},
+ };
++
++/* Called before Zend allocates or publishes a fatal backtrace. This must
++ * not raise a PHP diagnostic or allocate on the request heap: it can run
++ * during startup, compilation, or memory exhaustion. */
++static bool php_werewolf_fatal_backtrace(void)
++{
++	if (php_werewolf_allowed("debug")) {
++		return true;
++	}
++	runtime_hardening_denied("php", "debug", "fatal_error_backtraces", "");
++	return false;
++}
+ 
+ static void php_werewolf_undefined_function(const char *name)
+ {
+@@ -2530,6 +2544,7 @@
+ 	zuf.resolve_path_function = php_resolve_path_for_zend;
+ 	zuf.random_bytes_function = php_random_bytes_ex;
+ 	zuf.random_bytes_insecure_function = php_random_bytes_insecure_for_zend;
++	zend_runtime_hardening_fatal_backtrace = php_werewolf_fatal_backtrace;
+ 	zend_startup(&zuf);
+ 	zend_reset_lc_ctype_locale();
+ 	zend_update_current_locale();
+--- a/Zend/zend.h
++++ b/Zend/zend.h
+@@ -360,6 +360,7 @@
+ extern ZEND_API void (*zend_interrupt_function)(zend_execute_data *execute_data);
+ 
+ extern ZEND_API void (*zend_error_cb)(int type, zend_string *error_filename, const uint32_t error_lineno, zend_string *message);
++extern ZEND_API bool (*zend_runtime_hardening_fatal_backtrace)(void);
+ extern ZEND_API void (*zend_on_timeout)(int seconds);
+ extern ZEND_API zend_result (*zend_stream_open_function)(zend_file_handle *handle);
+ extern void (*zend_printf_to_smart_string)(smart_string *buf, const char *format, va_list ap);
+--- a/Zend/zend.c
++++ b/Zend/zend.c
+@@ -85,6 +85,8 @@
+ ZEND_API zend_write_func_t zend_write;
+ ZEND_API FILE *(*zend_fopen)(zend_string *filename, zend_string **opened_path);
+ ZEND_API zend_result (*zend_stream_open_function)(zend_file_handle *handle);
++/* No host policy installed means no automatic fatal backtrace. */
++ZEND_API bool (*zend_runtime_hardening_fatal_backtrace)(void) = NULL;
+ ZEND_API void (*zend_ticks_function)(int ticks);
+ ZEND_API void (*zend_interrupt_function)(zend_execute_data *execute_data);
+ ZEND_API void (*zend_error_cb)(int type, zend_string *error_filename, const uint32_t error_lineno, zend_string *message);
+@@ -1530,7 +1532,9 @@
+ 				ex->opline = opline;
+ 			}
+ 		}
+-	} else if (EG(fatal_error_backtrace_on) && (type & E_FATAL_ERRORS)) {
++	} else if (EG(fatal_error_backtrace_on) && (type & E_FATAL_ERRORS)
++			&& zend_runtime_hardening_fatal_backtrace
++			&& zend_runtime_hardening_fatal_backtrace()) {
+ 		zend_fetch_debug_backtrace(&EG(last_fatal_error_backtrace), 0, EG(exception_ignore_args) ? DEBUG_BACKTRACE_IGNORE_ARGS : 0, 0);
+ 	}
+ 
+--- a/ext/standard/info.c
++++ b/ext/standard/info.c
+@@ -133,6 +133,14 @@
+ 
+ PHPAPI ZEND_COLD void php_info_print_module(zend_module_entry *zend_module) /* {{{ */
+ {
++	/* ReflectionExtension::info() bypasses the phpinfo() function floor. */
++	if (!php_werewolf_allowed("debug")) {
++		runtime_hardening_denied("php", "debug", "module_info", zend_module->name);
++		php_error_docref(NULL, E_WARNING, "PHP module information is refused: "
++			"the image allows it only by php:debug");
++		return;
++	}
++
+ 	if (zend_module->info_func || zend_module->version) {
+ 		if (!sapi_module.phpinfo_as_text) {
+ 			zend_string *url_name = php_url_encode(zend_module->name, strlen(zend_module->name));
+@@ -761,10 +769,10 @@
+ PHPAPI ZEND_COLD void php_print_info(int flag)
+ {
+ 	/* CLI -i and embedded callers bypass the phpinfo() function table. */
+-	if (!php_werewolf_allowed("diagnostics")) {
+-		runtime_hardening_denied("php", "diagnostics", "phpinfo", "");
++	if (!php_werewolf_allowed("debug")) {
++		runtime_hardening_denied("php", "debug", "phpinfo", "");
+ 		php_error_docref(NULL, E_WARNING, "PHP information is refused: "
+-			"the image allows it only by php:diagnostics");
++			"the image allows it only by php:debug");
+ 		return;
+ 	}
+ 
+--- a/ext/standard/credits.c
++++ b/ext/standard/credits.c
+@@ -16,6 +16,7 @@
+ */
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "info.h"
+ #include "SAPI.h"
+ 
+@@ -23,6 +24,14 @@
+ 
+ PHPAPI ZEND_COLD void php_print_credits(int flag) /* {{{ */
+ {
++	/* Native callers can bypass the PHP function table. */
++	if (!php_werewolf_allowed("debug")) {
++		runtime_hardening_denied("php", "debug", "phpcredits", "");
++		php_error_docref(NULL, E_WARNING, "PHP credits are refused: "
++			"the image allows it only by php:debug");
++		return;
++	}
++
+ 	if (!sapi_module.phpinfo_as_text && flag & PHP_CREDITS_FULLPAGE) {
+ 		php_print_info_htmlhead();
+ 	}
+--- a/sapi/cli/php_cli.c
++++ b/sapi/cli/php_cli.c
+@@ -1114,6 +1114,14 @@
+ 			}
+ 		case PHP_CLI_MODE_REFLECTION_EXT_INFO:
+ 			{
++				/* --ri main prints INI entries without php_info_print_module(). */
++				if (!php_werewolf_allowed("debug")) {
++					runtime_hardening_denied("php", "debug", "module_info", reflection_what);
++					fprintf(stderr, "php: module information requires php:debug\n");
++					EG(exit_status) = 1;
++					break;
++				}
++
+ 				size_t len = strlen(reflection_what);
+ 				char *lcname = zend_str_tolower_dup(reflection_what, len);
+ 				zend_module_entry *module;

@@ -1,0 +1,51 @@
+{
+  "update": {
+    "source": "wolfi",
+    "family": "python-"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": true,
+    "minimized_reason": "Omit readline and curses native extensions in addition to GUI, JIT and free-threaded variants. Retain SQLite, GDBM and shelve for application persistence.",
+    "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
+    "evidence": [
+      "package.py",
+      "tests/probe.py",
+      "tests/probe.sh"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "python-*"
+    ],
+    "changes": [
+      {
+        "what": "Omit GUI, documentation, alternate JIT and unused interpreter variants.",
+        "why": "Publish the interpreter and development packages needed by current consumers.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Ignore runtime environment settings and user sites; refuse effective-root startup; gate ctypes, pickle globals, inline input and writable main scripts.",
+        "why": "Reduce attacker-controlled code loading paths while preserving explicit root-held allowances.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Omit readline and curses native extensions in addition to GUI, JIT and free-threaded variants. Retain SQLite, GDBM and shelve for application persistence.",
+        "why": "Reduce optional runtime dependencies while preserving tested common consumers.",
+        "evidence": [
+          "package.py",
+          "tests/probe.py",
+          "tests/probe.sh"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay."
+  }
+}

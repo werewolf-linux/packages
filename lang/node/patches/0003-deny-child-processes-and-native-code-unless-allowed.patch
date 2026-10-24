@@ -1,0 +1,190 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Deny child processes and native code unless allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 26e72d85a611e222e3f06025de8a3c496923bacd
+
+diff --git a/src/permission/permission.h b/src/permission/permission.h
+--- a/src/permission/permission.h
++++ b/src/permission/permission.h
+@@ -6,6 +6,7 @@
+ #include "debug_utils.h"
+ #include "node_diagnostics_channel.h"
+ #include "permission/permission_base.h"
++#include "node_hardening.h"
+ 
+ #include <array>
+ #include <string_view>
+@@ -27,7 +28,8 @@
+     const auto resource__ = (resource);                                        \
+     if (!env__->permission()->is_granted(env__, perm__, resource__))           \
+         [[unlikely]] {                                                         \
+-      if (!env__->permission()->warning_only()) {                              \
++      if (!env__->permission()->warning_only() || \
++          !node::permission::HardeningGranted(perm__)) {                              \
+         node::permission::Permission::ThrowAccessDenied(                       \
+             env__, perm__, resource__);                                        \
+         return __VA_ARGS__;                                                    \
+@@ -43,7 +45,8 @@
+     const auto resource__ = (resource);                                        \
+     if (!env__->permission()->is_granted(env__, perm__, resource__))           \
+         [[unlikely]] {                                                         \
+-      if (!env__->permission()->warning_only()) {                              \
++      if (!env__->permission()->warning_only() || \
++          !node::permission::HardeningGranted(perm__)) {                              \
+         node::permission::Permission::AsyncThrowAccessDenied(                  \
+             env__, (wrap), perm__, resource__);                                \
+         return __VA_ARGS__;                                                    \
+@@ -59,7 +62,8 @@
+     const auto resource__ = (resource);                                        \
+     if (!env__->permission()->is_granted(env__, perm__, resource__))           \
+         [[unlikely]] {                                                         \
+-      if (!env__->permission()->warning_only()) {                              \
++      if (!env__->permission()->warning_only() || \
++          !node::permission::HardeningGranted(perm__)) {                              \
+         Local<Value> err_access;                                               \
+         if (node::permission::CreateAccessDeniedError(                         \
+                 env__, perm__, resource__)                                     \
+@@ -84,6 +88,19 @@
+     MakeCallback(env()->oncomplete_string(), 1, &arg);                         \
+   }
+ 
++// This floor applies with permissions disabled, in audit mode, in workers,
++// and below JS wrappers. --allow-* never grants an image capability.
++inline bool HardeningGranted(PermissionScope permission) {
++  switch (permission) {
++    case PermissionScope::kChildProcess: return hardening::Allowed("exec");
++    case PermissionScope::kAddon:
++    case PermissionScope::kFFI:
++    case PermissionScope::kWASI:
++    case PermissionScope::kOpenSSLStore: return hardening::Allowed("native");
++    default: return true;
++  }
++}
++
+ class Permission {
+  public:
+   Permission();
+@@ -91,6 +108,7 @@
+   FORCE_INLINE bool is_granted(Environment* env,
+                                PermissionScope permission,
+                                std::string_view res = "") const {
++    if (!HardeningGranted(permission)) return false;
+     if (!enabled_) [[likely]] {
+       return true;
+     }
+diff --git a/src/permission/permission.cc b/src/permission/permission.cc
+--- a/src/permission/permission.cc
++++ b/src/permission/permission.cc
+@@ -259,7 +259,11 @@
+ MaybeLocal<Value> CreateAccessDeniedError(Environment* env,
+                                           PermissionScope perm,
+                                           std::string_view res) {
+-  const char* suggestion = GetErrorFlagSuggestion(perm);
++  const char* suggestion = !HardeningGranted(perm)
++      ? (perm == PermissionScope::kChildProcess
++             ? "The image must grant node:exec; command-line flags grant nothing."
++             : "The image must grant node:native; command-line flags grant nothing.")
++      : GetErrorFlagSuggestion(perm);
+   Local<Object> err = ERR_ACCESS_DENIED(
+       env->isolate(), "Access to this API has been restricted. %s", suggestion);
+ 
+diff --git a/src/node_sqlite.cc b/src/node_sqlite.cc
+--- a/src/node_sqlite.cc
++++ b/src/node_sqlite.cc
+@@ -1975,6 +1975,10 @@
+         return;
+       }
+       allow_load_extension = allow_extension_v.As<Boolean>()->Value();
++      if (allow_load_extension) {
++        THROW_IF_INSUFFICIENT_PERMISSIONS(
++            env, permission::PermissionScope::kAddon, "sqlite extension");
++      }
+     }
+ 
+     Local<Value> timeout_v;
+@@ -3586,6 +3590,8 @@
+ 
+   auto isolate = env->isolate();
+ 
++  THROW_IF_INSUFFICIENT_PERMISSIONS(
++      env, permission::PermissionScope::kAddon, "sqlite extension");
+   BufferValue path(isolate, args[0]);
+   BufferValue entryPoint(isolate, args[1]);
+   CHECK_NOT_NULL(*path);
+diff --git a/src/node_ffi.cc b/src/node_ffi.cc
+--- a/src/node_ffi.cc
++++ b/src/node_ffi.cc
+@@ -1376,6 +1376,9 @@
+                        void* priv) {
+   Environment* env = Environment::GetCurrent(context);
+ 
++  // Pointer read/write helpers also expose arbitrary native memory, so gate
++  // the entire binding, including callers that bypass the JS FFI wrapper.
++  THROW_IF_INSUFFICIENT_PERMISSIONS(env, permission::PermissionScope::kFFI, "");
+   // Create the DynamicLibrary template
+   Local<FunctionTemplate> dl_tmpl = DynamicLibrary::GetConstructorTemplate(env);
+   SetConstructorFunction(context,
+diff --git a/src/node.cc b/src/node.cc
+--- a/src/node.cc
++++ b/src/node.cc
+@@ -32,6 +32,7 @@
+ #include "memory_tracker-inl.h"
+ #include "node_binding.h"
+ #include "node_builtins.h"
++#include "node_hardening.h"
+ #include "node_errors.h"
+ #include "node_internals.h"
+ #include "node_main_instance.h"
+@@ -766,6 +767,10 @@
+   if (!errors->empty()) return ExitCode::kInvalidCommandLineArgument;
+ 
+   std::string revert_error;
++  if (!per_process::cli_options->security_reverts.empty()) {
++    errors->emplace_back("node: security reverts are disabled");
++    return ExitCode::kInvalidCommandLineArgument;
++  }
+   for (const std::string& cve : per_process::cli_options->security_reverts) {
+     Revert(cve.c_str(), &revert_error);
+     if (!revert_error.empty()) {
+@@ -1186,6 +1191,13 @@
+     per_process::enabled_debug_list.Parse(nullptr);
+   }
+ 
++  // OpenSSL also reads its environment directly, outside SafeGetenv.
++  if (!hardening::Allowed("native")) {
++    for (const char* key : {"OPENSSL_CONF", "OPENSSL_CONF_INCLUDE",
++                            "OPENSSL_MODULES", "OPENSSL_ENGINES"}) {
++      uv_os_unsetenv(key);
++    }
++  }
+   PlatformInit(flags);
+ 
+   // This needs to run *before* V8::Initialize().
+@@ -1204,6 +1216,12 @@
+   }
+ 
+   // A bare `--run` (empty value) lists the available scripts; a value runs it.
++  if (per_process::cli_options->has_run && !hardening::Allowed("exec")) {
++    result->errors_.emplace_back("node: --run requires node:exec");
++    result->exit_code_ = ExitCode::kGenericUserError;
++    result->early_return_ = true;
++    return result;
++  }
+   if (per_process::cli_options->has_run) {
+     auto positional_args = task_runner::GetPositionalArgs(args);
+     result->early_return_ = true;
+@@ -1285,6 +1303,13 @@
+     credentials::SafeGetenv("OPENSSL_CONF", &env_openssl_conf);
+     if (!env_openssl_conf.empty()) {
+       conf_file = env_openssl_conf.c_str();
++    }
++    if (!per_process::cli_options->openssl_config.empty() &&
++        !hardening::Allowed("native")) {
++      result->errors_.emplace_back("node:native required for --openssl-config");
++      result->exit_code_ = ExitCode::kGenericUserError;
++      result->early_return_ = true;
++      return result;
+     }
+     // Use --openssl-conf command line option if specified.
+     if (!per_process::cli_options->openssl_config.empty()) {

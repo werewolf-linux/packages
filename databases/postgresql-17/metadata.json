@@ -1,0 +1,37 @@
+{
+  "update": {
+    "source": "github-tags",
+    "repo": "postgres/postgres",
+    "prefix": "REL_",
+    "separator": "_",
+    "series": "17",
+    "reason": "Database major upgrades require an explicit data migration; follow PostgreSQL 17 maintenance releases."
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
+    "pledge_reason": "Service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "postgresql-17.yaml",
+      "tests/consumers.sh"
+    ]
+  },
+  "wolfi": {
+    "relationship": "replacement",
+    "recipes": [
+      "postgresql-17.yaml"
+    ],
+    "changes": [
+      {
+        "what": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
+        "why": "Keep common SQL, backup and extension workflows without optional enterprise authentication libraries.",
+        "evidence": [
+          "postgresql-17.yaml",
+          "tests/consumers.sh"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships equivalent dependency reductions and consumer tests pass."
+  }
+}

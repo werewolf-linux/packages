@@ -1,0 +1,31 @@
+{
+  "update": {
+    "source": "npm",
+    "project": "n8n",
+    "lock": "npm",
+    "hold": "Intentionally vulnerable training release; never advance this fixture automatically."
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Keep a deliberately vulnerable training release with isolated package identity.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "n8n.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Package the intentionally vulnerable application release under an isolated training package name.",
+        "why": "Keep a deliberately vulnerable training release with isolated package identity.",
+        "evidence": [
+          "n8n.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Retire with the training scenario; never replace its deliberately vulnerable release automatically."
+  }
+}

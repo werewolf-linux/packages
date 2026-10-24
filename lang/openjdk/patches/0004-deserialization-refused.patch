@@ -1,0 +1,29 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH 4/6] Deserialize no class unless allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/java.base/share/classes/java/io/ObjectInputStream.java b/src/java.base/share/classes/java/io/ObjectInputStream.java
+--- a/src/java.base/share/classes/java/io/ObjectInputStream.java
++++ b/src/java.base/share/classes/java/io/ObjectInputStream.java
+@@ -1310,6 +1310,19 @@
+      */
+     private void filterCheck(Class<?> clazz, int arrayLength)
+             throws InvalidClassException {
++        // Werewolf: as the filter !* would, refuse every class but a
++        // primitive array unless the image allows java:deserialize, whatever
++        // filter, filter factory or jdk.serialFilter says.
++        if (clazz != null && !jdk.internal.misc.WerewolfAllowance.allowed("deserialize")) {
++            Class<?> type = clazz;
++            while (type.isArray()) {
++                type = type.getComponentType();
++            }
++            if (!type.isPrimitive()) {
++                throw new InvalidClassException(clazz.getName(),
++                        "refused: werewolf deserializes only with /etc/werewolf/allow/java/deserialize");
++            }
++        }
+         // Info about the stream is not available if overridden by subclass, return 0
+         long bytesRead = (bin == null) ? 0 : bin.getBytesRead();
+         RuntimeException ex = null;

@@ -1,0 +1,70 @@
+SPDX-License-Identifier: PSF-2.0
+Subject: [PATCH 5/5] Refuse inline code and scripts from writable mounts
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 626fb7612218cf10fbcf0525fce6b37c8a60d4be
+
+diff --git a/Modules/main.c b/Modules/main.c
+--- a/Modules/main.c
++++ b/Modules/main.c
+@@ -654,6 +654,32 @@
+ }
+ 
+ 
++#ifndef MS_WINDOWS
++#  include <sys/statvfs.h>   // statvfs
++#endif
++
++/* Werewolf runtime-hardening allowance check (Python/preconfig.c). */
++extern int _Py_RuntimeHardeningAllowed(const char *feature);
++
++/* Werewolf: is the file on a writable mount (not the read-only root)? Only a
++   positive answer refuses; a stat failure defers to Python's own handling. */
++static int
++werewolf_source_is_writable(const wchar_t *filename)
++{
++#ifdef MS_WINDOWS
++    return 0;
++#else
++    char *path = _Py_EncodeLocaleRaw(filename, NULL);
++    if (path == NULL) {
++        return 1;  /* cannot tell: fail closed */
++    }
++    struct statvfs vfs;
++    int writable = (statvfs(path, &vfs) == 0) && !(vfs.f_flag & ST_RDONLY);
++    PyMem_RawFree(path);
++    return writable;
++#endif
++}
++
+ static void
+ pymain_run_python(int *exitcode)
+ {
+@@ -727,6 +753,27 @@
+         }
+     }
+ 
++    /* Werewolf (docs/design/hardened-interpreters.md): only code already on
++       the read-only root runs. Refuse inline code and scripts on writable
++       mounts unless the image allows python:inline / python:writable-source. */
++    if (config->run_command != NULL ||
++        (config_run_code(config) == 0 && !stdin_is_interactive(config))) {
++        if (!_Py_RuntimeHardeningAllowed("inline")) {
++            fprintf(stderr, "python: inline code (-c or piped stdin) is "
++                    "refused; the image allows it only by python:inline\n");
++            *exitcode = 1;
++            goto done;
++        }
++    }
++    if (config->run_filename != NULL &&
++        !_Py_RuntimeHardeningAllowed("writable-source") &&
++        werewolf_source_is_writable(config->run_filename)) {
++        fprintf(stderr, "python: running a script from a writable mount is "
++                "refused; the image allows it only by python:writable-source\n");
++        *exitcode = 1;
++        goto done;
++    }
++
+     pymain_header(config);
+ 
+     _PyInterpreterState_SetRunningMain(interp);

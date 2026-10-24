@@ -1,0 +1,76 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Refuse runtime initialization with effective UID 0
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+
+diff --git a/src/node.cc b/src/node.cc
+--- a/src/node.cc
++++ b/src/node.cc
+@@ -19,6 +19,7 @@
+ // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+ // USE OR OTHER DEALINGS IN THE SOFTWARE.
+ 
++#include "runtime_hardening_root.h"
+ #include "node.h"
+ #include "node_config_file.h"
+ #include "node_dotenv.h"
+@@ -1179,6 +1180,12 @@
+                                      ProcessInitializationFlags::kNoFlags) {
+   auto result = std::make_shared<InitializationResultImpl>();
+   result->args_ = args;
++  if (runtime_hardening_root_refused()) {
++    result->errors_.emplace_back("node: refusing effective UID 0");
++    result->exit_code_ = ExitCode::kGenericUserError;
++    result->early_return_ = true;
++    return result;
++  }
+ 
+   if (!(flags & ProcessInitializationFlags::kNoParseGlobalDebugVariables)) {
+     // Initialized the enabled list for Debug() calls with system
+diff --git a/src/runtime_hardening_root.h b/src/runtime_hardening_root.h
+--- /dev/null
++++ b/src/runtime_hardening_root.h
+@@ -0,0 +1,21 @@
++/* Runtime startup refuses effective root. The build marker is never packaged.
++ * No argv, environment variable, or supported runtime allowance opens this. */
++#ifndef RUNTIME_HARDENING_ROOT_H
++#define RUNTIME_HARDENING_ROOT_H
++#ifndef _WIN32
++#include <sys/stat.h>
++#include <unistd.h>
++#ifndef RUNTIME_HARDENING_BUILD_ROOT
++#define RUNTIME_HARDENING_BUILD_ROOT "/etc/runtime-hardening/build-root"
++#endif
++static int runtime_hardening_root_refused(void) {
++    struct stat st;
++    if (geteuid() != 0) return 0;
++    return !(lstat(RUNTIME_HARDENING_BUILD_ROOT, &st) == 0 &&
++             S_ISREG(st.st_mode) && st.st_uid == 0 &&
++             (st.st_mode & 0022) == 0);
++}
++#else
++static int runtime_hardening_root_refused(void) { return 1; }
++#endif
++#endif
+diff --git a/src/api/environment.cc b/src/api/environment.cc
+--- a/src/api/environment.cc
++++ b/src/api/environment.cc
+@@ -5,6 +5,7 @@
+ #include "env.h"
+ #include "env_properties.h"
+ #include "node.h"
++#include "runtime_hardening_root.h"
+ #include "node_builtins.h"
+ #include "node_context_data.h"
+ #include "node_debug.h"
+@@ -462,6 +463,10 @@
+     ThreadId thread_id,
+     std::unique_ptr<InspectorParentHandle> inspector_parent_handle,
+     std::string_view thread_name) {
++  if (runtime_hardening_root_refused()) {
++    fprintf(stderr, "node: refusing effective UID 0\n");
++    return nullptr;
++  }
+   Isolate* isolate = isolate_data->isolate();
+ 
+   Isolate::Scope isolate_scope(isolate);

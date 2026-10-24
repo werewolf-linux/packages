@@ -1,0 +1,54 @@
+# Caddy for werewolf's caddy form, as Wolfi packages it but position
+# independent: Wolfi builds its Go programs without -buildmode=pie, so
+# their code and data load at a fixed address that ASLR cannot move,
+# which werewolf's image build refuses (lib/image.zig). Built by melange
+# in Wolfi's environment with Wolfi's Go, static (no cgo) but for the
+# loader that relocates it, from the release tag's commit, with Wolfi's
+# build tags and an explicit version stamp for `caddy version`.
+# The welcome page and Caddyfile are the form's. Published with Wolfi's
+# package name; the authenticated Werewolf feed owns this replacement. When Wolfi builds
+# Go as PIE, the form names Wolfi's caddy and this file goes.
+package:
+  name: caddy
+  version: 2.11.7
+  epoch: 3
+  description: Fast, multi-platform web server with automatic HTTPS, position independent
+  copyright:
+    - license: Apache-2.0
+
+environment:
+  contents:
+    repositories:
+      - https://packages.wolfi.dev/os
+    keyring:
+      - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    packages:
+      - busybox
+      - ca-certificates-bundle
+      - git
+      - go-1.27
+      - patch
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/caddyserver/caddy
+      tag: v${{package.version}}
+      expected-commit: 72dd0fb067f6d7826c7f79907670ba4a713bfe37
+
+  # The binary says how it was built; a build that lost PIE stops here.
+  - runs: |
+      patch --batch --fuzz=0 -p1 < optional-modules.patch
+      CGO_ENABLED=0 go build -buildmode=pie -trimpath -tags netgo,osusergo \
+        -ldflags='-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v${{package.version}}' \
+        -o caddy ./cmd/caddy
+      go version -m caddy | grep -q '^[[:space:]]*build[[:space:]]*-buildmode=pie$'
+      ./caddy version | grep -F 'v${{package.version}}'
+      CGO_ENABLED=0 go test -tags=werewolf_consumers -v ./werewolf-tests
+      install -Dm755 caddy ${{targets.destdir}}/usr/bin/caddy
+
+update:
+  enabled: true
+  github:
+    identifier: caddyserver/caddy
+    strip-prefix: v

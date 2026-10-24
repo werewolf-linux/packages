@@ -17,15 +17,17 @@ import (
 )
 
 type Policy struct {
-	Source  string `json:"source"`
-	Repo    string `json:"repo,omitempty"`
-	Project string `json:"project,omitempty"`
-	Prefix  string `json:"prefix,omitempty"`
-	Pattern string `json:"pattern,omitempty"`
-	Series  string `json:"series,omitempty"`
-	Branch  string `json:"branch,omitempty"`
-	Lock    string `json:"lock,omitempty"`
-	Reason  string `json:"reason,omitempty"`
+	Source    string `json:"source"`
+	Separator string `json:"separator,omitempty"`
+	Repo      string `json:"repo,omitempty"`
+	Project   string `json:"project,omitempty"`
+	Prefix    string `json:"prefix,omitempty"`
+	Pattern   string `json:"pattern,omitempty"`
+	Series    string `json:"series,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+	Lock      string `json:"lock,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Hold      string `json:"hold,omitempty"`
 	// Components are keyed by the recipe variable holding their version.
 	Components map[string]Policy `json:"components,omitempty"`
 	CommitVar  string            `json:"commit-var,omitempty"`
@@ -162,6 +164,9 @@ func candidate(tag string, p Policy) (Release, bool) {
 		return Release{}, false
 	}
 	v := strings.TrimPrefix(tag, p.Prefix)
+	if p.Separator != "" {
+		v = strings.ReplaceAll(v, p.Separator, ".")
+	}
 	r := Release{Version: v, Tag: tag}
 	if p.Pattern != "" {
 		m := regexp.MustCompile(p.Pattern).FindStringSubmatch(v)
@@ -178,6 +183,32 @@ func candidate(tag string, p Policy) (Release, bool) {
 
 func (c *Client) Discover(ctx context.Context, p Policy, current string) (Release, error) {
 	switch p.Source {
+	case "plex":
+		response, err := c.get(ctx, "https://repo.plex.tv/deb/dists/public/main/binary-amd64/Packages")
+		if err != nil {
+			return Release{}, err
+		}
+		defer response.Body.Close()
+		data, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+		if err != nil {
+			return Release{}, err
+		}
+		for _, stanza := range strings.Split(string(data), "\n\n") {
+			if !strings.HasPrefix(stanza, "Package: plexmediaserver\n") {
+				continue
+			}
+			for _, line := range strings.Split(stanza, "\n") {
+				if strings.HasPrefix(line, "Version: ") {
+					version := strings.TrimPrefix(line, "Version: ")
+					parts := strings.SplitN(version, "-", 2)
+					if len(parts) != 2 || !stable.MatchString(parts[0]) {
+						return Release{}, fmt.Errorf("invalid Plex release")
+					}
+					return Release{Version: parts[0], Build: version}, nil
+				}
+			}
+		}
+		return Release{}, fmt.Errorf("Plex repository has no release")
 	case "github":
 		var item struct {
 			Tag        string `json:"tag_name"`

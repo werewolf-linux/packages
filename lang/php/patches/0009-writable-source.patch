@@ -1,0 +1,72 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH 9/9] Refuse a primary script on a writable mount unless allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 678778973bb4d4185c06ef1320de50f1a975d3c8
+
+diff --git a/main/main.c b/main/main.c
+--- a/main/main.c
++++ b/main/main.c
+@@ -25,6 +25,7 @@
+ #include <fcntl.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
++#include <sys/statvfs.h>
+ #ifdef PHP_WIN32
+ #include "win32/time.h"
+ #include "win32/signal.h"
+@@ -2278,7 +2279,40 @@
+ 	}
+ }
+ #endif
++
++
++#ifndef PHP_WIN32
++/* {{{ php_werewolf writable-source
++ * Wrap the compiler so the primary script's file must be on a read-only mount
++ * unless the image allows php:writable-source. Includes and generated code are
++ * phase 2; this gates only the entry script (docs/design/hardened-interpreters.md). */
++static zend_op_array *(*php_werewolf_orig_compile_file)(zend_file_handle *, int);
++
++static bool php_werewolf_writable_source(zend_file_handle *file_handle)
++{
++	zend_string *path = file_handle->opened_path ? file_handle->opened_path : file_handle->filename;
++	struct statvfs vfs;
+ 
++	if (path == NULL) {
++		return false;   /* stdin or generated code: the inline gate covers it */
++	}
++	return statvfs(ZSTR_VAL(path), &vfs) == 0 && !(vfs.f_flag & ST_RDONLY);
++}
++
++static zend_op_array *php_werewolf_compile_file(zend_file_handle *file_handle, int type)
++{
++	if (file_handle != NULL && file_handle->primary_script
++			&& !php_werewolf_allowed("writable-source")
++			&& php_werewolf_writable_source(file_handle)) {
++		zend_throw_error(NULL, "running a script from a writable mount is refused: "
++			"the image allows it only by php:writable-source");
++		return NULL;
++	}
++	return php_werewolf_orig_compile_file(file_handle, type);
++}
++#endif
++/* }}} */
++
+ /* {{{ php_module_startup */
+ zend_result php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_module)
+ {
+@@ -2500,6 +2534,13 @@
+ 
+ 	module_initialized = true;
+ 
++#ifndef PHP_WIN32
++	/* Werewolf: wrap the compiler outermost, so the primary script's file is
++	 * checked even on an opcache hit (docs/design/hardened-interpreters.md). */
++	php_werewolf_orig_compile_file = zend_compile_file;
++	zend_compile_file = php_werewolf_compile_file;
++#endif
++
+ 	if (zend_post_startup() != SUCCESS) {
+ 		return FAILURE;
+ 	}

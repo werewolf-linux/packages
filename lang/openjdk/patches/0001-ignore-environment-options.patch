@@ -1,0 +1,54 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH 1/6] Never read JVM or launcher options from the environment
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/hotspot/share/runtime/arguments.cpp b/src/hotspot/share/runtime/arguments.cpp
+--- a/src/hotspot/share/runtime/arguments.cpp
++++ b/src/hotspot/share/runtime/arguments.cpp
+@@ -2777,11 +2777,14 @@
+ };
+ 
+ jint Arguments::parse_java_options_environment_variable(ScopedVMInitArgs* args) {
+-  return parse_options_environment_variable("_JAVA_OPTIONS", args);
++  // Werewolf: the environment never configures the VM; a process that
++  // runs java again chooses its own environment.
++  return JNI_OK;
+ }
+ 
+ jint Arguments::parse_java_tool_options_environment_variable(ScopedVMInitArgs* args) {
+-  return parse_options_environment_variable("JAVA_TOOL_OPTIONS", args);
++  // Werewolf: as _JAVA_OPTIONS, JAVA_TOOL_OPTIONS configures nothing.
++  return JNI_OK;
+ }
+ 
+ static JavaVMOption* get_last_aotmode_arg(const JavaVMInitArgs* args) {
+diff --git a/src/java.base/share/native/libjli/args.c b/src/java.base/share/native/libjli/args.c
+--- a/src/java.base/share/native/libjli/args.c
++++ b/src/java.base/share/native/libjli/args.c
+@@ -481,6 +481,10 @@
+ 
+ JNIEXPORT jboolean JNICALL
+ JLI_AddArgsFromEnvVar(JLI_List args, const char *var_name) {
++    /* Werewolf: the environment never adds launcher arguments
++     * (JDK_JAVA_OPTIONS); a process that runs java again chooses it. */
++    return JNI_FALSE;
++
+     if (firstAppArgIndex == 0) {
+         // Not 'java', return
+         return JNI_FALSE;
+diff --git a/src/java.base/share/native/libjli/java.c b/src/java.base/share/native/libjli/java.c
+--- a/src/java.base/share/native/libjli/java.c
++++ b/src/java.base/share/native/libjli/java.c
+@@ -783,7 +783,9 @@
+     int newArgvIdx = 0;
+     int isVMType;
+     int jvmidx = -1;
+-    char *jvmtype = getenv("JDK_ALTERNATE_VM");
++    /* Werewolf: the environment never picks the VM (JDK_ALTERNATE_VM
++     * names any directory's libjvm.so); -XXaltjvm= on argv still does. */
++    char *jvmtype = NULL;
+ 
+     argc = *pargc;
+ 

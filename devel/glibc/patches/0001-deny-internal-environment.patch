@@ -1,0 +1,271 @@
+SPDX-License-Identifier: LGPL-2.1-or-later
+Subject: [PATCH 1/4] Deny implicit environment configuration; preserve public APIs
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: docs/glibc-vuln-audit.md; docs/design/glibc-neutered.md
+Base-Commit: 34106fee698c83eb0af71d4d0381e66b399be746
+
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index b57fd746..1763322a 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -306,7 +306,8 @@ _dl_non_dynamic_init (void)
+   /* Remember the last search directory added at startup.  */
+   _dl_init_all_dirs = GL(dl_all_dirs);
+ 
+-  _dl_lazy = *(getenv ("LD_BIND_NOW") ?: "") == '\0';
++  /* Eager binding is fixed policy, including static-linked dlopen.  */
++  _dl_lazy = 0;
+ 
+   _dl_bind_not = *(getenv ("LD_BIND_NOT") ?: "") != '\0';
+ 
+diff --git a/elf/dl-tunables.c b/elf/dl-tunables.c
+index 54d1296b..688b1a40 100644
+--- a/elf/dl-tunables.c
++++ b/elf/dl-tunables.c
+@@ -318,6 +318,9 @@ __tunables_init (char **envp, char **argv)
+   if (MALLOC_DEFAULT_THP_PAGESIZE > 0)
+     TUNABLE_SET (glibc, malloc, hugetlb, 1);
+ 
++  /* Keep compiled defaults; do not interpret environment or cached tuning.  */
++  return;
++
+ #if defined(SHARED) && defined (USE_LDCONFIG)
+   const char *prog_name = (argv && argv[0]) ? argv[0] : "";
+   int prog_name_len = -1;
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 111649f1..832e4b62 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -111,7 +111,7 @@ glibc {
+       type: INT_32
+       minval: 0
+       maxval: 2
+-      default: 1
++      default: 0
+     }
+   }
+ 
+diff --git a/elf/rtld.c b/elf/rtld.c
+index fc053df8..85a1c645 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -353,7 +353,7 @@ struct rtld_global_ro _rtld_global_ro attribute_relro =
+     ._dl_sysinfo = DL_SYSINFO_DEFAULT,
+ #endif
+     ._dl_debug_fd = STDERR_FILENO,
+-    ._dl_lazy = 1,
++    ._dl_lazy = 0,
+     ._dl_fpu_control = _FPU_DEFAULT,
+     ._dl_pagesize = EXEC_PAGESIZE,
+     ._dl_inhibit_cache = 0,
+@@ -2517,45 +2517,8 @@ Categories can be excluded by prefixing them with a dash (-).\n");
+ static int
+ process_envvars_secure (struct dl_main_state *state)
+ {
+-  char **runp = _environ;
+-  char *envline;
+   int skip_env = 0;
+ 
+-  while ((envline = _dl_next_ld_env_entry (&runp)) != NULL)
+-    {
+-      size_t len = 0;
+-
+-      while (envline[len] != '\0' && envline[len] != '=')
+-	++len;
+-
+-      if (envline[len] != '=')
+-	/* This is a "LD_" variable at the end of the string without
+-	   a '=' character.  Ignore it since otherwise we will access
+-	   invalid memory below.  */
+-	continue;
+-
+-      switch (len)
+-	{
+-	case 5:
+-	  /* For __libc_enable_secure mode, audit pathnames containing slashes
+-	     are ignored.  Also, shared audit objects are only loaded only from
+-	     the standard search directories and only if they have set-user-ID
+-	     mode bit enabled.  */
+-	  if (memcmp (envline, "AUDIT", 5) == 0)
+-	    audit_list_add_string (&state->audit_list, &envline[6]);
+-	  break;
+-
+-	case 7:
+-	  /* For __libc_enable_secure mode, preload pathnames containing slashes
+-	     are ignored.  Also, shared objects are only preloaded from the
+-	     standard search directories and only if they have set-user-ID mode
+-	     bit enabled.  */
+-	  if (memcmp (envline, "PRELOAD", 7) == 0)
+-	    state->preloadlist = &envline[8];
+-	  break;
+-	}
+-    }
+-
+   /* Extra security for SUID binaries.  Remove all dangerous environment
+      variables.  */
+   const char *nextp = UNSECURE_ENVVARS;
+@@ -2566,7 +2529,7 @@ process_envvars_secure (struct dl_main_state *state)
+ 	 non-NULL if the variable is set in the environment.  This count is
+ 	 needed if we need to adjust the location of the AUX vector on the
+ 	 stack when running ld.so directly. */
+-      if (getenv (nextp) != NULL)
++      if ((getenv) (nextp) != NULL)
+         skip_env++;
+ 
+       unsetenv (nextp);
+@@ -2576,7 +2539,7 @@ process_envvars_secure (struct dl_main_state *state)
+ 
+   if (GLRO(dl_debug_mask) != 0
+       || GLRO(dl_verbose) != 0
+-      || GLRO(dl_lazy) != 1
++      || GLRO(dl_lazy) != 0
+       || GLRO(dl_bind_not) != 0
+       || state->mode != rtld_mode_normal
+       || state->version_info)
+@@ -2588,6 +2551,9 @@ process_envvars_secure (struct dl_main_state *state)
+ static void
+ process_envvars_default (struct dl_main_state *state)
+ {
++  /* Loader configuration from the environment is disabled.  */
++  return;
++
+   char **runp = _environ;
+   char *envline;
+   char *debug_output = NULL;
+diff --git a/include/stdlib.h b/include/stdlib.h
+index b7147ba5..aab8b500 100644
+--- a/include/stdlib.h
++++ b/include/stdlib.h
+@@ -388,6 +388,20 @@ extern __typeof (unsetenv) unsetenv attribute_hidden;
+ extern __typeof (__strtoul_internal) __strtoul_internal attribute_hidden;
+ # endif
+ 
++/* Private libc/loader policy; installed headers and build tools are unchanged.
++   Public environment APIs and secure-execution sanitation use real lookups.  */
++# if !defined GLIBC_ENV_API && (IS_IN (libc) || IS_IN (rtld))
++static __always_inline char *
++__glibc_noenv (const char *name)
++{
++  (void) name;
++  return NULL;
++}
++# define getenv(name) __glibc_noenv (name)
++# define secure_getenv(name) __glibc_noenv (name)
++# define __libc_secure_getenv(name) __glibc_noenv (name)
++# endif
++
+ #endif
+ 
+ #endif  /* include/stdlib.h */
+diff --git a/posix/execvpe.c b/posix/execvpe.c
+index ec56e297..0e3db2e2 100644
+--- a/posix/execvpe.c
++++ b/posix/execvpe.c
+@@ -91,7 +91,11 @@ __execvpe_common (const char *file, char *const argv[], char *const envp[],
+ 
+   const char *path = getenv ("PATH");
+   if (!path)
+-    path = CS_PATH;
++    {
++      /* No implicit fallback to a broader command search path.  */
++      __set_errno (ENOENT);
++      return -1;
++    }
+   /* Although GLIBC does not enforce NAME_MAX, we set it as the maximum
+      size to avoid unbounded stack allocation.  Same applies for
+      PATH_MAX.  */
+diff --git a/posix/fnmatch.c b/posix/fnmatch.c
+index 33b60696..55518a82 100644
+--- a/posix/fnmatch.c
++++ b/posix/fnmatch.c
+@@ -100,7 +100,7 @@ typedef ptrdiff_t idx_t;
+    whose names are inconsistent.  */
+ 
+ /* Global variable.  */
+-static int posixly_correct;
++static int posixly_correct = 1;
+ 
+ /* Note that this evaluates C many times.  */
+ #define FOLD(c) ((flags & FNM_CASEFOLD) ? tolower (c) : (c))
+diff --git a/posix/getopt.c b/posix/getopt.c
+index 3e105796..569c9018 100644
+--- a/posix/getopt.c
++++ b/posix/getopt.c
+@@ -405,7 +405,8 @@ _getopt_initialize (_GL_UNUSED int argc,
+   else if (posixly_correct || !!getenv ("POSIXLY_CORRECT"))
+     d->__ordering = REQUIRE_ORDER;
+   else
+-    d->__ordering = PERMUTE;
++    /* Environment denial must not undo strict option ordering.  */
++    d->__ordering = REQUIRE_ORDER;
+ 
+   d->__initialized = 1;
+   return optstring;
+diff --git a/stdio-common/tmpdir.c b/stdio-common/tmpdir.c
+index 0846562a..8930ddc5 100644
+--- a/stdio-common/tmpdir.c
++++ b/stdio-common/tmpdir.c
+@@ -114,7 +114,11 @@ __path_search (char *tmpl, size_t tmpl_len, const char *dir, const char *pfx,
+       else if (dir != NULL && direxists (dir))
+         /* nothing */ ;
+       else
+-        dir = NULL;
++        {
++          /* No fallback from a private TMPDIR to a shared directory.  */
++          __set_errno (ENOENT);
++          return -1;
++        }
+     }
+   if (dir == NULL)
+     {
+diff --git a/stdlib/getenv.c b/stdlib/getenv.c
+index 4634387d..fa374bf1 100644
+--- a/stdlib/getenv.c
++++ b/stdlib/getenv.c
+@@ -15,6 +15,7 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+ 
++#define GLIBC_ENV_API 1
+ #include <atomic.h>
+ #include <setenv.h>
+ #include <string.h>
+diff --git a/stdlib/secure-getenv.c b/stdlib/secure-getenv.c
+index 46a10fa4..645afd10 100644
+--- a/stdlib/secure-getenv.c
++++ b/stdlib/secure-getenv.c
+@@ -15,6 +15,7 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+ 
++#define GLIBC_ENV_API 1
+ #include <stdlib.h>
+ #include <unistd.h>
+ 
+diff --git a/posix/wordexp.c b/posix/wordexp.c
+index 9a49e102..13646d01 100644
+--- a/posix/wordexp.c
++++ b/posix/wordexp.c
+@@ -856,7 +856,7 @@ exec_comm_child (char *comm, int *fildes, bool showerr, bool noexec)
+   struct strlist newenv;
+   strlist_init (&newenv);
+ 
+-  bool recreate_env = getenv ("IFS") != NULL;
++  bool recreate_env = (getenv) ("IFS") != NULL;
+   if (recreate_env)
+     {
+       for (char **ep = __environ; *ep != NULL; ep++)
+diff --git a/gmon/gmon.c b/gmon/gmon.c
+index 996b6a62..3260dd0c 100644
+--- a/gmon/gmon.c
++++ b/gmon/gmon.c
+@@ -375,6 +375,9 @@ write_bb_counts (int fd)
+ static void
+ write_gmon (void)
+ {
++    /* No implicit profiling output, including current-directory fallback.  */
++    return;
++
+     int fd = -1;
+     char *env;
+ 

@@ -1,220 +1,78 @@
-# packages
+# Werewolf packages
 
-Third-party application packaging for Werewolf. Each directory contains a Melange
-recipe and its complete source context: patches, dependency locks and bootstrap
-code. Production and intentionally vulnerable releases have separate directories
-(for example, `solr` and `solr-vuln-demo`).
-
-Forms, service restrictions, guest configuration and appliance tests remain in
-`../werewolf/forms`. Patched language runtimes and libc remain in
-`../hardened-packages`; these recipes use that project's signed hardened feed.
-Do not replace hardened runtimes with stock ones when porting dependencies.
-
-Keep these repositories side by side:
+Applications, libraries and hardened runtimes in one categorized ports tree.
+Each `CATEGORY/NAME/` is a complete build context. Names are unique across
+categories and remain stable when directories move. APK names remain compatible
+with Wolfi where we replace its packages; Caddy is `caddy`.
 
 ```text
-packages/
-werewolf/
-hardened-packages/
+devel/glibc/       lang/python/      net/curl/
+devel/libffi/      lang/php/         www/caddy/
+                  lang/node/        www/n8n/
+                  lang/openjdk/     multimedia/plex/
 ```
 
-A form names a package from the signed feed below, as it names Wolfi's; Werewolf
-images list the feed and refuse a name it covers from anywhere else:
+## Maintain a package
 
-```yaml
-packages:
-  - solr
-```
-
-Add a package only for what Wolfi does not ship, or ships unfit for a form (old,
-bringing a shell, built for one CPU, or at a fixed address); name it `NAME-werewolf`
-when Wolfi ships `NAME`. Its header says why, and when it can go.
-
-Build and inspect a package using Werewolf's existing QEMU or bubblewrap runner:
+Every context has one [metadata.json](docs/metadata.md) describing its automatic
+update source, hardening evidence and divergence from Wolfi. CI rejects missing
+sources, unsupported handlers, unexplained divergences and invalid evidence.
+Applications track upstream releases; Wolfi overlays capture its exact recipes
+and apply small checked changes. Deliberately vulnerable demonstrations retain
+real source metadata and an explicit update hold.
 
 ```sh
-make PACKAGE=solr build
-# Or from ../werewolf:
-howl build-apk ../packages/solr/solr.yaml
+python3 scripts/catalog.py list
+python3 scripts/catalog.py show caddy
+make metadata                     # offline maintenance assertions
+make test check                   # tests and Melange recipe validation
+make PACKAGE=caddy updates        # discover an upstream release
+make PACKAGE=php updates          # capture a Wolfi snapshot
+make PACKAGE=caddy build          # build through ../werewolf
+make PACKAGE=php build            # build the Wolfi derivation
 ```
 
-`make check` parses every recipe with Melange. `make PACKAGE=NAME check` checks
-one context. `ARCH=aarch64` or `ARCH=x86_64` selects an architecture for a build.
-Package outputs and caches stay in `../werewolf/build/vendor`. To try a change in a
-form before it is published, the form may declare the recipe
-(`recipes: [../../../packages/solr/solr.yaml]`): the build makes it and lays its files
-over the image. Published forms name the package instead.
-
-Distro-specific packages remain in Werewolf alongside their source, including
-`forms/vuln-demo/melange` (the Go console and SSH server) and
-`boot/tpm-stub.melange.yaml` (the measured EFI stub builder). libffi, built with
-static trampolines for MDWE, is a hardened package (`../hardened-packages/packages/libffi`).
-
-CI checkout and reviewed source pins are described in
-[Werewolf's contribution guide](../werewolf/CONTRIBUTING.md#package-sources).
-The recipes use Werewolf's Apache-2.0 license; packaged upstream code retains
-the license declared by each recipe.
-
-## Automatic publication
-
-`publish.yml` runs on main pushes, hourly retries and manual dispatch. It builds
-unpublished recipe inputs natively on x86_64 and ARM64. A failed context leaves
-other contexts free to publish. Pull requests run the publisher tests and parse
-every recipe without access to release credentials. Both hosted architectures also
-build the small ONNX model package as a real native runner smoke test.
-
-The signed application feed is `https://dist.werewolf-linux.org/apk/packages`,
-with `x86_64/APKINDEX.tar.gz` and `aarch64/APKINDEX.tar.gz`. Its trust root is
-`release/packages.pub`. Intentionally vulnerable packages use distinct APK names:
-`solr-vuln-demo`, `n8n-vuln-demo` and `langflow-vuln-demo`; production packages keep
-`solr`, `n8n` and `langflow`. Application paths and ports are unchanged.
-
-Builders receive no release secrets. The publisher validates both native build
-records, commit/run identities, APK metadata, payload hashes and index checksums
-before signing. APKs and immutable snapshots upload before the signed feed
-indexes. Conditional R2 writes preserve other publishers' additions. A signed
-snapshot allows the next run to finish an interrupted publication without rebuilding.
-Large APK payloads are streamed during validation and signing.
-
-Bump `package.epoch` when changing a published recipe or its build context without
-changing the upstream version. Published versions keep their first bytes;
-conflicting rebuilds fail. Stable upstream releases are tracked and committed by
-`update.yml`; deliberately vulnerable pins stay unchanged.
-
-The `release` GitHub environment needs these secrets:
-
-- `WEREWOLF_PACKAGES_KEY`: private key matching `release/packages.pub`.
-- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: access to the `werewolf` bucket.
-
-Allow deployments only from `main`. Optional repository variables
-`WEREWOLF_X86_64_BUILD_RUNNER` and `WEREWOLF_ARM64_BUILD_RUNNER` are JSON arrays of
-runner labels; defaults are `ubuntu-26.04` and `ubuntu-26.04-arm`. Self-hosted
-builders are used for main, manually dispatched checks and pull requests from
-this repository. Fork pull requests use hosted runners; external fork workflows
-require maintainer approval before they can run. Unit checks and publication
-planning use the configured amd64 runner too. Signing and R2 publication remain
-on a separate hosted job in the protected release environment. Self-hosted
-builders run as dedicated non-root accounts with subordinate UID/GID mappings,
-using the same `scripts/ci-root` and private bubblewrap profile as hardened-packages.
-No signing or R2 keys are needed by the builder accounts.
+Python 3.12+ with PyYAML, Go 1.27+, pinned Melange and package-specific test tools
+are required. Plex provenance checks also require GnuPG (`gpg`). Create a local
+environment with a supported interpreter before running the tests:
 
 ```sh
-make test check
-python3 scripts/plan.py --offline
-# Rebuild/publish only one context, or retry its staged snapshot:
-gh workflow run publish.yml -f package=onnx-minilm
-# Exercise a context on both hosted architectures without publication:
-gh workflow run check.yml --ref BRANCH -f package=CONTEXT
+python3.12 -m venv build/venv
+build/venv/bin/python -m pip install -r wolfi/requirements.txt
+make PYTHON=build/venv/bin/python test check
 ```
 
-Published APKs can be installed from this feed by consumers using its public key.
-Werewolf's current `recipes` forms still build their overlays locally; switching
-those forms to published package dependencies is a separate migration.
+Local application builds also need the sibling Werewolf checkout.
+[Application packaging](docs/applications.md) covers dependency locks and native
+smoke tests. [Wolfi builds](wolfi/README.md) covers capture, derivation, patching,
+installed-package probes and local build tools.
 
-## Tracking upstream releases
+## Publication
 
-`updates.json` declares a policy for every recipe context. `make test` fails if a
-new context lacks tracking or a production package is marked pinned. Policies live
-outside the build contexts so changing a discovery source does not invalidate a
-published APK. The older Melange `update:` blocks remain portable upstream hints;
-this repository's automation uses `updates.json` as its complete policy.
+Both engines build and validate x86_64 and aarch64 independently for each context.
+Failed contexts retain their previous publication and do not stop other packages.
+The application feed remains `https://dist.werewolf-linux.org/apk/packages`; Wolfi
+overlays use `https://dist.werewolf-linux.org/apk/hardened`. Both use the trust root
+in `release/packages.pub`. Signing credentials stay in the `release` environment.
+Application builders receive no signing credentials. Wolfi package tests require
+signed artifacts and retain their existing signing gates.
 
-```sh
-make updates                       # read-only discovery for every context
-make PACKAGE=solr updates           # discover one upstream release
-go run ./cmd/package-update --write --package solr
-go run ./cmd/package-update --validate  # offline coverage check
-```
+Hourly `update.yml` updates application source pins and dispatches `publish.yml`.
+Every ten minutes `wolfi-refresh.yml` captures Wolfi changes and builds unpublished
+inputs through `wolfi-build.yml`. Pull requests run metadata checks, both engines'
+unit tests, recipe validation and Wolfi patch discovery. A directory move does
+not change a package's public release identity.
 
-The Go updater uses GitHub's stable releases or numeric release tags, non-yanked
-PyPI releases, npm's `latest` channel and Mojang's stable server manifest. Numeric
-comparison handles versions such as `26.3` and `1.10.0`; previews, drafts and
-downgrades are rejected. Tag sources paginate instead of assuming tag order is
-version order. Continuwuity and Nextcloud use tags because their GitHub latest
-release metadata can lag their stable tags. GitHub requests accept `GH_TOKEN` to
-avoid anonymous rate limits; the token is never sent to download hosts or child
-processes. endoflife.date is useful for lifecycle information, but direct release
-sources also cover the applications it does not track.
+## Layout and licensing
 
-The explicitly versioned `neo4j-4.4` package follows stable patches in the 4.4
-stream. BloodHound requires APIs removed in newer Neo4j majors; migrating that
-form is separate from maintaining its named compatibility package. A stream
-policy requires an explicit reason and still checks upstream for new releases.
+Top-level categories describe what software does. Update origin and hardening
+status are metadata, so adding hardening never requires moving a package.
+`scripts/` holds shared tools and the application publisher; `wolfi/` holds the
+Wolfi derivation engine. Tool pins, runner helpers and the signing trust root each
+have one maintained copy. Build outputs stay under ignored `build/` directories.
 
-New versions reset the APK epoch to zero. Every version-dependent archive hash,
-architecture-specific fetch and Git checkout commit is refreshed. npm locks are
-regenerated without installing packages or running lifecycle scripts. Bugsink's
-hashed dependency lock is resolved with uv. Langflow's lock and three wheel pins
-are resolved together, with the existing Python overrides and separate fastuuid
-build retained. Resolver and recipe validation failures leave that context's files
-untouched. Other contexts can still update and the run reports each failure.
-
-The ONNX model has no upstream release number: its archive is checked for changed
-content and a change increments the epoch. Postdoc currently has no stable release
-tags, so its explicit snapshot policy follows `main`, pinning the commit and date;
-multiple commits on one date increment the epoch. All three `*-vuln-demo` contexts
-remain pinned and are skipped before any network access or filesystem write.
-
-Hourly and manual `update.yml` runs test the updater, prepare complete contexts,
-commit each successful update and push to main without force. They explicitly
-dispatch `publish.yml`, since pushes made with `GITHUB_TOKEN` do not trigger push
-workflows. Both native builds and their smoke tests must pass before the existing
-publisher signs and uploads APKs to R2. Failed updates are recorded in the
-`upstream-update-report` artifact and make the update run fail after other updates
-have been committed. Release credentials remain confined to the publisher.
-
-`tests/smoke.json` describes runtime checks for sixteen contexts. The Go smoke
-runner installs the built APK and its runtime dependencies in a disposable
-Melange bubblewrap runner. Checks include application version commands, Python
-imports, n8n's native SQLite and isolate modules, model parsing and ONNX CPU
-inference with invalid-shape and unknown-input rejection. The ONNX fixture comes
-from Werewolf's form tests. APK installation uses unsigned local test indexes;
-release artifact validation and signing still use the normal authenticated path.
-Runtime checks run offline as UID 1000 with the installed root and test fixtures
-mounted read-only, and writable scratch in `/tmp`. Python checks also prove inline code
-and scripts on writable mounts remain refused.
-Langflow also checks SQLite full-text search and offline MiniLM embeddings using
-the packaged model, with its form's `python:native` allowance.
-Other contexts retain native build and APK validation. These are package smoke
-checks; full service, database migration and appliance security checks remain in
-Werewolf's form suites.
-
-Langflow omits the optional native Db2 driver, which IBM does not provide for
-Linux ARM64. Its other IBM provider dependencies remain installed.
-
-Ordinary Melange recipes remain compatible with external tools. For a packaging
-change that needs only an epoch bump, use:
-
-```sh
-wolfictl bump solr/solr.yaml --dry-run
-wolfictl bump solr/solr.yaml
-```
-
-The [current wolfictl bump](https://github.com/wolfi-dev/wolfictl/blob/main/docs/cmd/wolfictl_bump.md)
-only increments epochs. Its exported recipe section helpers depend on Melange and
-apko and do not implement this repository's release discovery or coordinated npm
-and Python updates. The updater therefore uses Go's standard library plus the
-same YAML parser as Melange, keeping wolfictl optional for manual maintenance.
-For an upstream version change, use the Go updater so source and lock pins move
-together, then commit and push through the regular publisher.
-
-Bundled upstream components are listed under `components` in `updates.json`,
-keyed by the recipe variable holding their version. They use the same stable
-GitHub release resolver. For example, Vaultwarden's web vault is tracked
-independently of its server. A component-only update refreshes its archive hash
-and increments the parent's APK epoch; it does not regenerate the parent's
-unchanged dependency lock. Subpackage pipelines are included. A `commit-var`
-can additionally pin a component's release to its dereferenced commit (n8n's
-launcher). Vulnerability demonstrations remain pinned, including components.
-
-`wordpress-sqlite` packages WordPress's official SQLite integration release and
-builds its database drop-in from the matching template. Werewolf keeps its
-site configuration, installer and integration tests.
-
-Werewolf's hourly `package-pins.yml` job verifies the signed `contexts/*/current.json`
-records in this feed against a clean source snapshot. Every locked context and
-subpackage must be published for both native architectures before it proposes
-an immutable source commit and digest. Its regular check workflow tests the PR
-and merges it only after the tests and form boots pass. Failed publication or
-consumer tests leave the previous pins in place. No new publication mechanism
-or R2 credentials are needed by the consumer.
+The application recipes and original tools retain [Apache-2.0](LICENSE).
+Imported Wolfi engine tooling retains [GPL-3.0](wolfi/LICENSE); patches retain the
+licenses of the code they modify, recorded under `wolfi/LICENSES`. Packaged
+upstream code retains its declared license. [Import provenance](wolfi/IMPORT.json)
+records the source repository and commit.
