@@ -25,6 +25,9 @@ class Curl(unittest.TestCase):
         self.assertIn('--without-brotli', result['pipeline'][1]['with']['opts'])
         self.assertNotIn('brotli-dev', result['environment']['contents']['packages'])
         self.assertTrue(any(s.get('uses') == 'test/git-https-auth' for s in result['test']['pipeline']))
+        setup = result['test']['pipeline'][3]['with']['setup']
+        self.assertIn('daemon off;\nuser root;\n', setup)
+        self.assertIn('nginx -t', setup)
 
     def test_upstream_build_tests_are_retained_and_required(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
@@ -55,6 +58,8 @@ class Curl(unittest.TestCase):
             lambda c: c['subpackages'].append({'name': 'curl-extra'}),
             lambda c: c['pipeline'][0]['with'].update(branch='main'),
             lambda c: c['test']['pipeline'].pop(3),
+            lambda c: c['test']['pipeline'][4]['with'].update(
+                setup=c['test']['pipeline'][4]['with']['setup'].replace('daemon off;\n\n', 'daemon off;\n')),
             lambda c: c['pipeline'][3].update(runs=c['pipeline'][3]['runs'].replace('!2095', '!2096')),
         ):
             with self.subTest(mutate=mutate):

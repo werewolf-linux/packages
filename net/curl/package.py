@@ -44,6 +44,19 @@ def upstream_tests(step):
     return result
 
 
+def nginx_test(step):
+    result = deepcopy(step)
+    if result.get('uses') != 'test/daemon-check-output':
+        raise ValueError('Review changed curl HTTP server test')
+    setup = result['with']['setup']
+    marker = 'daemon off;\n\n'
+    if setup.count(marker) != 1 or setup.count('nginx -t') != 1:
+        raise ValueError('Review changed curl nginx setup')
+    # Bubblewrap cannot chown its temporary directory to nginx's unmapped UID.
+    result['with']['setup'] = setup.replace(marker, 'daemon off;\nuser root;\n\n')
+    return result
+
+
 def source_commit(config):
     steps = [s for s in config['pipeline'] if s.get('uses') == 'git-checkout']
     return steps[0].get('with', {}).get('expected-commit') if len(steps) == 1 else None
@@ -127,6 +140,7 @@ def derive(pkg, config, lock):
     if len(features) != 1:
         raise ValueError('Review changed curl feature test')
     tests.remove(features[0])
+    tests[3] = nginx_test(tests[3])
     tests.append(probe(pkg))
     config['update'] = {'enabled': False}
     return config
@@ -145,6 +159,7 @@ def check(pkg, upstream, derived):
     assert derived['environment'] == environment, 'unreviewed build environment change'
     assert derived['vars'] == upstream['vars'] and derived['var-transforms'] == upstream['var-transforms']
     expected = [s for s in upstream['test']['pipeline'] if s.get('runs', '').strip() != FEATURE_TEST]
+    expected[3] = nginx_test(expected[3])
     assert derived['test']['pipeline'] == expected + [probe(pkg)], 'upstream test removed'
     assert derived['test']['environment'] == upstream['test']['environment']
     for sub in derived['subpackages']:
