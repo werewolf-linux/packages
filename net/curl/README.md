@@ -23,6 +23,8 @@ dependencies remain. OpenSSL and zlib remain for HTTPS and gzip/deflate.
 `tests/probe.py` exercises local HTTP/HTTPS, rejected encodings/protocols, uploads,
 authentication, cookies, ETags and certificate failures in the APK test guest.
 Wolfi's Git HTTPS authentication, linkage, CLI and development-package tests remain.
+The local nginx test runs its worker as root inside Melange's disposable test
+guest, avoiding a chown to an unmapped UID under bubblewrap.
 The upstream build suite excludes the `netrc` keyword because loading netrc
 credentials is disabled; the package probe verifies those credentials are ignored.
 Wolfi's existing numbered exception and test failure reporting remain.
