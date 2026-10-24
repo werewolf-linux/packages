@@ -38,7 +38,8 @@ pipeline:
   # its local cache, PHP that Moodle then includes, writable by everyone
   # (chmod 0666); the umask, 0007 from Moodle's own setup, decides instead.
   # HTML Purifier loads only named classes from its bundled schema and has
-  # no writable serialized definition cache. The form lays Moodle's
+  # no writable serialized definition cache. MUC restores only stdClass
+  # records from its caches. The form lays Moodle's
   # config.php beside it.
   - runs: |
       # Moodle's bundled schema has only HTMLPurifier_ConfigSchema, PropertyList and stdClass.
