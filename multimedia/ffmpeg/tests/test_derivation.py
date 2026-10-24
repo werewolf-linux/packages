@@ -11,7 +11,7 @@ import verify
 
 PKG = packages.Package('ffmpeg')
 SOURCE = yaml.safe_load((Path(__file__).parent / 'fixtures/ffmpeg-9.0.yaml').read_text())
-LOCK = dict(recipe='ffmpeg-9.0.yaml', version='9.0.2', epoch=5, revision=1,
+LOCK = dict(recipe='ffmpeg-9.0.yaml', version='9.0.2', epoch=5, revision=PKG.policy['revision'],
             source_commit=PKG.hooks.source_commit(SOURCE))
 
 
@@ -25,7 +25,7 @@ class FFmpeg(unittest.TestCase):
                      '--disable-network', '--enable-protocol=file,pipe']:
             self.assertIn(flag, options)
         self.assertEqual(SOURCE['test']['pipeline'][-1], result['test']['pipeline'][-2])
-        self.assertEqual(1005, result['package']['epoch'])
+        self.assertEqual(LOCK['revision'] * 1000 + LOCK['epoch'], result['package']['epoch'])
 
     def test_upstream_fate_tests_are_retained_and_required(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(SOURCE), LOCK)

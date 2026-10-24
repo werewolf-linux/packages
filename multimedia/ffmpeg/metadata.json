@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "family": "ffmpeg-"
+    "family": "ffmpeg-",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "FFmpeg/FFmpeg",
+      "prefix": "n"
+    }
   },
   "hardening": {
     "minimized": true,

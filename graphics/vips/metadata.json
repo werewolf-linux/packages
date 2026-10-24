@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "recipe": "libvips"
+    "recipe": "libvips",
+    "upstream": {
+      "source": "github",
+      "repo": "libvips/libvips",
+      "prefix": "v"
+    }
   },
   "hardening": {
     "minimized": true,

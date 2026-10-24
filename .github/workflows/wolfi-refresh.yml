@@ -41,6 +41,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version: '1.27.x'
+      - name: Build upstream release discovery
+        run: |
+          mkdir -p build/tools
+          go build -C .. -o "$PWD/build/tools/package-update" ./cmd/package-update
+          echo "UPSTREAM_DISCOVERER=$PWD/build/tools/package-update" >> "$GITHUB_ENV"
       - name: Install tools and run the unit tests
         run: |
           sudo apt-get -o Acquire::Retries=3 update

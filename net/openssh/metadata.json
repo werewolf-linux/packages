@@ -1,7 +1,13 @@
 {
   "update": {
     "source": "wolfi",
-    "recipe": "openssh"
+    "recipe": "openssh",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "openssh/openssh-portable",
+      "version-pattern": "^V_([0-9]+)_([0-9]+)_P([0-9]+)$",
+      "version-replace": "${1}.${2}_p${3}"
+    }
   },
   "hardening": {
     "minimized": true,
@@ -10,6 +16,8 @@
     "pledge_reason": "No package-enforced pledge-style capability policy is claimed; sshd confinement is declared in the Werewolf sshd forms.",
     "evidence": [
       "package.py",
+      "patches/0001-no-pty-reopen.patch",
+      "patches/0002-no-default-listen-in-session.patch",
       "tests/probe.sh",
       "tests/test_derivation.py"
     ]
@@ -34,6 +42,22 @@
         "why": "It configures PAM for a server built without it.",
         "evidence": [
           "package.py",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Do not reopen the pty by name where TIOCSCTTY already made it the controlling tty.",
+        "why": "Werewolf runs sshd without CAP_DAC_OVERRIDE; the redundant open, as root, of a pty owned by another user fails and logs an error at every login.",
+        "evidence": [
+          "patches/0001-no-pty-reopen.patch",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Do not resolve the default listen address in sshd-session, which queues the ListenAddress lines it never binds.",
+        "why": "Werewolf refuses netlink to sshd; glibc's sort of that two-family lookup asked netlink, and every connection logged the refusal.",
+        "evidence": [
+          "patches/0002-no-default-listen-in-session.patch",
           "tests/test_derivation.py"
         ]
       }

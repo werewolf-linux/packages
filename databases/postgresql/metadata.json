@@ -1,11 +1,13 @@
 {
   "update": {
-    "source": "github-tags",
-    "repo": "postgres/postgres",
-    "prefix": "REL_",
-    "separator": "_",
-    "series": "17",
-    "reason": "Database major upgrades require an explicit data migration; follow PostgreSQL 17 maintenance releases."
+    "source": "wolfi",
+    "family": "postgresql-",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "postgres/postgres",
+      "prefix": "REL_",
+      "separator": "_"
+    }
   },
   "hardening": {
     "minimized": true,
@@ -13,22 +15,29 @@
     "minimized_reason": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
     "pledge_reason": "Service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "postgresql-17.yaml",
+      "package.py",
       "tests/consumers.sh"
     ]
   },
   "wolfi": {
-    "relationship": "replacement",
+    "relationship": "derived",
     "recipes": [
-      "postgresql-17.yaml"
+      "postgresql-*.yaml"
     ],
     "changes": [
       {
         "what": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
         "why": "Keep common SQL, backup and extension workflows without optional enterprise authentication libraries.",
         "evidence": [
-          "postgresql-17.yaml",
+          "package.py",
           "tests/consumers.sh"
+        ]
+      },
+      {
+        "what": "Track only the latest stable PostgreSQL with unversioned package names and standard PostgreSQL extension/header directories.",
+        "why": "New stable major releases should update automatically without retaining older server streams.",
+        "evidence": [
+          "package.py"
         ]
       }
     ],

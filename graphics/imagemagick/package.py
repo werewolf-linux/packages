@@ -46,7 +46,7 @@ def derive(pkg, config, lock):
     steps[1]['with'] = {'opts': OPTIONS}
     config['environment']['contents']['packages'] = [d for d in deps if d not in REMOVED]
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
-    origin = 'wolfi-origin:' + RECIPE + ':' + lock['version'] + '-r' + str(lock['epoch'])
+    origin = 'upstream-origin:' + RECIPE + ':' + lock['version'] + '-r' + str(lock['epoch'])
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(origin)
     config['test']['pipeline'].append({'name': 'Server-side document and image consumers',

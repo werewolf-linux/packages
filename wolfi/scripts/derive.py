@@ -12,6 +12,7 @@ import re
 import shutil
 import yaml
 import packages
+import releases
 
 BACKOFF = (0, 15, 45)
 
@@ -42,8 +43,8 @@ def fetch(commit, sources):
             'exit 1\n'}
 
 def derive(pkg):
-    config = yaml.safe_load((pkg.inputs / 'upstream.yaml').read_text())
     lock = json.loads((pkg.inputs / 'upstream.lock.json').read_text())
+    config = releases.recipe(pkg, lock)
     return pkg.hooks.derive(pkg, config, lock)
 
 def context(pkg):

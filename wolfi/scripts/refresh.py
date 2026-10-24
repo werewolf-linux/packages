@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""Capture each package's Wolfi recipe, unchanged.
+"""Capture a Wolfi packaging baseline and pin the latest upstream stable release.
 
-A package follows its family's newest stable stream (glibc-2.44.yaml,
-php-8.5.yaml, openjdk-27.yaml), not Wolfi's default: the highest numeric
-stream whose version is a release, or Wolfi's snapshot of a released branch
-(3.15.0_git20261010), never a pre-release such as 3.15.0_rc1. policy.json's
-"stream" pins an older one, only where something still needs it.
-
-A package Wolfi keeps in one recipe (libffi.yaml) names it as RECIPE instead.
+The newest upstream stable release owns version selection. A suitable Wolfi
+recipe supplies packaging, dependencies, tests and backports. Capture the recipe
+unchanged, then lock the effective source independently. Only released streams
+are candidates; standalone offline fixtures may still narrow recipe selection.
 
 usage: refresh.py [--wolfi CHECKOUT] [PACKAGE...]    every package by default"""
 import argparse
@@ -21,6 +18,7 @@ import tempfile
 import yaml
 from inputs import identity, policy_hashes, sha256, file_modes
 import packages
+import releases
 
 STREAM = re.compile(r'[0-9]+(?:\.[0-9]+)*')
 # A release, its patch level (_p1), or Wolfi's snapshot of its branch (_git20261010).
@@ -29,7 +27,7 @@ RELEASE = re.compile(r'[0-9]+(?:\.[0-9]+)*(?:_p[0-9]+|_git[0-9]{8})?')
 def version_key(text):
     return tuple(int(x) for x in text.split('.'))
 
-def latest(pkg, checkout):
+def latest(pkg, checkout, release=None):
     """The path and config of pkg's newest stable recipe in checkout.
 
     A package follows a FAMILY of streams, or one RECIPE that Wolfi versions
@@ -37,6 +35,8 @@ def latest(pkg, checkout):
     recipe = pkg.hook('RECIPE')
     family = pkg.hook('FAMILY')
     pinned = pkg.policy.get('stream')
+    if release and pinned:
+        raise ValueError('Latest-stable tracking cannot pin an older recipe stream')
     stable = pkg.hook('stable', lambda config: True)
     candidates = []
     paths = [checkout / (recipe + '.yaml')] if recipe else checkout.glob(family + '*.yaml')
@@ -52,6 +52,8 @@ def latest(pkg, checkout):
         if package.get('name') != path.stem or not RELEASE.fullmatch(version):
             continue
         if not recipe and version != stream and not version.startswith(stream + '.'):
+            continue
+        if release and releases.key(version) > releases.key(release['version']):
             continue
         if stable(config):
             candidates.append((version_key(stream), path, config))
@@ -70,7 +72,8 @@ def capture(pkg, checkout, destination=None):
     if type(revision) is not int or revision < 1:
         raise ValueError('Policy revision must be a positive integer')
     pkg.hook('check_policy', lambda policy: None)(policy)
-    path, config = latest(pkg, checkout)
+    release = releases.discover(pkg)
+    path, config = latest(pkg, checkout, release)
     commit = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
     # The build's SOURCE_DATE_EPOCH: when these inputs were current in Wolfi.
     # Melange would take the recipe's commit time, which a captured copy lacks.
@@ -94,6 +97,21 @@ def capture(pkg, checkout, destination=None):
                 'sha256': {str(p.relative_to(candidate)): sha256(p) for p in sorted(candidate.rglob('*')) if p.is_file()},
                 'mode': file_modes(candidate),
                 'policy_sha256': policy_hashes(pkg, pkg.root)}
+        if release:
+            lock['wolfi'] = {k: lock[k] for k in ('version', 'epoch', 'source_commit')}
+            lock['release'] = release
+            lock['source_kind'] = 'wolfi'
+            # Preserve Wolfi's same-release maintenance/backport commits. When
+            # upstream advances (or Wolfi uses a _git snapshot), pin the actual
+            # released tag independently, starting its epoch at zero.
+            if release['version'] != lock['version']:
+                lock['version'], lock['source_commit'] = release['version'], release['commit']
+                lock['epoch'] = 0
+                lock['source_date_epoch'] = release['timestamp']
+                lock['source_kind'] = 'upstream-release'
+            # Validate adapters before replacing any previously usable inputs.
+            effective = releases.effective(pkg, config, lock)
+            lock['effective_recipe'] = effective['package']['name'] + '.yaml'
         lock['build_id'] = identity(lock)
         (candidate / 'upstream.lock.json').write_text(json.dumps(lock, indent=2) + '\n')
         if destination.exists():
@@ -121,7 +139,8 @@ def main():
                 print(name + ': ' + type(error).__name__ + ': ' + str(error), file=sys.stderr)
                 failed.append(name)
                 continue
-            print('{}: Wolfi {}-r{}, build {}'.format(name, lock['version'], lock['epoch'], lock['build_id']))
+            print('{}: upstream {} (Wolfi baseline {}), build {}'.format(
+                name, lock['version'], releases.baseline_version(lock), lock['build_id']))
     if failed:
         raise SystemExit('refresh failed for ' + ', '.join(failed))
 

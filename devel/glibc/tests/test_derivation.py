@@ -166,7 +166,7 @@ class Derivation(unittest.TestCase):
     def test_every_package_names_the_wolfi_source_it_rebuilds(self):
         upstream = FIXTURE['package']
         result = self.derived()[2]
-        source = f"wolfi-origin:{upstream['name']}:{upstream['version']}-r{upstream['epoch']}"
+        source = f"upstream-origin:{upstream['name']}:{upstream['version']}-r{upstream['epoch']}"
         for section in [result['package']] + result['subpackages']:
             # Unversioned: apk installs one provider of each name=version.
             self.assertIn(source, section['dependencies']['provides'])

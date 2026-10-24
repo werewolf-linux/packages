@@ -63,7 +63,7 @@ def markdown(made):
     source, previous = made['source'], made['previous']
     context = made.get('context_path', 'packages/' + made['package'])
     lines = ['# ' + made['title'] + ' ' + made['version'], '',
-             "Wolfi's `{}` {} ([wolfi-dev/os@{}]({}/tree/{})), source {}, with the {} protections of "
+             "Packaging baseline: Wolfi's `{}` {} ([wolfi-dev/os@{}]({}/tree/{})); effective upstream source {}, with the {} protections of "
              '[{}/patches]({}/tree/{}/{}/patches).'.format(
                  source['recipe'], source['wolfi_version'], source['wolfi_commit'][:12], WOLFI,
                  source['wolfi_commit'], commit_link(source, source['source_commit']), len(made['patches']),

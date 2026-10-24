@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,12 +14,34 @@ import (
 )
 
 func main() {
+	discoverRelease := flag.Bool("discover-release", false, "read an upstream policy from stdin and resolve its stable release commit")
 	root := flag.String("root", ".", "repository root")
 	write := flag.Bool("write", false, "prepare and write complete updates (default: discovery only)")
 	validate := flag.Bool("validate", false, "validate policy coverage offline")
 	selected := flag.String("package", "", "one context; empty checks every context")
 	report := flag.String("report", "", "also save the JSON report to this file")
 	flag.Parse()
+	if *discoverRelease {
+		var policy update.Policy
+		decoder := json.NewDecoder(io.LimitReader(os.Stdin, 65536))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&policy); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		release, err := update.NewClient(os.Getenv("GH_TOKEN")).ResolveRelease(ctx, policy)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(release); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "unexpected arguments")
 		os.Exit(2)

@@ -44,7 +44,7 @@ class Derivation(unittest.TestCase):
         self.assertEqual([s['name'] for s in FIXTURE['subpackages'] if s['name'] not in PHP.hooks.OMITTED_SUBPACKAGES],
                          [s['name'] for s in derived['subpackages']])
         for section in [derived['package']] + derived['subpackages']:
-            self.assertIn('wolfi-origin:php-8.5:8.5.11-r3', section['dependencies']['provides'])
+            self.assertIn('upstream-origin:php-8.5:8.5.11-r3', section['dependencies']['provides'])
             self.assertNotIn('replaces', section['dependencies'])
 
     def test_epoch_moves_with_wolfi_and_with_the_policy_never_colliding(self):

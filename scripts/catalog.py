@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = re.compile(r'[a-z0-9][a-z0-9+_.-]*\Z')
 CATEGORIES = {'databases', 'devel', 'games', 'graphics', 'lang', 'mail', 'math', 'multimedia', 'net', 'net-im', 'security', 'www'}
 SOURCES = {'wolfi', 'github', 'github-tags', 'pypi', 'npm', 'minecraft', 'git', 'content', 'plex'}
-UPDATE_FIELDS = {'source', 'separator', 'repo', 'project', 'prefix', 'pattern', 'series', 'branch', 'lock', 'reason', 'components', 'commit-var', 'recipe', 'family', 'hold'}
+UPDATE_FIELDS = {'source', 'separator', 'repo', 'project', 'prefix', 'pattern', 'series', 'branch', 'lock', 'reason', 'components', 'commit-var', 'recipe', 'family', 'hold', 'upstream', 'suffix', 'version-pattern', 'version-replace'}
 
 
 def keys(value, required, optional=()):
@@ -60,6 +60,18 @@ def validate(directory, meta):
     recipes = list(directory.glob('*.yaml'))
     hook = directory / 'package.py'
     if update['source'] == 'wolfi':
+        upstream = update.get('upstream')
+        keys(upstream, {'source'}, {'repo', 'prefix', 'separator', 'suffix', 'version-pattern', 'version-replace'})
+        if upstream['source'] not in ('github', 'github-tags', 'openjdk'):
+            raise ValueError('Wolfi derivations need an independent stable upstream release source')
+        if upstream['source'] != 'openjdk' and not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', upstream.get('repo', '')):
+            raise ValueError('upstream release tracking needs a GitHub repository')
+        if upstream.get('separator', '') not in ('', '_'):
+            raise ValueError('unsupported upstream version separator')
+        if bool(upstream.get('version-pattern')) != bool(upstream.get('version-replace')):
+            raise ValueError('upstream version pattern and replacement must be paired')
+        if upstream.get('version-pattern'):
+            re.compile(upstream['version-pattern'])
         if not hook.is_file() or recipes or not (directory / 'policy.json').is_file():
             raise ValueError('Wolfi contexts need hooks and policy, with no maintained recipe')
         if bool(update.get('recipe')) == bool(update.get('family')):

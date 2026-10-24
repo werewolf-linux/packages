@@ -52,7 +52,7 @@ class Derivation(unittest.TestCase):
         self.assertEqual({'openjdk-27', 'openjdk-27-jre', 'openjdk-27-default-jvm', 'openjdk-27-default-jdk'},
                          publish.package_names(derived))
         for section in [derived['package']] + derived['subpackages']:
-            self.assertIn('wolfi-origin:openjdk-27:27.0.0-r2', section['dependencies']['provides'])
+            self.assertIn('upstream-origin:openjdk-27:27.0.0-r2', section['dependencies']['provides'])
 
     def test_the_checkout_becomes_our_fetch_where_it_was_then_our_patches_follow_wolfis(self):
         pkg, _, derived = self.derived()

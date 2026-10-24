@@ -56,7 +56,7 @@ class Derivation(unittest.TestCase):
         self.assertEqual({'python-3.15', 'python-3.15-runtime', 'python-3.15-base', 'python-3.15-dev',
                           'python-3.15-base-dev'}, publish.package_names(derived))
         for section in [derived['package']] + derived['subpackages']:
-            self.assertIn('wolfi-origin:python-3.15:3.15.0_git20261017-r3', section['dependencies']['provides'])
+            self.assertIn('upstream-origin:python-3.15:3.15.0_git20261017-r3', section['dependencies']['provides'])
 
     def test_the_locked_commit_is_fetched_in_place_of_wolfis_checkout(self):
         _, _, derived = self.derived()

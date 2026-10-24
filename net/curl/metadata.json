@@ -1,7 +1,13 @@
 {
   "update": {
     "source": "wolfi",
-    "recipe": "curl"
+    "recipe": "curl",
+    "upstream": {
+      "source": "github",
+      "repo": "curl/curl",
+      "prefix": "curl-",
+      "separator": "_"
+    }
   },
   "hardening": {
     "minimized": true,

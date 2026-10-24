@@ -213,7 +213,7 @@ def derive(pkg, config, lock):
     # so that all may: Werewolf matches Wolfi's CVE fixes against it, not ours.
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(
-            'wolfi-origin:' + original + ':' + wolfi)
+            'upstream-origin:' + original + ':' + wolfi)
     # Keep the original ratio and assertions; find must use explicit commands.
     for section in [config] + config['subpackages']:
         tests = section.get('test', {}).get('pipeline', [])
@@ -342,8 +342,9 @@ def results(data):
 def gather(pkg, artifacts, lock, records):
     # Facts for notes.build: this build's evidence, the previous release's and
     # Wolfi's advisories. Run once per release; stage() keeps what it wrote.
-    import publish
-    wolfi = lock['version'] + '-r' + str(lock['epoch'])
+    import publish, releases
+    wolfi = releases.baseline_version(lock)
+    source_version = lock['version'] + '-r' + str(lock['epoch'])
     version = records[publish.ARCHES[0]]['version']
     previous = None
     pointer = publish.download(pkg.public + 'current.json')
@@ -360,9 +361,10 @@ def gather(pkg, artifacts, lock, records):
             entry = next(s for s in publish.stanzas(publish.download(pkg.public + publish.ARCHES[1] + '/APKINDEX.tar.gz'))
                          if s['P'] == stream(pointer['version']) and s['V'] == pointer['version'])
             origin = next((p.rsplit(':', 1)[1] for p in entry.get('p', '').split()
-                           if p.startswith('wolfi-origin:')), None)
+                           if p.startswith(('upstream-origin:', 'wolfi-origin:'))), None)
         previous = {'version': pointer['version'], 'build_id': pointer['build_id'],
                     'commit': pointer['source_sha'], 'wolfi_version': origin,
+                    'source_version': old['source'].get('version', origin) if old is not None else origin,
                     'wolfi_commit': old['source']['wolfi_commit'] if old is not None else None,
                     'wolfi_inputs': old['wolfi_inputs'] if old is not None else None}
     commits = glibc_commits = None
@@ -399,6 +401,7 @@ def gather(pkg, artifacts, lock, records):
             'run': os.environ.get('GITHUB_SERVER_URL', 'https://github.com') + '/' +
                    os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
             'source': {'glibc_commit': lock['source_commit'], 'wolfi_commit': lock['wolfi_commit'],
+                       'version': source_version, 'release': lock.get('release'), 'kind': lock.get('source_kind', 'wolfi'),
                        'wolfi_version': wolfi, 'recipe': lock['recipe'], 'policy_revision': lock['revision']},
             'repository': {'stable': pkg.public, 'snapshot': pkg.public + 'builds/' + lock['build_id'],
                            'key_sha256': publish.sha256(pkg.root / 'release/packages.pub')},
@@ -406,6 +409,6 @@ def gather(pkg, artifacts, lock, records):
             'previous': previous, 'commits': commits, 'glibc_commits': glibc_commits,
             'ceiling': pkg.policy['max_fail_per_mille'],
             'security': notes.security(secdb, 'glibc-' + lock['version'],
-                                       previous['wolfi_version'] if previous else None, wolfi),
+                                       previous['source_version'] if previous else None, source_version),
             'architectures': architectures}
 

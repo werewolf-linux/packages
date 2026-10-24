@@ -3,9 +3,10 @@
 Commands in this guide run from `wolfi/`; package contexts live in the top-level
 categories. The repository root provides the common `make PACKAGE=NAME` interface.
 
-The `wolfi/` engine builds the categorized Wolfi overlays in this repository. Each one is Wolfi's newest stable recipe,
-captured unchanged, plus a few policy patches that remove or deny what attacks need.
-Scheduled discovery follows Wolfi every ten minutes, signed with Werewolf's package key.
+The `wolfi/` engine captures Wolfi recipes unchanged as packaging baselines and
+independently selects the latest stable upstream releases. Its checked derivations
+apply the source/version update and our hardening changes. Discovery runs every ten
+minutes; successful native builds publish with Werewolf's package key.
 
 Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with
 `x86_64/APKINDEX.tar.gz` and `aarch64/APKINDEX.tar.gz` signed by
@@ -23,6 +24,8 @@ Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with
 | [vips](../graphics/vips/README.md) | `libvips` | Mastodon image formats only; no HEIF, SVG, PDF, TIFF or external loader modules |
 | [ffmpeg](../multimedia/ffmpeg/README.md) | newest `ffmpeg-*` | local media only; no network protocols, display, devices or font rendering |
 | [libffi](../devel/libffi/README.md) | `libffi` | callbacks from read-only library code (static trampolines), so they work under MDWE |
+| [busybox](../devel/busybox/README.md) | `busybox` | applets a tool runs by name come from busybox itself, as glibc searches no PATH |
+| PostgreSQL | newest `postgresql-*` | latest stable only; unversioned packages, no PAM/LDAP/GSSAPI, PL/Perl, PL/Python or OCI entrypoints; retain JIT, ICU, TLS, compression and contrib |
 
 Each package guide covers installation on Werewolf/Wolfi, every patch and allowance,
 build changes and troubleshooting. Start with [feed setup, grants and denial logs](docs/usage.md).
@@ -31,7 +34,10 @@ Package snapshots and release notes remain under `apk/NAME/builds/BUILD-ID/`.
 Legacy `apk/NAME` feeds are maintained for compatibility. Runtimes keep Wolfi's names;
 glibc uses `glibc-neutered-*` names and provides/replaces Wolfi's names.
 Our version outranks the Wolfi build it rebuilds, and each feed package provides
-`wolfi-origin:NAME:VERSION` so Werewolf's updater matches Wolfi's CVE fixes. Allowances
+`upstream-origin:NAME:VERSION` for the actual source identity used in CVE comparisons.
+The captured Wolfi recipe version is recorded separately; a newer upstream source
+does not claim to be a Wolfi build. Werewolf accepts the historical `wolfi-origin`
+marker for existing packages too. Allowances
 are grouped by capability, pledge-style: an empty file at
 `/etc/runtime-hardening/allow/<ns>/LANG/GROUP`, or `.../all/LANG/GROUP` for every
 service, read off the read-only root, never from argv or the environment. `<ns>` is the
@@ -94,12 +100,14 @@ work. These defaults complement the service's kernel restrictions.
 
 Every ten minutes `wolfi-refresh.yml` takes one Wolfi snapshot and, for each package:
 
-1. **Capture** (`scripts/refresh.py`): the newest stable stream's recipe, its directory,
-   pipelines and Wolfi's key, locked by hash. Only the latest stream is followed;
-   `policy.json` may pin one with `"stream"` when an upgrade must wait.
+1. **Capture** (`scripts/refresh.py`, `releases.py`): resolve the latest upstream
+   stable release using the shared Go updater, then capture a suitable Wolfi recipe,
+   its directory, pipelines and key unchanged. Lock the baseline separately from
+   the selected release. Same-release maintenance commits are retained; newer
+   upstream releases advance without waiting for Wolfi. Older-stream pins are rejected.
 2. **Verify and derive** (`verify.py`, `derive.py`): the package's `derive` hook edits
    the recipe; `check` refuses an upstream change nobody has reviewed. Its source is
-   fetched at Wolfi's exact commit by one shared step, with mirrors and retries.
+   fetched at the effective source's exact commit by one shared step, with mirrors and retries.
 3. **Prepare** (`prepare.py`): every patch applies at that commit as the build will
    apply it, GNU patch with fuzz 2.
 4. **Build** (`wolfi-build.yml`): Melange on native x86_64 and aarch64 runners, then Wolfi's
@@ -197,7 +205,7 @@ From the repository root, make `CATEGORY/NAME/` with `metadata.json`, `package.p
 | `derive(pkg, config, lock)` | yes | Wolfi's recipe to ours |
 | `check(pkg, upstream, derived)` | yes | refuse a derivation that lost a protection |
 | `TITLE`, `UPSTREAM` | no | names for issues and release notes |
-| `stable`, `check_policy`, `prepared` | no | refresh and prepare checks |
+| `stable`, `check_policy`, `prepared`, `upstream_patches` | no | baseline selection and source preparation checks; retained Wolfi patch list |
 | `test_recipe`, `TEST_PACKAGES`, `TEST_UNPINNED`, `MIN_KERNEL` | no | package tests |
 | `check_apk`, `check_apks`, `gather`, `notes` | no | publication checks and notes |
 

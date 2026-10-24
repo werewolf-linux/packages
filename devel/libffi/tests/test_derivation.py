@@ -48,7 +48,7 @@ class LibffiDerivation(unittest.TestCase):
         self.assertNotIn('--disable-exec-static-tramp', configure['with']['opts'].split())
         self.assertIn(PACKAGE.hooks.built_in(), result['pipeline'])
         self.assertEqual('3.8.0-r1002', PACKAGE.hooks.full_version(LOCK))
-        self.assertIn('wolfi-origin:libffi:3.8.0-r2', result['package']['dependencies']['provides'])
+        self.assertIn('upstream-origin:libffi:3.8.0-r2', result['package']['dependencies']['provides'])
         self.assertEqual({'libffi', 'libffi-dev', 'libffi-pic-dev', 'libffi-doc'}, publish.package_names(result))
         self.assertEqual(PACKAGE.hooks.PROBED, result['test']['pipeline'][-1]['name'])
         self.assertNotIn('Apply Werewolf policy patches', [s.get('name') for s in result['pipeline']])

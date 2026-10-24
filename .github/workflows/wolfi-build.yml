@@ -124,8 +124,14 @@ jobs:
         run: |
           mkdir -p "build/$PACKAGE/inputs"
           tar -xzf "build/input-bundle/$PACKAGE.tar.gz" -C "build/$PACKAGE/inputs"
-      - name: Capture Wolfi's newest recipe for a build by hand
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         if: inputs.inputs_artifact == ''
+        with:
+          go-version: '1.27.x'
+      - name: Capture the latest stable source and Wolfi recipe for a build by hand
+        if: inputs.inputs_artifact == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: build/venv/bin/python scripts/refresh.py "$PACKAGE"
       - name: Verify provenance and derivation
         run: make PYTHON=build/venv/bin/python PACKAGE="$PACKAGE" check derive

@@ -134,7 +134,7 @@ def probe(pkg):
 
 def derive(pkg, config, lock):
     original = config['package']['name']
-    if original != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if original != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed upstream package identity before deriving')
     pipeline = config['pipeline']
     source = pipeline[0]
@@ -171,7 +171,7 @@ def derive(pkg, config, lock):
     # CVE fixes against that (lib/prebuilt.zig), not against our epoch.
     for section in [config['package']] + kept:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(
-            'wolfi-origin:' + original + ':' + wolfi)
+            'upstream-origin:' + original + ':' + wolfi)
     test = config['test'] = retained_tests(config)
     test.setdefault('environment', {}).setdefault('contents', {}).setdefault('packages', []).extend(PROBE_PACKAGES)
     test['pipeline'].append({'name': 'Werewolf protections hold, and allowances take each back',
@@ -207,7 +207,7 @@ def check(pkg, upstream, derived):
     ours_only = ('Apply Werewolf policy patches', 'Configure', 'Allow every group in the build guest', PRUNE)
     assert steps(upstream, ('Configure',) + APXS_STEPS) == steps(derived, ours_only), 'an upstream build step changed'
     strip = lambda subs: [{**s, 'dependencies': {**s.get('dependencies', {}), 'provides': [
-        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]}}
+        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('upstream-origin:')]}}
         for s in subs]
     assert strip(retained_subpackages(upstream)) == strip(derived['subpackages']), 'an upstream subpackage changed'
     expected_data = [{**item, 'items': retained_extensions(upstream)} if item['name'] == 'extensions' else item

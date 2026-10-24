@@ -74,7 +74,7 @@ def derive(pkg, config, lock):
     config['subpackages'] = config['subpackages'][:1]
     config['test']['pipeline'] = [t for t in config['test']['pipeline'] if t.get('name') not in OMITTED_TESTS] + [probe(pkg)]
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
-    origin = 'wolfi-origin:libvips:' + lock['version'] + '-r' + str(lock['epoch'])
+    origin = 'upstream-origin:libvips:' + lock['version'] + '-r' + str(lock['epoch'])
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(origin)
     config['package']['dependencies']['provides'].append('libvips-hardened=${{package.full-version}}')

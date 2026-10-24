@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "family": "php-"
+    "family": "php-",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "php/php-src",
+      "prefix": "php-"
+    }
   },
   "hardening": {
     "minimized": true,

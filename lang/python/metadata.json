@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "family": "python-"
+    "family": "python-",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "python/cpython",
+      "prefix": "v"
+    }
   },
   "hardening": {
     "minimized": true,

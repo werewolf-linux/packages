@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 # The shared files that change what a build makes, beside the package's own
@@ -10,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED = ['Makefile', 'requirements.txt', 'tools.lock.json', 'release/packages.pub',
           'scripts/packages.py', 'scripts/inputs.py', 'scripts/refresh.py', 'scripts/derive.py',
           'scripts/patching.py', 'scripts/source.py', 'scripts/prepare.py', 'scripts/verify.py',
+          'scripts/releases.py',
           'scripts/build.py', 'scripts/runtime.py', 'scripts/runtime_hardening_log.h', 'scripts/signing-key.py', 'scripts/install-melange.py',
           'scripts/setup-runner.py']
 # Within a package's directory, what documents it rather than builds it.
@@ -38,6 +40,9 @@ def file_modes(directory):
 def identity(lock):
     # A Wolfi commit changing an unrelated package is provenance, not a rebuild.
     relevant = {key: lock[key] for key in ['recipe', 'source_commit', 'revision', 'sha256', 'mode', 'policy_sha256']}
+    if 'release' in lock:
+        relevant['release'] = lock['release']
+        relevant['version'], relevant['epoch'] = lock['version'], lock['epoch']
     return hashlib.sha256(json.dumps(relevant, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 def verify(pkg, directory=None):
@@ -53,4 +58,18 @@ def verify(pkg, directory=None):
         raise ValueError('Downstream policy changed; refresh the inputs')
     if lock['build_id'] != identity(lock):
         raise ValueError('Build identity mismatch')
+    if lock.get('release'):
+        baseline = yaml.safe_load((directory / 'upstream.yaml').read_text())
+        facts = {'version':str(baseline['package']['version']), 'epoch':baseline['package']['epoch'],
+                 'source_commit':pkg.hooks.source_commit(baseline)}
+        if facts != lock.get('wolfi'):
+            raise ValueError('Wolfi baseline identity differs from captured recipe')
+        if lock.get('source_kind') not in ('wolfi', 'upstream-release'):
+            raise ValueError('Unknown effective source kind')
+        selected = lock['release'] if lock['source_kind'] == 'upstream-release' else facts
+        commit = selected.get('commit', selected.get('source_commit'))
+        if (lock['version'], lock['source_commit']) != (selected['version'], commit):
+            raise ValueError('Effective source differs from selected release or baseline')
+        if lock['version'] != lock['release']['version']:
+            raise ValueError('Effective version is not the selected stable release')
     return lock

@@ -11,7 +11,7 @@ import verify
 
 PKG = packages.Package('vips')
 SOURCE = yaml.safe_load((Path(__file__).parent / 'fixtures/libvips.yaml').read_text())
-LOCK = dict(recipe='libvips.yaml', version='8.18.7', epoch=1, revision=1,
+LOCK = dict(recipe='libvips.yaml', version='8.18.7', epoch=1, revision=PKG.policy['revision'],
             source_commit=PKG.hooks.source_commit(SOURCE))
 
 
@@ -25,7 +25,7 @@ class Vips(unittest.TestCase):
             self.assertIn(option, options)
         self.assertNotIn('libheif-dev', result['environment']['contents']['packages'])
         self.assertNotIn('librsvg-dev', result['environment']['contents']['packages'])
-        self.assertEqual(1001, result['package']['epoch'])
+        self.assertEqual(LOCK['revision'] * 1000 + LOCK['epoch'], result['package']['epoch'])
 
     def test_new_upstream_dependency_requires_review(self):
         source = copy.deepcopy(SOURCE)

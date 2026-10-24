@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "recipe": "libffi"
+    "recipe": "libffi",
+    "upstream": {
+      "source": "github",
+      "repo": "libffi/libffi",
+      "prefix": "v"
+    }
   },
   "hardening": {
     "minimized": false,

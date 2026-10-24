@@ -1,24 +1,27 @@
 #!/bin/sh
 set -eu
-export PATH=/usr/libexec/postgresql17:$PATH
+bindir=$(pg_config --bindir)
+export PATH=$bindir:$PATH
 # Verify both sides of authentication: libpq must not retain GSSAPI/LDAP either.
-for binary in /usr/libexec/postgresql17/postgres /usr/lib/libpq.so.5; do
+for binary in "$bindir/postgres" /usr/lib/libpq.so.5; do
     if ldd "$binary" | grep -E 'lib(pam|ldap|gssapi|krb5)'; then
         echo "optional authentication library remains: $binary" >&2
         exit 1
     fi
 done
 pg_config --configure | grep -- '--with-llvm'
+id pgtest >/dev/null 2>&1 || useradd -M -s /bin/sh pgtest
 work=$(mktemp -d)
 trap 'su -p -s /bin/sh pgtest -c "pg_ctl -D $work/data -m immediate stop" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 chown pgtest "$work"
-export PGHOST=$work PGUSER=pgtest PGDATABASE=postgres
+export PGHOST=$work PGUSER=pgtest PGDATABASE=postgres PGPORT=55432
 su -p -s /bin/sh pgtest -c "initdb -D $work/data --no-locale --encoding=UTF8 --auth-local=peer --auth-host=scram-sha-256"
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$work/server.key" -out "$work/server.crt" -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost
 chmod 600 "$work/server.key"
 chown pgtest "$work/server.key" "$work/server.crt"
 cat >> "$work/data/postgresql.conf" <<EOF
 unix_socket_directories = '$work'
+port = 55432
 listen_addresses = '127.0.0.1'
 ssl = on
 ssl_cert_file = '$work/server.crt'

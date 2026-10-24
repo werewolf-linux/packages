@@ -1,7 +1,12 @@
 {
   "update": {
     "source": "wolfi",
-    "family": "nodejs-"
+    "family": "nodejs-",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "nodejs/node",
+      "prefix": "v"
+    }
   },
   "hardening": {
     "minimized": true,
