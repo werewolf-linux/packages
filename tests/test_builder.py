@@ -35,7 +35,7 @@ class Builder(unittest.TestCase):
                 out.mkdir()
                 unsigned(out / 'example-1-r0.apk', 'example', 'aarch64')
             def capture(args, **kwargs):
-                return 'GitVersion: v0.62.1' if args[0] == 'melange' else '1700000000'
+                return 'GitVersion: v0.62.1' if Path(args[0]).name == 'melange' else '1700000000'
             old = Path.cwd()
             try:
                 with patch.object(sys, 'argv', ['build.py', 'example', '--arch', 'aarch64']), \
