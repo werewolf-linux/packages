@@ -36,3 +36,8 @@ print(json.dumps({
     'native': can_import('ctypes'),        # python:native
     'deserialize': can_unpickle(),         # python:deserialize
 }, sort_keys=True))
+
+# Interactive libraries must be absent even when native imports are allowed.
+for _module in ('readline', '_curses', '_curses_panel'):
+    if __import__('importlib.util', fromlist=['find_spec']).find_spec(_module) is not None:
+        raise AssertionError('unexpected terminal extension: ' + _module)

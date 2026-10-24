@@ -27,9 +27,9 @@ person told when a Wolfi change stops a package.
 
 ## Detailed design
 
-`refresh.yml` runs at minutes 7-57/10, on main pushes and by hand. Builds and
+`wolfi-refresh.yml` runs at minutes 7-57/10, on main pushes and by hand. Builds and
 publication remain independent per package; only index commits serialize through
-R2 conditional writes. `check.yml` runs discovery on pull requests without building
+R2 conditional writes. `wolfi-check.yml` runs discovery on pull requests without building
 or filing issues.
 
 **Discovery** (`discover.py`) clones Wolfi once, then runs refresh, verify, derive and
@@ -58,7 +58,7 @@ unchanged. Fuzz still builds and files an advisory issue; a failure stops the pa
 `derivation`, `patches` or `fuzz`. Each names the Wolfi version and quotes the output. A
 hidden marker finds the open issue, so a new failure comments on it.
 
-**Builds** (`build.yml`) run Melange in bubblewrap on `ubuntu-26.04` and
+**Builds** (`wolfi-build.yml`) run Melange in bubblewrap on `ubuntu-26.04` and
 `ubuntu-26.04-arm`. Ubuntu's AppArmor child profile denies the `sys_chroot` APK's
 bootstrap test needs; a private bubblewrap copy gets a profile allowing `sys_chroot`,
 `setuid` and `setgid`. The latter two let runtime probes verify real/effective UID

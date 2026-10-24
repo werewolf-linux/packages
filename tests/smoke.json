@@ -5,6 +5,7 @@
   "continuwuity": {"runs": "conduwuit --version | grep -F '${{package.version}}'"},
   "keycloak": {"packages": ["openjdk-21-default-jvm"], "runs": "java @/usr/lib/keycloak/java.args --version | grep -F '${{package.version}}'"},
   "langflow": {"runs": "/usr/lib/langflow/bin/python -P -c 'from langflow.main import setup_app; assert callable(setup_app)'"},
+  "mastodon": {"runs": "ruby mastodon-check.rb", "packages": ["ruby-4.0", "ruby4.0-bundler", "libvips-hardened>=8.18.7-r1001"]},
   "mattermost": {"runs": "/usr/lib/mattermost/bin/mattermost version | grep -F '${{package.version}}'"},
   "miniflux": {"runs": "miniflux -version | grep -F '${{package.version}}'"},
   "mox": {"runs": "mox version | grep -F '${{package.version}}'"},

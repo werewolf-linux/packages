@@ -1,4 +1,5 @@
 import importlib.util
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -45,8 +46,9 @@ class RunnerProfile(unittest.TestCase):
     def test_capability_is_scoped_to_the_private_runner_child(self):
         executable = Path('/home/runner/work/project/build/tools/bwrap')
         result = runner_setup.profile(TEMPLATE, executable)
-        self.assertIn('profile hardened_packages_bwrap "' + str(executable.resolve()) + '"', result)
-        child = result.split('profile hardened_packages_bwrap_child flags=', 1)[1]
+        name = re.search(r'^profile (\S+) "', result, re.M)[1]
+        self.assertIn('profile ' + name + ' "' + str(executable.resolve()) + '"', result)
+        child = result.split('profile ' + name + '_child flags=', 1)[1]
         self.assertIn('allow capability sys_chroot,', child)
         self.assertIn('allow capability setuid,', child)
         self.assertIn('allow capability setgid,', child)
@@ -55,6 +57,37 @@ class RunnerProfile(unittest.TestCase):
         self.assertNotIn('local/', result)
         self.assertNotIn('/usr/bin/bwrap', result)
         self.assertIn('audit deny capability,', TEMPLATE)
+
+    def test_application_and_wolfi_profiles_do_not_replace_each_other(self):
+        app = runner_setup.profile(TEMPLATE, Path('/checkout/build/tools/bwrap-private'))
+        wolfi = runner_setup.profile(TEMPLATE, Path('/checkout/wolfi/build/tools/bwrap-private'))
+        app_names = re.findall(r'^profile (\S+)', app, re.M)
+        wolfi_names = re.findall(r'^profile (\S+)', wolfi, re.M)
+        self.assertFalse(set(app_names) & set(wolfi_names))
+        self.assertEqual(app, runner_setup.profile(TEMPLATE, Path('/checkout/build/tools/bwrap-private')))
+
+    def test_profile_attaches_to_a_new_binary_without_replacing_the_legacy_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            template = root / 'template'
+            template.write_text(TEMPLATE)
+            executable = root / 'build/tools/bwrap'
+            with mock.patch.object(runner_setup, 'ROOT', root), \
+                 mock.patch.object(runner_setup, 'PROFILE', template), \
+                 mock.patch.object(runner_setup.os, 'geteuid', return_value=0), \
+                 mock.patch.object(runner_setup.shutil, 'copyfile',
+                                   side_effect=lambda source, target: target.write_bytes(b'runner')), \
+                 mock.patch.object(runner_setup.subprocess, 'run') as run:
+                runner_setup.main()
+            binary = executable.with_name('bwrap-private')
+            self.assertEqual(binary, executable.resolve())
+            self.assertEqual(0o755, binary.stat().st_mode & 0o777)
+            self.assertEqual(binary.with_suffix('.apparmor'), executable.with_suffix('.apparmor').resolve())
+            policy = executable.with_suffix('.apparmor').read_text()
+            self.assertIn('"' + str(binary) + '"', policy)
+            self.assertNotIn('"' + str(executable) + '"', policy)
+            run.assert_called_once()
+            self.assertEqual('--replace', run.call_args.args[0][1])
 
     def test_new_child_capabilities_and_unknown_profiles_fail_closed(self):
         for template in (TEMPLATE.replace('audit deny capability,', 'allow capability,'),

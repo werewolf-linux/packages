@@ -69,3 +69,7 @@ Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE m
 Build guests grant the groups privately; APKs contain no hardening exception files.
 [Installed-package probes](tests/probe.sh) check each grant and reject symlink grants.
 [Build instructions](../../wolfi/README.md#building-locally); patches: PSF-2.0.
+
+Readline and curses native extensions are omitted. GDBM, shelve and SQLite remain
+for application data, including persistent Celery schedules; the installed-package
+probe writes and reopens a GDBM-backed schedule.

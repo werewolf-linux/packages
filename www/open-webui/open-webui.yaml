@@ -1,7 +1,7 @@
 # Open WebUI for werewolf's open-webui form, in its slim build: upstream's
 # own variant for a machine whose models are served elsewhere (here, by
 # Ollama), its vectors kept in PostgreSQL with pgvector, without torch,
-# local speech or document models, or any cloud storage SDK. Built by
+# local speech or document models. Retains S3 storage. Built by
 # melange in Wolfi's environment, into a virtual environment on Wolfi's
 # Python 3.12 at /usr/lib/open-webui: the Python packages upstream's slim
 # image installs (backend/requirements-slim.txt at the tag), resolved as
@@ -12,7 +12,7 @@
 package:
   name: open-webui
   version: "0.12.3"
-  epoch: 1
+  epoch: 2
   description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
   copyright:
     - license: LicenseRef-Open-WebUI
@@ -30,6 +30,7 @@ environment:
       - python-3.12
       - python-3.12-dev
       - uv
+      - patch
   environment:
     UV_PYTHON_DOWNLOADS: never
     UV_NO_CACHE: "1"
@@ -58,16 +59,22 @@ pipeline:
   # whole application, as the slim build, proves it. Bytecode is compiled
   # here: the machine's image is read-only.
   - runs: |
+      python3.12 minimal-requirements.py requirements-slim.txt
       uv venv --python /usr/bin/python3.12 /usr/lib/open-webui
       export VIRTUAL_ENV=/usr/lib/open-webui
       uv pip install --exclude-newer 2026-10-18T10:44:22Z \
         -r requirements-slim.txt
       uv pip install --no-deps \
         open_webui-${{package.version}}-py3-none-any.whl
+      # LangSmith supports uncompressed traces; its declared zstandard dependency
+      # is optional in code and not needed by document splitting.
+      uv pip uninstall zstandard
+      python3.12 optional-metadata.py /usr/lib/open-webui/lib/python3.12/site-packages
+      patch --batch --fuzz=0 -p1 -d /usr/lib/open-webui/lib/python3.12/site-packages < optional-features.patch
       d=$(mktemp -d)
       DATA_DIR=$d STATIC_DIR=$d/static USE_SLIM_DOCKER=true WEBUI_SECRET_KEY=build \
         PYTHONDONTWRITEBYTECODE=1 FROM_INIT_PY=true \
-        /usr/lib/open-webui/bin/python -c 'import open_webui.main'
+        /usr/lib/open-webui/bin/python consumers.py
       rm -rf "$d"
 
   # uv's parallel workers compile files in an unpredictable order, which

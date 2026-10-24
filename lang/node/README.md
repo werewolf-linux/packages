@@ -28,6 +28,7 @@ supported group below; see [grant scope and restart instructions](../../wolfi/do
 | [0005](patches/0005-gate-inline-code-and-modules-on-writable-mounts.patch) | Gate inline code and ordinary module provenance; reject custom startup snapshots. | `inline`, `writable-source`; custom snapshots always denied |
 | [0006](patches/0006-gate-disk-compilation-caches-with-writable-source.patch) | Disable disk compilation caches unless writable source is allowed. | `writable-source` |
 | [0007](patches/0007-log-denials-to-stderr.patch) | Emit JSON denial records directly to stderr. | Always on |
+| [0008](patches/0008-omit-optional-compression-libraries.patch) | Omit Brotli/Zstd implementations, APIs and HTTP negotiation. | Build-time omission |
 
 | Group | Restores |
 |---|---|
@@ -67,9 +68,15 @@ use `--ignore-scripts` during dependency installation and run reviewed builds ex
 ## Build differences
 
 Keep Wolfi's commit, toolchain, ordinary runtime and headers for application builds.
-Configure without inspector, npm/npx, `NODE_OPTIONS`, SEA and LIEF; discard manpages.
+Configure without inspector, npm/npx, `NODE_OPTIONS`, SEA, LIEF, Brotli and Zstd; discard manpages.
+Gzip/deflate remain. Fetch advertises only available encodings; Brotli/Zstd responses
+fail. No allowance restores omitted codecs. Native addons may carry independent
+codec implementations and require their own audit.
 Omit minimal/minimal-compat, shared libnode, OCI-entrypoint and documentation subpackages.
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
 [Probes](tests/probe.sh) check APIs, workers, grants and real/effective UID mismatches.
 Build guests grant groups privately; APKs contain no hardening exception files.
 [Build instructions](../../wolfi/README.md#building-locally); patches: MIT.
+
+The separate `node:ffi` API is omitted. Native addons remain gated by the native
+allowance; built-in SQLite and TypeScript are retained for common consumers.

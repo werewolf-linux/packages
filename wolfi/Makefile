@@ -9,9 +9,12 @@ need-package = $(if $(PACKAGE),,$(error name one: make PACKAGE=$(subst $(eval) ,
 .PHONY: test refresh discover verify derive prepare build check
 # Every unit test, shared and each package's; no network, no captured inputs.
 test:
+	$(PYTHON) -c 'import sys; sys.exit("Python 3.12+ is required; set PYTHON to a supported interpreter") if sys.version_info < (3, 12) else None'
+	$(PYTHON) ../scripts/catalog.py validate
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
-	for package in $$($(PYTHON) ../scripts/catalog.py list --engine wolfi); do \
-		directory=$$($(PYTHON) ../scripts/catalog.py path $$package --engine wolfi); \
+	packages=$$($(PYTHON) ../scripts/catalog.py list --engine wolfi) || exit 1; \
+	for package in $$packages; do \
+		directory=$$($(PYTHON) ../scripts/catalog.py path $$package --engine wolfi) || exit 1; \
 		$(PYTHON) -m unittest discover -s "../$$directory/tests" -p 'test_*.py' || exit 1; \
 	done
 

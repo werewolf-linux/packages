@@ -1,0 +1,376 @@
+Subject: [PATCH] Make Brotli and Zstd optional at build time
+Upstream-Status: Pending
+Reference: https://github.com/nodejs/node/tree/v26.12.1
+
+Omit codec implementations, linkage and APIs together. Keep numeric constants
+for zlib module initialization and feature detection through constructor absence.
+Fetch advertises only the codecs this build can decode.
+
+diff --git a/configure.py b/configure.py
+--- a/configure.py
++++ b/configure.py
+@@ -703,6 +703,9 @@
+     dest='shared_merve_libpath',
+     help='a directory to search for the shared merve DLL')
+ 
++parser.add_argument('--without-brotli', action='store_true',
++    help='omit brotli compression and decompression')
++
+ shared_optgroup.add_argument('--shared-brotli',
+     action='store_true',
+     dest='shared_brotli',
+@@ -812,6 +815,9 @@
+     action='store',
+     dest='shared_temporal_capi_libpath',
+     help='a directory to search for the shared temporal_capi DLL')
++
++parser.add_argument('--without-zstd', action='store_true',
++    help='omit zstd compression and decompression')
+ 
+ shared_optgroup.add_argument('--shared-zstd',
+     action='store_true',
+@@ -2964,7 +2970,13 @@
+ configure_library('ada', output)
+ configure_library('simdjson', output)
+ configure_library('simdutf', output)
+-configure_library('brotli', output, pkgname=['libbrotlidec', 'libbrotlienc'])
++output['variables']['node_use_brotli'] = b(not options.without_brotli)
++if options.without_brotli:
++    if options.shared_brotli:
++        error('--without-brotli conflicts with --shared-brotli')
++    output['variables']['node_shared_brotli'] = 'false'
++else:
++    configure_library('brotli', output, pkgname=['libbrotlidec', 'libbrotlienc'])
+ configure_library('cares', output, pkgname='libcares')
+ # Only cctest uses gtest; keep it out of the node binary's link line.
+ output['variables']['node_shared_gtest_libraries'] = []
+@@ -2982,7 +2994,13 @@
+ configure_ffi(output);
+ configure_library('temporal_capi', output)
+ configure_library('uvwasi', output)
+-configure_library('zstd', output, pkgname='libzstd')
++output['variables']['node_use_zstd'] = b(not options.without_zstd)
++if options.without_zstd:
++    if options.shared_zstd:
++        error('--without-zstd conflicts with --shared-zstd')
++    output['variables']['node_shared_zstd'] = 'false'
++else:
++    configure_library('zstd', output, pkgname='libzstd')
+ configure_v8(output, configurations)
+ configure_openssl(output)
+ configure_quic(output)
+diff --git a/node.gypi b/node.gypi
+--- a/node.gypi
++++ b/node.gypi
+@@ -250,7 +250,15 @@
+         'dependencies': [ 'tools/v8_gypfiles/simdutf.gyp:simdutf' ],
+     }],
+ 
+-    [ 'node_shared_brotli=="false"', {
++    [ 'node_use_brotli=="true"', {
++      'defines': [ 'HAVE_BROTLI=1' ],
++    }, {
++      'defines': [ 'HAVE_BROTLI=0' ],
++      # Numeric zlib constants only; no library or decoder implementation.
++      'include_dirs': [ 'deps/brotli/c/include' ],
++    }],
++
++    [ 'node_use_brotli=="true" and node_shared_brotli=="false"', {
+       'dependencies': [ 'deps/brotli/brotli.gyp:brotli' ],
+     }],
+ 
+@@ -262,7 +270,15 @@
+       'dependencies': [ 'deps/libffi/libffi.gyp:libffi' ],
+     }],
+ 
+-    [ 'node_shared_zstd=="false"', {
++    [ 'node_use_zstd=="true"', {
++      'defines': [ 'HAVE_ZSTD=1' ],
++    }, {
++      'defines': [ 'HAVE_ZSTD=0' ],
++      # Numeric zlib constants only; no library or decoder implementation.
++      'include_dirs': [ 'deps/zstd/lib' ],
++    }],
++
++    [ 'node_use_zstd=="true" and node_shared_zstd=="false"', {
+       'dependencies': [ 'deps/zstd/zstd.gyp:zstd' ],
+       'defines': [ 'NODE_BUNDLED_ZSTD' ],
+     }],
+diff --git a/src/node_zlib.cc b/src/node_zlib.cc
+--- a/src/node_zlib.cc
++++ b/src/node_zlib.cc
+@@ -137,6 +137,7 @@
+   V(ZSTD_error_noForwardProgress_destFull)                                     \
+   V(ZSTD_error_noForwardProgress_inputEmpty)
+ 
++#if HAVE_ZSTD
+ inline const char* ZstdStrerror(int err) {
+ #define V(code)                                                                \
+   if (err == code) return #code;
+@@ -144,6 +145,8 @@
+ #undef V
+   return "ZSTD_error_GENERIC";
+ }
++
++#endif  // HAVE_ZSTD
+ 
+ enum node_zlib_mode {
+   NONE,
+@@ -180,6 +183,7 @@
+   inline bool IsError() const { return code != nullptr; }
+ };
+ 
++#if HAVE_BROTLI
+ void RecordBrotliParam(std::vector<std::pair<int, uint32_t>>* params,
+                        int key,
+                        uint32_t value) {
+@@ -191,6 +195,8 @@
+   }
+   params->emplace_back(key, value);
+ }
++
++#endif  // HAVE_BROTLI
+ 
+ class ZlibContext final : public MemoryRetainer {
+  public:
+@@ -255,6 +261,7 @@
+   z_stream strm_;
+ };
+ 
++#if HAVE_BROTLI
+ // Brotli has different data types for compression and decompression streams,
+ // so some of the specifics are implemented in more specific subclasses
+ class BrotliContext : public MemoryRetainer {
+@@ -328,6 +335,9 @@
+   std::vector<std::pair<int, uint32_t>> params_;
+ };
+ 
++#endif  // HAVE_BROTLI
++
++#if HAVE_ZSTD
+ class ZstdContext : public MemoryRetainer {
+  public:
+   ZstdContext() = default;
+@@ -422,6 +432,8 @@
+   size_t frame_prefix_size_ = 0;
+   uint8_t possible_frame_types_ = 0;
+ };
++
++#endif  // HAVE_ZSTD
+ 
+ class CompressionStreamMemoryOwner {
+  public:
+@@ -881,6 +893,7 @@
+   SET_SELF_SIZE(ZlibStream)
+ };
+ 
++#if HAVE_BROTLI
+ template <typename CompressionContext>
+ class BrotliCompressionStream final :
+   public CompressionStream<CompressionContext> {
+@@ -972,6 +985,9 @@
+ using BrotliEncoderStream = BrotliCompressionStream<BrotliEncoderContext>;
+ using BrotliDecoderStream = BrotliCompressionStream<BrotliDecoderContext>;
+ 
++#endif  // HAVE_BROTLI
++
++#if HAVE_ZSTD
+ template <typename CompressionContext>
+ class ZstdStream final : public CompressionStream<CompressionContext> {
+  public:
+@@ -1082,6 +1098,8 @@
+ using ZstdCompressStream = ZstdStream<ZstdCompressContext>;
+ using ZstdDecompressStream = ZstdStream<ZstdDecompressContext>;
+ 
++#endif  // HAVE_ZSTD
++
+ void ZlibContext::Close() {
+   {
+     Mutex::ScopedLock lock(mutex_);
+@@ -1483,6 +1501,7 @@
+ }
+ 
+ 
++#if HAVE_BROTLI
+ void BrotliContext::SetBuffers(const char* in, uint32_t in_len,
+                                char* out, uint32_t out_len) {
+   next_in_ = reinterpret_cast<const uint8_t*>(in);
+@@ -1721,6 +1740,9 @@
+   }
+ }
+ 
++#endif  // HAVE_BROTLI
++
++#if HAVE_ZSTD
+ void ZstdContext::SetBuffers(const char* in,
+                              uint32_t in_len,
+                              char* out,
+@@ -2054,6 +2076,8 @@
+   return {};
+ }
+ 
++#endif  // HAVE_ZSTD
++
+ template <typename Stream>
+ struct MakeClass {
+   static void Make(Environment* env, Local<Object> target, const char* name) {
+@@ -2134,10 +2158,18 @@
+   Environment* env = Environment::GetCurrent(context);
+ 
+   MakeClass<ZlibStream>::Make(env, target, "Zlib");
++#if HAVE_BROTLI
+   MakeClass<BrotliEncoderStream>::Make(env, target, "BrotliEncoder");
++#endif
++#if HAVE_BROTLI
+   MakeClass<BrotliDecoderStream>::Make(env, target, "BrotliDecoder");
++#endif
++#if HAVE_ZSTD
+   MakeClass<ZstdCompressStream>::Make(env, target, "ZstdCompress");
++#endif
++#if HAVE_ZSTD
+   MakeClass<ZstdDecompressStream>::Make(env, target, "ZstdDecompress");
++#endif
+ 
+   SetFastMethodNoSideEffect(context, target, "crc32", CRC32, &fast_crc32_);
+   target->Set(env->context(),
+@@ -2147,10 +2179,18 @@
+ 
+ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
+   MakeClass<ZlibStream>::Make(registry);
++#if HAVE_BROTLI
+   MakeClass<BrotliEncoderStream>::Make(registry);
++#endif
++#if HAVE_BROTLI
+   MakeClass<BrotliDecoderStream>::Make(registry);
++#endif
++#if HAVE_ZSTD
+   MakeClass<ZstdCompressStream>::Make(registry);
++#endif
++#if HAVE_ZSTD
+   MakeClass<ZstdDecompressStream>::Make(registry);
++#endif
+   registry->Register(CRC32);
+   registry->Register(fast_crc32_);
+ }
+diff --git a/src/node_metadata.cc b/src/node_metadata.cc
+--- a/src/node_metadata.cc
++++ b/src/node_metadata.cc
+@@ -131,12 +131,15 @@
+       "."
+       NODE_STRINGIFY(LLHTTP_VERSION_PATCH);
+ 
++#if HAVE_BROTLI
+   brotli =
+     std::to_string(BrotliEncoderVersion() >> 24) +
+     "." +
+     std::to_string((BrotliEncoderVersion() & 0xFFF000) >> 12) +
+     "." +
+     std::to_string(BrotliEncoderVersion() & 0xFFF);
++#endif  // HAVE_BROTLI
++
+ #ifndef NODE_SHARED_BUILTIN_UNDICI_UNDICI_PATH
+   undici = UNDICI_VERSION;
+ #endif
+@@ -144,7 +147,9 @@
+   acorn = ACORN_VERSION;
+   merve = MERVE_VERSION;
+   uvwasi = UVWASI_VERSION_STRING;
++#if HAVE_ZSTD
+   zstd = ZSTD_VERSION_STRING;
++#endif
+ 
+ #ifndef NODE_SHARED_BUILTIN_AMARO_DIST_INDEX_PATH
+ #if HAVE_AMARO
+diff --git a/src/node_metadata.h b/src/node_metadata.h
+--- a/src/node_metadata.h
++++ b/src/node_metadata.h
+@@ -42,13 +42,25 @@
+ #define NODE_VERSIONS_KEY_UNDICI(V)
+ #endif
+ 
++#if HAVE_BROTLI
++#define NODE_VERSIONS_KEY_BROTLI(V) V(brotli)
++#else
++#define NODE_VERSIONS_KEY_BROTLI(V)
++#endif
++
++#if HAVE_ZSTD
++#define NODE_VERSIONS_KEY_ZSTD(V) V(zstd)
++#else
++#define NODE_VERSIONS_KEY_ZSTD(V)
++#endif
++
+ #define NODE_VERSIONS_KEYS_BASE(V)                                             \
+   V(node)                                                                      \
+   V(v8)                                                                        \
+   V(uv)                                                                        \
+   V(zlib)                                                                      \
+-  V(brotli)                                                                    \
+-  V(zstd)                                                                      \
++  NODE_VERSIONS_KEY_BROTLI(V)                                        \
++  NODE_VERSIONS_KEY_ZSTD(V)                                        \
+   V(ares)                                                                      \
+   V(modules)                                                                   \
+   V(nghttp2)                                                                   \
+diff --git a/lib/zlib.js b/lib/zlib.js
+--- a/lib/zlib.js
++++ b/lib/zlib.js
+@@ -1209,3 +1209,22 @@
+     writable: false,
+   });
+ }
++
++// Numeric constants remain available, but omitted native codecs must not be
++// advertised by callers that feature-detect the public API.
++if (binding.BrotliEncoder === undefined) {
++  for (const name of ['BrotliCompress', 'BrotliDecompress',
++                     'createBrotliCompress', 'createBrotliDecompress',
++                     'brotliCompress', 'brotliCompressSync',
++                     'brotliDecompress', 'brotliDecompressSync']) {
++    delete module.exports[name];
++  }
++}
++if (binding.ZstdCompress === undefined) {
++  for (const name of ['ZstdCompress', 'ZstdDecompress',
++                     'createZstdCompress', 'createZstdDecompress',
++                     'zstdCompress', 'zstdCompressSync',
++                     'zstdDecompress', 'zstdDecompressSync']) {
++    delete module.exports[name];
++  }
++}
+diff --git a/lib/internal/webstreams/compression.js b/lib/internal/webstreams/compression.js
+--- a/lib/internal/webstreams/compression.js
++++ b/lib/internal/webstreams/compression.js
+@@ -53,7 +53,7 @@
+   'deflate',
+   'deflate-raw',
+   'gzip',
+-  'brotli',
++  ...(internalBinding('zlib').BrotliEncoder ? ['brotli'] : []),
+ ]);
+ 
+ /**
+diff --git a/deps/undici/src/lib/web/fetch/index.js b/deps/undici/src/lib/web/fetch/index.js
+--- a/deps/undici/src/lib/web/fetch/index.js
++++ b/deps/undici/src/lib/web/fetch/index.js
+@@ -1591,7 +1591,7 @@
+   //    TODO: https://github.com/whatwg/fetch/issues/1285#issuecomment-896560129
+   if (!httpRequest.headersList.contains('accept-encoding', true)) {
+     if (urlHasHttpsScheme(requestCurrentURL(httpRequest))) {
+-      httpRequest.headersList.append('accept-encoding', 'br, gzip, deflate, zstd', true)
++      httpRequest.headersList.append('accept-encoding', [typeof zlib.createBrotliDecompress === 'function' ? 'br' : null, 'gzip', 'deflate', typeof zlib.createZstdDecompress === 'function' ? 'zstd' : null].filter(Boolean).join(', '), true)
+     } else {
+       httpRequest.headersList.append('accept-encoding', 'gzip, deflate', true)
+     }
+diff --git a/deps/undici/undici.js b/deps/undici/undici.js
+--- a/deps/undici/undici.js
++++ b/deps/undici/undici.js
+@@ -14881,7 +14881,7 @@
+       }
+       if (!httpRequest.headersList.contains("accept-encoding", true)) {
+         if (urlHasHttpsScheme(requestCurrentURL(httpRequest))) {
+-          httpRequest.headersList.append("accept-encoding", "br, gzip, deflate, zstd", true);
++          httpRequest.headersList.append("accept-encoding", [typeof zlib.createBrotliDecompress === 'function' ? 'br' : null, 'gzip', 'deflate', typeof zlib.createZstdDecompress === 'function' ? 'zstd' : null].filter(Boolean).join(', '), true);
+         } else {
+           httpRequest.headersList.append("accept-encoding", "gzip, deflate", true);
+         }

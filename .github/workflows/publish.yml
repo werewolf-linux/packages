@@ -32,7 +32,11 @@ jobs:
       - name: Remove what a cancelled build left
         if: runner.environment == 'self-hosted'
         run: |
-          if [ -d build ]; then unshare --user --map-auto --map-root-user rm -rf -- build; fi
+          for directory in build wolfi/build; do
+            if [ -d "$directory" ]; then
+              unshare --user --map-auto --map-root-user rm -rf -- "$directory"
+            fi
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

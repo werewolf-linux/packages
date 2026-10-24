@@ -29,15 +29,35 @@ lock. `N8N_DEV_RELOAD` and native Sentry profiling are unavailable in this build
 
 Mastodon excludes Bundler's optional `opentelemetry` group. Configurations enabling
 OTel exporters need a different package. The API gem required by ordinary runtime
-dependencies remains. libvips and FFmpeg are unchanged pending media conversion
-tests; their codecs and image loaders must not be removed solely because the
-form does not emit those formats.
+dependencies remains. The reduced libvips profile retains JPEG, PNG, WebP, GIF,
+EXIF and ICC support; optional document and specialist image loaders are omitted.
+FFmpeg retains the selected codecs and local media processing, while omitting
+network protocols, physical devices, display and font rendering integrations.
+Installed-package format conversion and Rails/streaming startup checks pass.
 
-These changes do not remove Brotli from Node.js, its native addons or imported OCI
-images. Node uses shared system Brotli; removing `--shared-brotli` would bundle
-Brotli instead. Keep its shared decoder patched until a separately tested runtime
-profile can omit it. Werewolf also needs Zstd for boot images. Vulnerable demo
-packages remain intentionally separate from these production reductions.
+Hardened Node omits Brotli and Zstd implementations, APIs and HTTP negotiation.
+Gzip/deflate and HTTPS remain. Its installed-package tests cover unavailable
+codecs and negotiation; n8n's native SQLite/isolate probes and Mastodon's
+streaming server are exercised on this runtime. Removing `--shared-brotli` alone
+would bundle Brotli; the maintained source patch instead removes the codec.
+
+The HTTP(S)-only curl profile removes Brotli/Zstd, unused protocols and optional
+authentication backends. Pi-hole uses a separate musl build inside its OCI tree;
+its original curl and now-unused libraries are pruned by the form. Blocklist,
+login and DNS checks cover first boot and restart.
+
+Continuwuity omits Brotli/Zstd HTTP compression, its terminal admin console and
+URL previews. Its database codecs remain for existing RocksDB data, and
+memory-serve retains pure-Rust Brotli for embedded static assets. Build-time
+dependency checks prevent the HTTP decoder and console/preview libraries from
+returning. An installed-package check initializes RocksDB and serves the Matrix API.
+
+This does not remove every Brotli implementation from every application. Font
+and PDF engines (including n8n's native canvas backends) can retain independent
+codecs, and imported OCI images need separate audits. FreeType's WOFF2 support
+is retained because font consumers accept those formats. Werewolf needs Zstd
+for boot images; databases may also need codecs to read existing data.
+Vulnerable demonstration packages remain separate from production reductions.
 
 Keep these repositories side by side:
 
@@ -78,7 +98,7 @@ Distro-specific packages remain in Werewolf alongside their source, including
 static trampolines for MDWE, is a hardened package (`devel/libffi`).
 
 CI checkout and reviewed source pins are described in
-[Werewolf's contribution guide](../werewolf/CONTRIBUTING.md#package-sources).
+[Werewolf's contribution guide](../../werewolf/CONTRIBUTING.md#package-sources).
 The recipes use Werewolf's Apache-2.0 license; packaged upstream code retains
 the license declared by each recipe.
 
@@ -204,8 +224,8 @@ Ordinary Melange recipes remain compatible with external tools. For a packaging
 change that needs only an epoch bump, use:
 
 ```sh
-wolfictl bump solr/solr.yaml --dry-run
-wolfictl bump solr/solr.yaml
+wolfictl bump databases/solr/solr.yaml --dry-run
+wolfictl bump databases/solr/solr.yaml
 ```
 
 The [current wolfictl bump](https://github.com/wolfi-dev/wolfictl/blob/main/docs/cmd/wolfictl_bump.md)

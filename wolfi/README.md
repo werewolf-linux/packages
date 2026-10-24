@@ -91,7 +91,7 @@ work. These defaults complement the service's kernel restrictions.
 
 ## How it works
 
-Every ten minutes `refresh.yml` takes one Wolfi snapshot and, for each package:
+Every ten minutes `wolfi-refresh.yml` takes one Wolfi snapshot and, for each package:
 
 1. **Capture** (`scripts/refresh.py`): the newest stable stream's recipe, its directory,
    pipelines and Wolfi's key, locked by hash. Only the latest stream is followed;
@@ -101,7 +101,7 @@ Every ten minutes `refresh.yml` takes one Wolfi snapshot and, for each package:
    fetched at Wolfi's exact commit by one shared step, with mirrors and retries.
 3. **Prepare** (`prepare.py`): every patch applies at that commit as the build will
    apply it, GNU patch with fuzz 2.
-4. **Build** (`build.yml`): Melange on native x86_64 and aarch64 runners, then Wolfi's
+4. **Build** (`wolfi-build.yml`): Melange on native x86_64 and aarch64 runners, then Wolfi's
    package tests and our own probes against the signed packages.
 5. **Publish** (`publish.py`, `feed.py`): a GitHub draft, immutable APKs, signed indexes,
    then the release. Each index update is conditional on the version read; a concurrent
@@ -124,7 +124,7 @@ close when the step passes again. One package's failure holds back no other.
 ## Building locally
 
 On macOS Melange boots a QEMU guest, built once into `build/guest/ARCH` with apko; on
-Linux it uses bubblewrap. You need Python 3 with PyYAML, git, GNU or BSD patch, and:
+Linux it uses bubblewrap. You need Python 3.12+ with PyYAML, git, GNU or BSD patch, and:
 
 ```sh
 brew install apko qemu libarchive          # Linux: apko, bubblewrap, bsdtar

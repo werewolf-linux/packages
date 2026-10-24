@@ -11,7 +11,7 @@
 package:
   name: caddy
   version: 2.11.7
-  epoch: 1
+  epoch: 2
   description: Fast, multi-platform web server with automatic HTTPS, position independent
   copyright:
     - license: Apache-2.0
@@ -27,6 +27,7 @@ environment:
       - ca-certificates-bundle
       - git
       - go-1.27
+      - patch
 
 pipeline:
   - uses: git-checkout
@@ -37,10 +38,12 @@ pipeline:
 
   # The binary says how it was built; a build that lost PIE stops here.
   - runs: |
+      patch --batch --fuzz=0 -p1 < optional-modules.patch
       CGO_ENABLED=0 go build -buildmode=pie -trimpath -tags netgo,osusergo \
         -ldflags='-s -w' -o caddy ./cmd/caddy
       go version -m caddy | grep -q '^[[:space:]]*build[[:space:]]*-buildmode=pie$'
       ./caddy version
+      CGO_ENABLED=0 go test -tags=werewolf_consumers -v ./werewolf-tests
       install -Dm755 caddy ${{targets.destdir}}/usr/bin/caddy
 
 update:

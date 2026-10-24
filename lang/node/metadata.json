@@ -6,7 +6,7 @@
   "hardening": {
     "minimized": true,
     "pledge": true,
-    "minimized_reason": "Omit npm/npx, inspector, SEA and unused subpackages.",
+    "minimized_reason": "Omit npm/npx, inspector, SEA, Brotli/Zstd implementations and unused subpackages. Omit node:ffi while retaining native addons, SQLite and TypeScript.",
     "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
     "evidence": [
       "package.py",
@@ -33,6 +33,23 @@
         "evidence": [
           "package.py",
           "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Omit native Brotli/Zstd codecs and negotiate only available HTTP content encodings.",
+        "why": "The deployed applications use gzip/deflate; unavailable decoders must not be linked or advertised.",
+        "evidence": [
+          "patches/0008-omit-optional-compression-libraries.patch",
+          "tests/codecs.cjs",
+          "package.py"
+        ]
+      },
+      {
+        "what": "Disable the standalone node:ffi API.",
+        "why": "Keep native addons used by n8n without an additional general-purpose FFI entrypoint.",
+        "evidence": [
+          "package.py",
+          "tests/codecs.cjs"
         ]
       }
     ],

@@ -16,7 +16,8 @@ ALLOW = 'Permit capabilities only in the build guest'
 BUILD = 'Configure and build'
 PRUNE = 'Omit package managers and documentation'
 FLAGS = (' --without-inspector --without-npm --without-node-options'
-         ' --disable-single-executable-application --without-lief')
+         ' --disable-single-executable-application --without-lief'
+         ' --without-brotli --without-zstd --without-ffi')
 OMITTED = ('${{package.name}}-minimal', '${{package.name}}-minimal-compat',
            'libnode${{vars.soversion}}', '${{package.name}}-oci-entrypoint-compat',
            '${{package.name}}-doc', '${{package.name}}-minimal-doc')
@@ -79,13 +80,15 @@ rm -R "${{targets.destdir}}/usr/share/man"
 def probe(pkg):
     js = (pkg.dir / 'tests/probe.cjs').read_text()
     sh = (pkg.dir / 'tests/probe.sh').read_text()
-    for text in (js, sh):
+    codecs = (pkg.dir / 'tests/codecs.cjs').read_text()
+    for text in (js, sh, codecs):
         if '${{' in text or PROBE_JS in text or PROBE_SH in text:
             raise ValueError('Node probe cannot be embedded in the recipe')
     return (runtime.root_probe('node', ['node', '--version']) +
             'work=$(mktemp -d)\n' +
             'cat > "$work/probe.cjs" <<\'' + PROBE_JS + "'\n" + js + PROBE_JS + '\n' +
             'cat > "$work/probe.sh" <<\'' + PROBE_SH + "'\n" + sh + PROBE_SH + '\n' +
+            'cat > "$work/codecs.cjs" <<\'' + PROBE_JS + "'\n" + codecs + PROBE_JS + '\n' +
             'sh "$work/probe.sh" "$work"\n')
 
 
@@ -121,6 +124,10 @@ def derive(pkg, config, lock):
         raise ValueError('Review changed upstream build or npm cleanup')
     if pipeline[-1] != cleanup[0]:
         raise ValueError('Review changed upstream packaging order')
+    flags = config['vars']['configure-flags']
+    if flags.split().count('--shared-brotli') != 1:
+        raise ValueError('Review changed upstream Brotli linkage')
+    config['vars']['configure-flags'] = ' '.join(f for f in flags.split() if f != '--shared-brotli')
     builds[0]['runs'] = configure(builds[0]['runs'])
     pipeline[0] = fetch(lock['source_commit'], SOURCES)
     # Ours apply after Wolfi's, as prepare.py applies them.
@@ -139,7 +146,7 @@ def derive(pkg, config, lock):
         'nodejs-hardened=${{package.full-version}}'])
     config['test']['pipeline'].append({
         'name': 'Werewolf protections hold, and allowances take each back',
-        'needs': {'packages': ['build-base']}, 'runs': probe(pkg)})
+        'needs': {'packages': ['build-base', 'openssl']}, 'runs': probe(pkg)})
     config['update'] = {'enabled': False}
     return config
 
@@ -152,8 +159,11 @@ def test_recipe(config, repository):
 def check(pkg, upstream, derived):
     assert not derived['subpackages'], 'unreviewed subpackage restored'
     assert derived['environment'] == upstream['environment'], 'upstream build environment changed'
-    assert derived['vars'] == {k: v for k, v in upstream['vars'].items()
-                               if k not in ('docker-entrypoint-hash', 'soversion')}, 'upstream variables changed'
+    expected_vars = {k: v for k, v in upstream['vars'].items()
+                     if k not in ('docker-entrypoint-hash', 'soversion')}
+    expected_vars['configure-flags'] = ' '.join(
+        f for f in expected_vars['configure-flags'].split() if f != '--shared-brotli')
+    assert derived['vars'] == expected_vars, 'upstream variables changed'
     patched = wolfi_patches(upstream['pipeline'])
     ours = 1 + patched
     assert derived['pipeline'][1:ours] == upstream['pipeline'][1:ours], "Wolfi's patches changed"

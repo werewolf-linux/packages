@@ -5,3 +5,4 @@
 0005-gate-inline-code-and-modules-on-writable-mounts.patch
 0006-gate-disk-compilation-caches-with-writable-source.patch
 0007-log-denials-to-stderr.patch
+0008-omit-optional-compression-libraries.patch

@@ -11,7 +11,7 @@
 package:
   name: keycloak
   version: "26.8.1"
-  epoch: 1
+  epoch: 2
   description: Open Source Identity and Access Management, built for PostgreSQL by its socket
   copyright:
     - license: Apache-2.0
@@ -225,7 +225,8 @@ pipeline:
   # The server, built for what the form runs: build-time options cannot
   # change at a start --optimized, so these are the form's.
   - runs: |
-      bin/kc.sh build --db=postgres --cache=local --health-enabled=true --metrics-enabled=true
+      bin/kc.sh build --db=postgres --cache=local --health-enabled=true --metrics-enabled=false \
+        --features-disabled=kerberos,ciba,impersonation,opentelemetry
       rm -rf data
 
   # What kc.sh passes java, but the heap, which the service sizes to its

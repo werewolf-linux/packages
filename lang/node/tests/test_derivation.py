@@ -52,7 +52,7 @@ class NodeDerivation(unittest.TestCase):
         self.assertIn('nodejs-hardened=${{package.full-version}}', result['package']['dependencies']['provides'])
         self.assertEqual([], result['subpackages'])
         build = next(s['runs'] for s in result['pipeline'] if s.get('name') == PACKAGE.hooks.BUILD)
-        for flag in ('--without-inspector', '--without-npm', '--without-node-options'):
+        for flag in ('--without-inspector', '--without-npm', '--without-node-options', '--without-brotli', '--without-zstd', '--without-ffi'):
             self.assertIn(flag, build)
 
     def test_build_and_test_guests_alone_get_capabilities(self):
@@ -64,7 +64,7 @@ class NodeDerivation(unittest.TestCase):
         tested = PACKAGE.hooks.test_recipe(copy.deepcopy(result), 'unused')
         self.assertEqual(allowed, tested['test']['pipeline'][0])
         self.assertIn('effective root', result['test']['pipeline'][-1]['runs'])
-        self.assertEqual({'packages': ['build-base']}, result['test']['pipeline'][-1]['needs'])
+        self.assertEqual({'packages': ['build-base', 'openssl']}, result['test']['pipeline'][-1]['needs'])
 
     def test_reviewed_wolfi_patches_apply_before_ours(self):
         upstream, result = self.derived()

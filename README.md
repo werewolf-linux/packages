@@ -32,8 +32,17 @@ make PACKAGE=caddy build          # build through ../werewolf
 make PACKAGE=php build            # build the Wolfi derivation
 ```
 
-Python 3 with PyYAML, Go 1.27+, pinned Melange and package-specific test tools
-are required. Local application builds also need the sibling Werewolf checkout.
+Python 3.12+ with PyYAML, Go 1.27+, pinned Melange and package-specific test tools
+are required. Plex provenance checks also require GnuPG (`gpg`). Create a local
+environment with a supported interpreter before running the tests:
+
+```sh
+python3.12 -m venv build/venv
+build/venv/bin/python -m pip install -r wolfi/requirements.txt
+make PYTHON=build/venv/bin/python test check
+```
+
+Local application builds also need the sibling Werewolf checkout.
 [Application packaging](docs/applications.md) covers dependency locks and native
 smoke tests. [Wolfi builds](wolfi/README.md) covers capture, derivation, patching,
 installed-package probes and local build tools.

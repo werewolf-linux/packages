@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Give the private runner chroot and the identity changes its UID probes need."""
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -14,6 +15,8 @@ def profile(template, executable):
     path = str(executable.resolve())
     if not re.fullmatch(r'/[a-zA-Z0-9_./-]+', path):
         raise ValueError('Runner path must be a literal AppArmor attachment')
+    name = 'werewolf_packages_bwrap_' + hashlib.sha256(path.encode()).hexdigest()[:16]
+    child_name = name + '_child'
     marker = 'profile unpriv_bwrap flags='
     if template.count(marker) != 1:
         raise ValueError('Review changed Ubuntu bubblewrap child profile')
@@ -22,10 +25,10 @@ def profile(template, executable):
     if re.search(r'\bcapability\b', rules.replace('audit deny capability,', '')):
         raise ValueError('Review unexpected child capability rules')
     replacements = [
-        ('profile bwrap /usr/bin/bwrap', 'profile hardened_packages_bwrap "' + path + '"'),
-        ('&bwrap//&unpriv_bwrap', '&hardened_packages_bwrap//&hardened_packages_bwrap_child'),
-        (marker, 'profile hardened_packages_bwrap_child flags='),
-        ('&unpriv_bwrap', '&hardened_packages_bwrap_child'),
+        ('profile bwrap /usr/bin/bwrap', 'profile ' + name + ' "' + path + '"'),
+        ('&bwrap//&unpriv_bwrap', '&' + name + '//&' + child_name),
+        (marker, 'profile ' + child_name + ' flags='),
+        ('&unpriv_bwrap', '&' + child_name),
         ('audit deny capability,', 'allow capability sys_chroot,\n    allow capability setuid,\n    allow capability setgid,'),
         ('include if exists <local/bwrap-userns-restrict>', ''),
         ('include if exists <local/unpriv_bwrap>', ''),
@@ -43,16 +46,23 @@ def main():
     if os.geteuid() != 0:
         raise ValueError('Load the CI runner profile as root')
     executable = ROOT / 'build/tools/bwrap'
-    policy = profile(PROFILE.read_text(), executable) if PROFILE.is_file() else None
+    # A new attachment avoids conflicts with the old globally named profile.
+    binary = executable.with_name('bwrap-private') if PROFILE.is_file() else executable
+    policy = profile(PROFILE.read_text(), binary) if PROFILE.is_file() else None
     executable.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile('/usr/bin/bwrap', executable)
-    executable.chmod(0o755)
+    shutil.copyfile('/usr/bin/bwrap', binary)
+    binary.chmod(0o755)
     if policy is None:
         print('setup-runner: no Ubuntu bubblewrap child profile; using system confinement')
         return
-    target = executable.with_suffix('.apparmor')
+    target = binary.with_suffix('.apparmor')
     target.write_text(policy)
     subprocess.run(['/usr/sbin/apparmor_parser', '--replace', str(target)], check=True, timeout=30)
+    for alias, source in ((executable, binary), (executable.with_suffix('.apparmor'), target)):
+        link = alias.with_name('.' + alias.name + '-link')
+        link.unlink(missing_ok=True)
+        link.symlink_to(source.name)
+        link.replace(alias)
     print('setup-runner: private child capabilities: sys_chroot, setuid, setgid')
 
 

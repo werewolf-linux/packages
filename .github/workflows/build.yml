@@ -31,10 +31,16 @@ jobs:
       - name: Remove what a cancelled build left
         if: runner.environment == 'self-hosted'
         run: |
-          if [ -d build ]; then unshare --user --map-auto --map-root-user rm -rf -- build; fi
+          for directory in build wolfi/build; do
+            if [ -d "$directory" ]; then
+              unshare --user --map-auto --map-root-user rm -rf -- "$directory"
+            fi
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The builder stamps the context's last commit, not an unrelated HEAD.
+          fetch-depth: 0
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'

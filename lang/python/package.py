@@ -74,6 +74,13 @@ def retained_subpackages(config):
         raise ValueError('Review changed upstream subpackages')
     return [s for s in subpackages if s['name'] in KEPT_SUBPACKAGES]
 
+def omit_terminal_modules():
+    # Setup.local wins over configure auto-detection, including transitive headers.
+    return {'name': 'Omit interactive terminal extensions', 'runs':
+            "test ! -e Modules/Setup.local\n"
+            "printf '*disabled*\\nreadline\\n_curses\\n_curses_panel\\n' > Modules/Setup.local\n"}
+
+
 def prune():
     # Without Wolfi's -tk and -doc split steps these files would stay in the
     # runtime and base packages. The last step of -runtime, which installs
@@ -179,6 +186,7 @@ def derive(pkg, config, lock):
     build = runtime_of(config['subpackages'])['pipeline']
     if not [s for s in build if s.get('uses') == 'autoconf/configure']:
         raise ValueError('Review changed upstream runtime build before deriving')
+    build.insert(0, omit_terminal_modules())
     build.append(prune())
     wolfi = str(config['package']['version']) + '-r' + str(config['package']['epoch'])
     config['package']['epoch'] = epoch(config['package']['epoch'], lock['revision'])
@@ -221,6 +229,7 @@ def check(pkg, upstream, derived):
     assert CLONE not in names, 'the omitted variants must not clone the source tree'
     assert derived.get('data') == VARIANTS == upstream.get('data'), 'interpreter variants changed'
     runtime = runtime_of(derived['subpackages'])['pipeline']
+    assert runtime[0] == omit_terminal_modules(), 'terminal extensions must not be compiled'
     assert runtime[-1] == prune(), 'GUI and documentation files must be removed before splitting'
     assert PRUNE not in names and sum(x.get('name') == PRUNE for x in runtime) == 1, \
         'one GUI and documentation cleanup step, in -runtime'
@@ -231,7 +240,7 @@ def check(pkg, upstream, derived):
     # Ours, apart from the wolfi-origin provides and the cleanup in -runtime.
     strip = lambda subs: [{**s, 'dependencies': {**s.get('dependencies', {}), 'provides': [
         p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]},
-        'pipeline': [x for x in s.get('pipeline', []) if x != prune()]}
+        'pipeline': [x for x in s.get('pipeline', []) if x not in (prune(), omit_terminal_modules())]}
         for s in subs]
     assert strip(ours_for_c_ext(retained_subpackages(upstream))) == strip(derived['subpackages']), \
         'an upstream subpackage changed'

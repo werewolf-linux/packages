@@ -103,3 +103,21 @@ expect 'a link is not an allowance' "$closed" report
 rm -f "$base/native"
 
 echo "probe: ok: every python protection holds, and each group takes its own back"
+
+# Celery beat uses shelve, often backed by GDBM. Keep persisted schedules readable.
+grant deserialize
+cat > "$work/schedule.py" <<'PYCODE'
+import dbm.gnu
+import shelve
+import sys
+path = sys.argv[1]
+with dbm.gnu.open(path, 'c') as raw:
+    with shelve.Shelf(raw) as schedule:
+        schedule['daily'] = {'task': 'documents.tasks.consume_file', 'runs': 3}
+with dbm.gnu.open(path, 'r') as raw:
+    with shelve.Shelf(raw) as schedule:
+        assert schedule['daily']['runs'] == 3
+        assert schedule['daily']['task'] == 'documents.tasks.consume_file'
+print('schedule persistence works')
+PYCODE
+expect 'Celery-style GDBM schedules survive reopening' 'schedule persistence works' "$python" "$work/schedule.py" "$work/schedule"
