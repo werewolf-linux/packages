@@ -1,0 +1,41 @@
+{
+  "update": {
+    "source": "wolfi",
+    "family": "nodejs-"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": true,
+    "minimized_reason": "Omit npm/npx, inspector, SEA and unused subpackages.",
+    "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
+    "evidence": [
+      "package.py",
+      "tests/test_derivation.py"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "nodejs-*"
+    ],
+    "changes": [
+      {
+        "what": "Omit npm/npx, inspector, SEA and unused subpackages.",
+        "why": "Keep the server runtime without package installation and debugging entrypoints.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Ignore runtime environment options, refuse effective-root initialization, and gate execution, native loading, inline input and writable modules.",
+        "why": "Require explicit root-held allowances for dangerous runtime capability groups.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay."
+  }
+}

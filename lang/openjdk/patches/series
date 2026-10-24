@@ -1,0 +1,8 @@
+0001-ignore-environment-options.patch
+0002-disable-attach-by-default.patch
+0003-werewolf-allowances.patch
+0004-deserialization-refused.patch
+0005-unsafe-memory-access-denied.patch
+0006-native-access-denied.patch
+0007-refuse-effective-root.patch
+0008-log-denials-to-stderr.patch

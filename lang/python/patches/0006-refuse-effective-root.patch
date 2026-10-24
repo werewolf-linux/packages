@@ -1,0 +1,50 @@
+SPDX-License-Identifier: PSF-2.0
+Subject: [PATCH] Refuse runtime initialization with effective UID 0
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+
+diff --git a/Python/pylifecycle.c b/Python/pylifecycle.c
+--- a/Python/pylifecycle.c
++++ b/Python/pylifecycle.c
+@@ -1,5 +1,6 @@
+ /* Python interpreter top-level routines, including init/exit */
+ 
+ #include "Python.h"
++#include "runtime_hardening_root.h"
+ #include "pycore_audit.h"         // _PySys_ClearAuditHooks()
+ #include "pycore_call.h"          // _PyObject_CallMethod()
+@@ -1045,6 +1046,9 @@
+ PyStatus
+ _Py_PreInitializeFromPyArgv(const PyPreConfig *src_config, const _PyArgv *args)
+ {
++    if (runtime_hardening_root_refused()) {
++        return _PyStatus_ERR("python: refusing effective UID 0");
++    }
+     PyStatus status;
+ 
+     if (src_config == NULL) {
+diff --git a/Python/runtime_hardening_root.h b/Python/runtime_hardening_root.h
+--- /dev/null
++++ b/Python/runtime_hardening_root.h
+@@ -0,0 +1,21 @@
++/* Runtime startup refuses effective root. The build marker is never packaged.
++ * No argv, environment variable, or supported runtime allowance opens this. */
++#ifndef RUNTIME_HARDENING_ROOT_H
++#define RUNTIME_HARDENING_ROOT_H
++#ifndef _WIN32
++#include <sys/stat.h>
++#include <unistd.h>
++#ifndef RUNTIME_HARDENING_BUILD_ROOT
++#define RUNTIME_HARDENING_BUILD_ROOT "/etc/runtime-hardening/build-root"
++#endif
++static int runtime_hardening_root_refused(void) {
++    struct stat st;
++    if (geteuid() != 0) return 0;
++    return !(lstat(RUNTIME_HARDENING_BUILD_ROOT, &st) == 0 &&
++             S_ISREG(st.st_mode) && st.st_uid == 0 &&
++             (st.st_mode & 0022) == 0);
++}
++#else
++static int runtime_hardening_root_refused(void) { return 1; }
++#endif
++#endif

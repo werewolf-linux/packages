@@ -1,0 +1,93 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Require native for SQLite extension libraries and FFI access
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 678778973bb4d4185c06ef1320de50f1a975d3c8
+
+--- a/ext/pdo_sqlite/pdo_sqlite.c
++++ b/ext/pdo_sqlite/pdo_sqlite.c
+@@ -19,6 +19,7 @@
+ #endif
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "php_ini.h"
+ #include "ext/standard/info.h"
+ #include "SAPI.h"
+@@ -70,6 +71,13 @@
+ /* Attempts to load an SQLite extension library. */
+ PHP_METHOD(Pdo_Sqlite, loadExtension)
+ {
++	if (!php_werewolf_allowed("native")) {
++		runtime_hardening_denied("php", "native", "loadExtension", "Pdo\\Sqlite::loadExtension");
++		zend_throw_error(NULL, "SQLite extension loading is refused: "
++			"the image allows it only by php:native");
++		RETURN_THROWS();
++	}
++
+ 	char *extension, *errtext = NULL;
+ 	char fullpath[MAXPATHLEN];
+ 	size_t extension_len;
+--- a/ext/sqlite3/sqlite3.c
++++ b/ext/sqlite3/sqlite3.c
+@@ -19,6 +19,7 @@
+ #endif
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "php_ini.h"
+ #include "ext/standard/info.h"
+ #include "php_sqlite3.h"
+@@ -397,6 +398,13 @@
+ /* {{{ Attempts to load an SQLite extension library. */
+ PHP_METHOD(SQLite3, loadExtension)
+ {
++	if (!php_werewolf_allowed("native")) {
++		runtime_hardening_denied("php", "native", "loadExtension", "SQLite3::loadExtension");
++		zend_throw_error(NULL, "SQLite extension loading is refused: "
++			"the image allows it only by php:native");
++		RETURN_THROWS();
++	}
++
+ 	php_sqlite3_db_object *db_obj;
+ 	zval *object = ZEND_THIS;
+ 	char *extension, *lib_path, *extension_dir, *errtext = NULL;
+--- a/ext/ffi/ffi.c
++++ b/ext/ffi/ffi.c
+@@ -19,6 +19,7 @@
+ #endif
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "php_ffi.h"
+ #include "ext/standard/info.h"
+ #include "php_scandir.h"
+@@ -2991,6 +2992,13 @@
+ 
+ static zend_always_inline bool zend_ffi_validate_api_restriction(const zend_execute_data *execute_data) /* {{{ */
+ {
++	if (!php_werewolf_allowed("native")) {
++		runtime_hardening_denied("php", "native", "ffi", get_active_function_name());
++		zend_throw_error(zend_ffi_exception_ce, "FFI is refused: "
++			"the image allows it only by php:native");
++		return false;
++	}
++
+ 	if (EXPECTED(FFI_G(restriction) > ZEND_FFI_ENABLED)) {
+ 		ZEND_ASSERT(FFI_G(restriction) == ZEND_FFI_PRELOAD);
+ 		if (FFI_G(is_cli)
+@@ -5387,6 +5395,14 @@
+ 
+ static zend_result zend_ffi_preload(char *preload) /* {{{ */
+ {
++	/* Preloading headers can load libraries without a PHP method call. */
++	if (!php_werewolf_allowed("native")) {
++		runtime_hardening_denied("php", "native", "ffi.preload", preload);
++		php_error_docref(NULL, E_WARNING, "FFI preloading is refused: "
++			"the image allows it only by php:native");
++		return FAILURE;
++	}
++
+ 	zend_ffi *ffi;
+ 	char *s = NULL, *e, *filename;
+ 	bool is_glob = 0;

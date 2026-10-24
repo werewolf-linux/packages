@@ -1,0 +1,30 @@
+{
+  "update": {
+    "source": "github",
+    "repo": "mjl-/mox",
+    "prefix": "v"
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "mox.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Mox for werewolf's mox form, as Wolfi would package it but for one patch: built by melange in Wolfi's environment with Wolfi's Go, static (no cgo), from the release tag's commit, so Go stamps the binary with its version (v0.0.17+dirty: the patch) for `mox version`, its logs and scanners. Its Go modules are vendored in the tree; nothing else is fetched. When upstream takes the patch's two changes (https://github.com/mjl-/mox/issues/194) the patch goes, and the recipe can go to wolfi-dev/os.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "mox.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

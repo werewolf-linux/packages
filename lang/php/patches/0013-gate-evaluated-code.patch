@@ -1,0 +1,40 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Gate eval and string compilation with the inline allowance
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: https://cloud.google.com/blog/topics/threat-intelligence/armory-castle-exploits-beyondtrust
+
+--- a/main/main.c
++++ b/main/main.c
+@@ -2322,6 +2322,20 @@
+  * Check the descriptor the compiler reads, including includes and cache hits.
+  * Paths and permissions alone do not establish source provenance. */
+ static zend_op_array *(*php_werewolf_orig_compile_file)(zend_file_handle *, int);
++static zend_op_array *(*php_werewolf_orig_compile_string)(zend_string *, const char *, zend_compile_position);
++
++static zend_op_array *php_werewolf_compile_string(zend_string *source, const char *filename,
++		zend_compile_position position)
++{
++	if (!php_werewolf_allowed("inline")) {
++		runtime_hardening_denied("php", "inline", "eval", filename);
++		zend_throw_error(NULL, "evaluated code is refused: "
++			"the image allows it only by php:inline");
++		return NULL;
++	}
++	return php_werewolf_orig_compile_string(source, filename, position);
++}
++
+ 
+ static bool php_werewolf_fd_source(int fd)
+ {
+@@ -2606,6 +2620,11 @@
+ 	zend_finalize_system_id();
+ 
+ 	module_initialized = true;
++
++#ifndef PHP_WIN32
++	php_werewolf_orig_compile_string = zend_compile_string;
++	zend_compile_string = php_werewolf_compile_string;
++#endif
+ 
+ 	if (zend_post_startup() != SUCCESS) {
+ 		return FAILURE;

@@ -1,0 +1,86 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Ignore environment options and user module paths
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 26e72d85a611e222e3f06025de8a3c496923bacd
+
+diff --git a/src/node_credentials.cc b/src/node_credentials.cc
+--- a/src/node_credentials.cc
++++ b/src/node_credentials.cc
+@@ -1,4 +1,5 @@
+ #include "env-inl.h"
++#include "node_hardening.h"
+ #include "node_errors.h"
+ #include "node_external_reference.h"
+ #include "node_internals.h"
+@@ -72,6 +73,10 @@
+ // process does not have any capabilities set and the process is running as
+ // setuid root then lookup will not be allowed.
+ bool SafeGetenv(const char* key, std::string* text, Environment* env) {
++  if (!hardening::Allowed("environment") &&
++      (strncmp(key, "NODE_", 5) == 0 || strncmp(key, "OPENSSL_", 8) == 0)) {
++    return false;
++  }
+ #if !defined(__CloudABI__) && !defined(_WIN32)
+ #if defined(__linux__)
+   if ((!HasOnly(CAP_NET_BIND_SERVICE) && linux_at_secure()) ||
+diff --git a/src/node_options.cc b/src/node_options.cc
+--- a/src/node_options.cc
++++ b/src/node_options.cc
+@@ -1,4 +1,5 @@
+-#include "node_options.h"  // NOLINT(build/include_inline)
++#include "node_options.h"
++#include "node_hardening.h"  // NOLINT(build/include_inline)
+ #include "node_options-inl.h"
+ 
+ #include "env-inl.h"
+@@ -2527,6 +2528,7 @@
+ 
+ void HandleEnvOptions(std::shared_ptr<EnvironmentOptions> env_options,
+                       std::function<std::string(const char*)> opt_getter) {
++  if (!hardening::Allowed("environment")) return;
+   env_options->pending_deprecation =
+       opt_getter("NODE_PENDING_DEPRECATION") == "1";
+ 
+diff --git a/src/node.cc b/src/node.cc
+--- a/src/node.cc
++++ b/src/node.cc
+@@ -990,8 +990,8 @@
+   node_options = node_options_from_config + node_options_from_dotenv;
+ 
+ #if !defined(NODE_WITHOUT_NODE_OPTIONS)
+-  bool should_parse_node_options =
+-      !(flags & ProcessInitializationFlags::kDisableNodeOptionsEnv);
++  // Also suppress options supplied through dotenv/config NODE_OPTIONS.
++  bool should_parse_node_options = false;
+ #ifndef DISABLE_SINGLE_EXECUTABLE_APPLICATION
+   if (sea::IsSingleExecutable()) {
+     const sea::SeaResource& sea_resource = sea::FindSingleExecutableResource();
+diff --git a/src/node_worker.cc b/src/node_worker.cc
+--- a/src/node_worker.cc
++++ b/src/node_worker.cc
+@@ -584,7 +584,8 @@
+     });
+ 
+ #ifndef NODE_WITHOUT_NODE_OPTIONS
+-    std::optional<std::string> node_options = env_vars->Get("NODE_OPTIONS");
++    // The worker path reads its KVStore directly, bypassing SafeGetenv.
++    std::optional<std::string> node_options = std::nullopt;
+     if (node_options.has_value()) {
+       std::vector<std::string> errors{};
+       std::vector<std::string> env_argv =
+diff --git a/lib/internal/modules/cjs/loader.js b/lib/internal/modules/cjs/loader.js
+--- a/lib/internal/modules/cjs/loader.js
++++ b/lib/internal/modules/cjs/loader.js
+@@ -2215,8 +2215,9 @@
+  * Define the paths to use for resolving a module.
+  */
+ Module._initPaths = function() {
+-  const homeDir = isWindows ? process.env.USERPROFILE : safeGetenv('HOME');
+-  const nodePath = isWindows ? process.env.NODE_PATH : safeGetenv('NODE_PATH');
++  // The runtime never searches user homes or NODE_PATH for executable code.
++  const homeDir = undefined;
++  const nodePath = undefined;
+ 
+   // process.execPath is $PREFIX/bin/node except on Windows where it is
+   // $PREFIX\node.exe where $PREFIX is the root of the Node.js installation.

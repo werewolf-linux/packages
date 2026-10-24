@@ -1,0 +1,5 @@
+{
+  "repository": "https://github.com/werewolf-linux/hardened-packages",
+  "commit": "f0c315657e59e9f82bf1cd2b66a45dd773dc21ec",
+  "note": "Imported working tree, including pending Curl and PHP changes. Original GPL-3.0 tooling and patch license notices are retained."
+}

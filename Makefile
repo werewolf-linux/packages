@@ -1,27 +1,19 @@
-# Build through Werewolf so native Linux and macOS use the same runners.
+PYTHON ?= python3
 WEREWOLF ?= ../werewolf
-PACKAGE ?= solr
+PACKAGE ?=
 ARCH ?= $(shell uname -m | sed 's/arm64/aarch64/;s/amd64/x86_64/')
-RECIPES = $(wildcard $(PACKAGE)/*.yaml)
-SOURCE ?= ../packages
+MELANGE ?= melange
+export MELANGE
+manage = $(PYTHON) scripts/manage.py --package '$(PACKAGE)' --arch '$(ARCH)' --werewolf '$(abspath $(WEREWOLF))' $(if $(WOLFI),--wolfi '$(abspath $(WOLFI))')
 
-.PHONY: build check test updates
-build:
-	@test -n "$(RECIPES)" || { echo "no recipes for $(PACKAGE)" >&2; exit 1; }
-	$(MAKE) -C $(WEREWOLF) howl
-	@for recipe in $(RECIPES); do \
-		(cd $(WEREWOLF) && build/host/howl build-apk "$(SOURCE)/$$recipe" --arch $(ARCH)) || exit; \
-	done
+.PHONY: build check test updates refresh discover verify derive prepare metadata
+metadata:
+	$(PYTHON) scripts/catalog.py validate
 
-check:
-	@for recipe in $(if $(filter command line,$(origin PACKAGE)),$(RECIPES),$(wildcard */*.yaml)); do \
-		melange query "$$recipe" '{{.Package.Name}}-{{.Package.Version}}-r{{.Package.Epoch}}{{println}}' || exit; \
-	done
+build check updates refresh discover verify derive prepare: metadata
+	$(manage) $@
 
-test:
+test: metadata
 	go test ./...
-	python3 -m unittest discover -s tests -p 'test_*.py'
-
-# Discovery is read-only; --write also refreshes pins and dependency locks.
-updates:
-	go run ./cmd/package-update $(if $(filter command line,$(origin PACKAGE)),--package $(PACKAGE))
+	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
+	$(manage) test-wolfi

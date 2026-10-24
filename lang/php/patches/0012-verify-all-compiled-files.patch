@@ -1,0 +1,164 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Verify every compiled file by descriptor, outside OPcache
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: https://cloud.google.com/blog/topics/threat-intelligence/armory-castle-exploits-beyondtrust
+
+--- a/main/main.c
++++ b/main/main.c
+@@ -27,7 +27,7 @@
+ #include <fcntl.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
+-#include <sys/statvfs.h>
++#include "runtime_hardening_source.h"
+ #ifdef PHP_WIN32
+ #include "win32/time.h"
+ #include "win32/signal.h"
+@@ -1815,6 +1815,10 @@
+ }
+ /* }}} */
+ 
++#ifndef PHP_WIN32
++static bool php_werewolf_stream_source(php_stream *stream);
++#endif
++
+ PHPAPI zend_result php_stream_open_for_zend_ex(zend_file_handle *handle, int mode) /* {{{ */
+ {
+ 	zend_string *opened_path;
+@@ -1825,6 +1829,18 @@
+ 	opened_path = filename = handle->filename;
+ 	stream = php_stream_open_wrapper((char *)ZSTR_VAL(filename), "rb", mode | STREAM_OPEN_FOR_ZEND_STREAM, &opened_path);
+ 	if (stream) {
++#ifndef PHP_WIN32
++		if (!php_werewolf_stream_source(stream)) {
++			php_stream_close(stream);
++			if (opened_path != NULL && opened_path != filename) {
++				zend_string_release(opened_path);
++			}
++			runtime_hardening_denied("php", "source", "compile", ZSTR_VAL(filename));
++			zend_throw_error(NULL, "unverified script source is refused: "
++				"the image allows it by php:writable-source (generated streams require php:inline)");
++			return FAILURE;
++		}
++#endif
+ 		memset(handle, 0, sizeof(zend_file_handle));
+ 		handle->type = ZEND_HANDLE_STREAM;
+ 		handle->filename = filename;
+@@ -2303,31 +2319,60 @@
+ 
+ #ifndef PHP_WIN32
+ /* {{{ php_werewolf writable-source
+- * Wrap the compiler so the primary script's file must be on a read-only mount
+- * unless the image allows php:writable-source. Includes and generated code are
+- * phase 2; this gates only the entry script (docs/design/hardened-interpreters.md). */
++ * Check the descriptor the compiler reads, including includes and cache hits.
++ * Paths and permissions alone do not establish source provenance. */
+ static zend_op_array *(*php_werewolf_orig_compile_file)(zend_file_handle *, int);
+ 
+-static bool php_werewolf_writable_source(zend_file_handle *file_handle)
+-{
+-	zend_string *path = file_handle->opened_path ? file_handle->opened_path : file_handle->filename;
+-	struct statvfs vfs;
+-
+-	if (path == NULL) {
+-		return false;   /* stdin or generated code: the inline gate covers it */
+-	}
+-	return statvfs(ZSTR_VAL(path), &vfs) == 0 && !(vfs.f_flag & ST_RDONLY);
++static bool php_werewolf_fd_source(int fd)
++{
++	struct stat st;
++	return runtime_hardening_source_fd(fd)
++		|| (php_werewolf_allowed("writable-source")
++			&& fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode));
++}
++
++static bool php_werewolf_stream_source(php_stream *stream)
++{
++	php_socket_t fd;
++	if (stream->wrapper != &php_plain_files_wrapper
++			|| !php_stream_is(stream, PHP_STREAM_IS_STDIO)
++			|| stream->readfilters.head != NULL) {
++		return php_werewolf_allowed("inline");
++	}
++	return php_stream_cast(stream, PHP_STREAM_AS_FD, (void *) &fd, 0) == SUCCESS
++		&& php_werewolf_fd_source(fd);
++}
++
++static bool php_werewolf_file_source(zend_file_handle *handle)
++{
++	if (handle->buf != NULL) {
++		return false;
++	}
++	if (handle->type == ZEND_HANDLE_FILENAME
++			&& php_stream_open_for_zend_ex(handle,
++				USE_PATH|REPORT_ERRORS|STREAM_OPEN_FOR_INCLUDE) == FAILURE) {
++		return false;
++	}
++	if (handle->type == ZEND_HANDLE_FP) {
++		if (handle->handle.fp == stdin) {
++			return php_werewolf_allowed("inline");
++		}
++		return handle->handle.fp != NULL
++			&& php_werewolf_fd_source(fileno(handle->handle.fp));
++	}
++	return handle->type == ZEND_HANDLE_STREAM
++		&& handle->handle.stream.reader == (zend_stream_reader_t) _php_stream_read
++		&& php_werewolf_stream_source(handle->handle.stream.handle);
+ }
+ 
+ static zend_op_array *php_werewolf_compile_file(zend_file_handle *file_handle, int type)
+ {
+-	if (file_handle != NULL && file_handle->primary_script
+-			&& !php_werewolf_allowed("writable-source")
+-			&& php_werewolf_writable_source(file_handle)) {
+-		zend_string *path = file_handle->opened_path ? file_handle->opened_path : file_handle->filename;
+-		runtime_hardening_denied("php", "writable-source", "execute", path ? ZSTR_VAL(path) : "");
+-		zend_throw_error(NULL, "running a script from a writable mount is refused: "
+-			"the image allows it only by php:writable-source");
++	if (file_handle == NULL || !php_werewolf_file_source(file_handle)) {
++		zend_string *path = file_handle ? file_handle->filename : NULL;
++		runtime_hardening_denied("php", "source", "compile", path ? ZSTR_VAL(path) : "");
++		zend_throw_error(NULL, "unverified script source is refused: "
++			"the image requires a regular file on a read-only mount; "
++			"exceptions require php:writable-source (stdin requires php:inline)");
+ 		return NULL;
+ 	}
+ 	return php_werewolf_orig_compile_file(file_handle, type);
+@@ -2562,16 +2607,15 @@
+ 
+ 	module_initialized = true;
+ 
++	if (zend_post_startup() != SUCCESS) {
++		return FAILURE;
++	}
++
+ #ifndef PHP_WIN32
+-	/* Werewolf: wrap the compiler outermost, so the primary script's file is
+-	 * checked even on an opcache hit (docs/design/hardened-interpreters.md). */
++	/* OPcache installs its hooks in zend_post_startup. Stay outside them. */
+ 	php_werewolf_orig_compile_file = zend_compile_file;
+ 	zend_compile_file = php_werewolf_compile_file;
+ #endif
+-
+-	if (zend_post_startup() != SUCCESS) {
+-		return FAILURE;
+-	}
+ 
+ 	/* Check for deprecated directives */
+ 	/* NOTE: If you add anything here, remember to add it to build/Makefile.global! */
+--- /dev/null
++++ b/main/runtime_hardening_source.h
+@@ -0,0 +1,13 @@
++/* A compiled file must be a regular file on a read-only mount. */
++#ifndef RUNTIME_HARDENING_SOURCE_H
++#define RUNTIME_HARDENING_SOURCE_H
++#include <sys/stat.h>
++#include <sys/statvfs.h>
++static int runtime_hardening_source_fd(int fd)
++{
++    struct stat st;
++    struct statvfs vfs;
++    return fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode)
++        && fstatvfs(fd, &vfs) == 0 && (vfs.f_flag & ST_RDONLY) != 0;
++}
++#endif

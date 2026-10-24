@@ -1,0 +1,280 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Log actual hardening denials to stderr with bounded context
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 678778973bb4d4185c06ef1320de50f1a975d3c8
+
+diff --git a/main/runtime_hardening_log.h b/main/runtime_hardening_log.h
+new file mode 100644
+--- /dev/null
++++ b/main/runtime_hardening_log.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: MIT
++ * Keep the copies carried by each runtime's logging patch identical.
++ * stderr is inherited from the supervisor (Werewolf sends it to the console).
++ * No interpreter callbacks, application logging settings or syslog required.
++ */
++#ifndef RUNTIME_HARDENING_LOG_H
++#define RUNTIME_HARDENING_LOG_H
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++static inline char *rh_log_quote(char *out, const char *text, size_t size,
++                                 size_t limit, int *truncated) {
++    static const char hex[] = "0123456789abcdef";
++    size_t i;
++    if (size > limit) { size = limit; *truncated = 1; }
++    *out++ = '"';
++    for (i = 0; i < size; i++) {
++        unsigned char c = (unsigned char)text[i];
++        if (c == '"' || c == '\\') { *out++ = '\\'; *out++ = (char)c; }
++        else if (c < 32 || c > 126) {
++            memcpy(out, "\\u00", 4); out += 4;
++            *out++ = hex[c >> 4]; *out++ = hex[c & 15];
++        } else { *out++ = (char)c; }
++    }
++    *out++ = '"';
++    return out;
++}
++
++/* The limits below keep the entire escaped record below PIPE_BUF (4096 on
++ * Linux). One write prevents concurrent workers from interleaving records.
++ * Never read the environment or the contents of a serialized payload.
++ */
++static inline void runtime_hardening_denied(const char *runtime, const char *group,
++                                           const char *operation, const char *detail) {
++    int saved_errno = errno, truncated = 0, fd;
++    char line[4096], cmdline[257], *p = line;
++    ssize_t n = -1, result;
++    size_t i, start, length = 0;
++    if (!detail) detail = "";
++    p += snprintf(p, 256,
++        "{\"event\":\"runtime-denial\",\"time\":%lld,\"pid\":%ld,\"euid\":%ld,\"runtime\":",
++        (long long)time(NULL), (long)getpid(), (long)geteuid());
++    p = rh_log_quote(p, runtime, strlen(runtime), 16, &truncated);
++    memcpy(p, ",\"group\":", 9); p += 9;
++    p = rh_log_quote(p, group, strlen(group), 24, &truncated);
++    memcpy(p, ",\"operation\":", 13); p += 13;
++    p = rh_log_quote(p, operation, strlen(operation), 48, &truncated);
++    memcpy(p, ",\"detail\":", 10); p += 10;
++    p = rh_log_quote(p, detail, strlen(detail), 192, &truncated);
++    memcpy(p, ",\"argv\":[", 9); p += 9;
++    fd = open("/proc/self/cmdline", O_RDONLY | O_CLOEXEC);
++    if (fd >= 0) { n = read(fd, cmdline, sizeof(cmdline)); close(fd); }
++    if (n > 0) {
++        length = (size_t)n;
++        if (length > 256) { length = 256; truncated = 1; }
++    }
++    for (i = 0, start = 0; i < length; i++) {
++        if (cmdline[i] == '\0' || i + 1 == length) {
++            size_t end = cmdline[i] == '\0' ? i : i + 1;
++            if (start) *p++ = ',';
++            p = rh_log_quote(p, cmdline + start, end - start, 256, &truncated);
++            start = i + 1;
++        }
++    }
++    p += snprintf(p, 32, "],\"truncated\":%s}\n", truncated ? "true" : "false");
++    do { result = write(STDERR_FILENO, line, (size_t)(p - line)); }
++    while (result < 0 && errno == EINTR);
++    errno = saved_errno;
++}
++#endif
+diff --git a/main/main.c b/main/main.c
+--- a/main/main.c
++++ b/main/main.c
+@@ -22,6 +22,7 @@
+ 
+ #include "php.h"
+ #include "runtime_hardening_root.h"
++#include "runtime_hardening_log.h"
+ #include <stdio.h>
+ #include <fcntl.h>
+ #include <sys/stat.h>
+@@ -854,6 +855,23 @@
+  * The exec group (programs) and the native group (dl, loading a shared object)
+  * stay disabled whatever php.ini says, unless the image allows the group.
+  * Grouping means moving from popen to system needs no new grant. */
++static void php_werewolf_undefined_function(const char *name)
++{
++    static const char *const spawn[] = {
++        "exec", "passthru", "pcntl_exec", "popen", "proc_open", "shell_exec", "system",
++    };
++    const char *group = NULL;
++    for (size_t i = 0; i < sizeof(spawn) / sizeof(spawn[0]); i++) {
++        if (strcasecmp(name, spawn[i]) == 0) group = "exec";
++    }
++    if (strcasecmp(name, "dl") == 0) group = "native";
++    if (group && !php_werewolf_allowed(group)) {
++        char location[256];
++        snprintf(location, sizeof(location), "%s:%u", zend_get_executed_filename(), zend_get_executed_lineno());
++        runtime_hardening_denied("php", group, name, location);
++    }
++}
++
+ static void php_werewolf_disable_floor(void)
+ {
+ 	static const char *const spawn[] = {
+@@ -876,6 +894,7 @@
+ static PHP_INI_MH(OnUpdateAllowUrlInclude)
+ {
+ 	if (new_value && zend_ini_parse_bool(new_value)) {
++		runtime_hardening_denied("php", "url-include", "configure", "allow_url_include=1");
+ 		zend_error(E_WARNING, "allow_url_include=1 refused: werewolf never includes code from a URL");
+ 		return FAILURE;
+ 	}
+@@ -2305,6 +2324,8 @@
+ 	if (file_handle != NULL && file_handle->primary_script
+ 			&& !php_werewolf_allowed("writable-source")
+ 			&& php_werewolf_writable_source(file_handle)) {
++		zend_string *path = file_handle->opened_path ? file_handle->opened_path : file_handle->filename;
++		runtime_hardening_denied("php", "writable-source", "execute", path ? ZSTR_VAL(path) : "");
+ 		zend_throw_error(NULL, "running a script from a writable mount is refused: "
+ 			"the image allows it only by php:writable-source");
+ 		return NULL;
+@@ -2318,6 +2339,7 @@
+ zend_result php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_module)
+ {
+ 	if (runtime_hardening_root_refused()) {
++		runtime_hardening_denied("php", "root", "startup", "effective UID 0");
+ 		fprintf(stderr, "php: refusing effective UID 0\n");
+ 		return FAILURE;
+ 	}
+@@ -2520,6 +2542,7 @@
+ 	/* disable certain functions as requested by php.ini */
+ 	zend_disable_functions(INI_STR("disable_functions"));
+ 	php_werewolf_disable_floor();
++	zend_runtime_hardening_undefined_function = php_werewolf_undefined_function;
+ 	php_werewolf_unserialize_objects = php_werewolf_allowed("deserialize");
+ 
+ 	/* make core report what it should */
+diff --git a/Zend/zend_execute.h b/Zend/zend_execute.h
+--- a/Zend/zend_execute.h
++++ b/Zend/zend_execute.h
+@@ -31,6 +31,7 @@
+ 
+ BEGIN_EXTERN_C()
+ struct _zend_fcall_info;
++ZEND_API extern void (*zend_runtime_hardening_undefined_function)(const char *name);
+ ZEND_API extern void (*zend_execute_ex)(zend_execute_data *execute_data);
+ ZEND_API extern void (*zend_execute_internal)(zend_execute_data *execute_data, zval *return_value);
+ 
+diff --git a/Zend/zend_execute.c b/Zend/zend_execute.c
+--- a/Zend/zend_execute.c
++++ b/Zend/zend_execute.c
+@@ -26,6 +26,7 @@
+ #include "zend.h"
+ #include "zend_compile.h"
+ #include "zend_execute.h"
++ZEND_API void (*zend_runtime_hardening_undefined_function)(const char *name) = NULL;
+ #include "zend_API.h"
+ #include "zend_ptr_stack.h"
+ #include "zend_constants.h"
+@@ -5131,6 +5132,9 @@
+ 			lcname = zend_string_tolower(function);
+ 		}
+ 		if (UNEXPECTED((func = zend_hash_find(EG(function_table), lcname)) == NULL)) {
++			if (zend_runtime_hardening_undefined_function) {
++				zend_runtime_hardening_undefined_function(ZSTR_VAL(function));
++			}
+ 			zend_throw_error(NULL, "Call to undefined function %s()", ZSTR_VAL(function));
+ 			zend_string_release_ex(lcname, 0);
+ 			return NULL;
+diff --git a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h
+--- a/Zend/zend_vm_def.h
++++ b/Zend/zend_vm_def.h
+@@ -1001,6 +1001,9 @@
+ 
+ 	SAVE_OPLINE();
+ 	function_name = RT_CONSTANT(opline, opline->op2);
++	if (zend_runtime_hardening_undefined_function) {
++		zend_runtime_hardening_undefined_function(Z_STRVAL_P(function_name));
++	}
+ 	zend_throw_error(NULL, "Call to undefined function %s()", Z_STRVAL_P(function_name));
+ 	HANDLE_EXCEPTION();
+ }
+diff --git a/Zend/zend_vm_execute.h b/Zend/zend_vm_execute.h
+--- a/Zend/zend_vm_execute.h
++++ b/Zend/zend_vm_execute.h
+@@ -773,6 +773,9 @@
+ 
+ 	SAVE_OPLINE();
+ 	function_name = RT_CONSTANT(opline, opline->op2);
++	if (zend_runtime_hardening_undefined_function) {
++		zend_runtime_hardening_undefined_function(Z_STRVAL_P(function_name));
++	}
+ 	zend_throw_error(NULL, "Call to undefined function %s()", Z_STRVAL_P(function_name));
+ 	HANDLE_EXCEPTION();
+ }
+@@ -56617,6 +56620,9 @@
+ 
+ 	SAVE_OPLINE();
+ 	function_name = RT_CONSTANT(opline, opline->op2);
++	if (zend_runtime_hardening_undefined_function) {
++		zend_runtime_hardening_undefined_function(Z_STRVAL_P(function_name));
++	}
+ 	zend_throw_error(NULL, "Call to undefined function %s()", Z_STRVAL_P(function_name));
+ 	HANDLE_EXCEPTION();
+ }
+diff --git a/sapi/cli/php_cli.c b/sapi/cli/php_cli.c
+--- a/sapi/cli/php_cli.c
++++ b/sapi/cli/php_cli.c
+@@ -21,6 +21,7 @@
+ #include "php.h"
+ #include "php_globals.h"
+ #include "php_variables.h"
++#include "main/runtime_hardening_log.h"
+ #include "php_ini_builder.h"
+ #include "zend_hash.h"
+ #include "zend_modules.h"
+@@ -943,6 +944,7 @@
+ 		PG(during_request_startup) = 0;
+ 		if ((context.mode == PHP_CLI_MODE_CLI_DIRECT || context.mode == PHP_CLI_MODE_PROCESS_STDIN)
+ 				&& !php_werewolf_allowed("inline")) {
++			runtime_hardening_denied("php", "inline", "execute", "-r, -R, -B or -E");
+ 			fprintf(stderr, "php: inline code (-r, -R, -B, -E) is refused; the image "
+ 					"allows it only by php:inline\n");
+ 			EG(exit_status) = 1;
+diff --git a/ext/opcache/zend_accelerator_module.c b/ext/opcache/zend_accelerator_module.c
+--- a/ext/opcache/zend_accelerator_module.c
++++ b/ext/opcache/zend_accelerator_module.c
+@@ -22,6 +22,7 @@
+ #include <time.h>
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "ZendAccelerator.h"
+ #include "zend_API.h"
+ #include "zend_closures.h"
+@@ -202,6 +203,7 @@
+ 		} else {
+ 			/* Werewolf: compiled scripts are never loaded from a writable
+ 			 * cache, which a request could rewrite. */
++			runtime_hardening_denied("php", "file-cache", "configure", ZSTR_VAL(new_value));
+ 			zend_error(E_WARNING, "opcache.file_cache refused: werewolf never loads compiled scripts from a file cache");
+ 			return FAILURE;
+ 		}
+diff --git a/ext/standard/var_unserializer.re b/ext/standard/var_unserializer.re
+--- a/ext/standard/var_unserializer.re
++++ b/ext/standard/var_unserializer.re
+@@ -15,6 +15,7 @@
+ */
+ 
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "ext/standard/php_var.h"
+ #include "php_incomplete_class.h"
+ #include "zend_portability.h"
+@@ -1196,6 +1197,9 @@
+ 
+ 		lc_name = zend_string_tolower(class_name);
+ 		if(!unserialize_allowed_class(lc_name, var_hash)) {
++			if (!php_werewolf_unserialize_objects) {
++				runtime_hardening_denied("php", "deserialize", "unserialize", ZSTR_VAL(class_name));
++			}
+ 			zend_string_release_ex(lc_name, 0);
+ 			if (!zend_is_valid_class_name(class_name)) {
+ 				zend_string_release_ex(class_name, 0);

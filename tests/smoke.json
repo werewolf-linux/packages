@@ -1,6 +1,6 @@
 {
   "authelia": {"runs": "authelia --version | grep -F '${{package.version}}'"},
-  "bugsink": {"runs": "/usr/lib/bugsink/bin/python -c 'import bugsink; from django.core.management import execute_from_command_line; assert callable(execute_from_command_line)'"},
+  "bugsink": {"runs": "/usr/lib/bugsink/bin/python bugsink-check.py", "allow": ["python:writable-source"]},
   "caddy": {"runs": "caddy version | grep -F 'v${{package.version}}'\ncaddy list-modules >/dev/null"},
   "continuwuity": {"runs": "conduwuit --version | grep -F '${{package.version}}'"},
   "keycloak": {"packages": ["openjdk-21-default-jvm"], "runs": "java @/usr/lib/keycloak/java.args --version | grep -F '${{package.version}}'"},

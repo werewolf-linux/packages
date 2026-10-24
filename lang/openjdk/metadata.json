@@ -1,0 +1,41 @@
+{
+  "update": {
+    "source": "wolfi",
+    "family": "openjdk-"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": true,
+    "minimized_reason": "Omit jmods, demos and the OCI entrypoint.",
+    "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
+    "evidence": [
+      "package.py",
+      "tests/test_derivation.py"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "openjdk-*"
+    ],
+    "changes": [
+      {
+        "what": "Omit jmods, demos and the OCI entrypoint.",
+        "why": "Keep the runtime and supported development packages without unused distribution artifacts.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      },
+      {
+        "what": "Ignore environment-controlled startup options, refuse effective-root initialization and restrict native access and object deserialization.",
+        "why": "Enforce runtime policy within the JVM so application-controlled relaunches cannot discard it.",
+        "evidence": [
+          "package.py",
+          "tests/test_derivation.py"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay."
+  }
+}

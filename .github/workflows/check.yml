@@ -35,7 +35,11 @@ jobs:
         with:
           go-version: '1.27.x'
       - run: python3 scripts/install-melange.py --dest build/tools/melange
-      - run: PATH="$PWD/build/tools:$PATH" make test check
+      - name: Install package test dependencies
+        run: |
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r wolfi/requirements.txt
+      - run: PATH="$PWD/build/tools:$PATH" make PYTHON=build/venv/bin/python test check
       - name: Validate every context and its APK names
         run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --offline
   native-smoke:

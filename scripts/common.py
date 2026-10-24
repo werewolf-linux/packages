@@ -9,6 +9,7 @@ import re
 import subprocess
 import tarfile
 import zlib
+import catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHES = ('x86_64', 'aarch64')
@@ -31,13 +32,16 @@ def sha256(path):
 
 
 def contexts():
+    if (ROOT / 'wolfi').is_dir():
+        return sorted(n for n, m in catalog.load(ROOT).items() if m['engine'] == 'upstream')
     return sorted(p.name for p in ROOT.iterdir() if p.is_dir() and NAME.fullmatch(p.name) and list(p.glob('*.yaml')))
 
 
 def context(name):
     if not NAME.fullmatch(name) or name not in contexts():
         raise ValueError('unknown package context: ' + name)
-    recipes = list((ROOT / name).glob('*.yaml'))
+    directory = ROOT / catalog.load(ROOT)[name]['path'] if (ROOT / 'wolfi').is_dir() else ROOT / name
+    recipes = list(directory.glob('*.yaml'))
     if len(recipes) != 1:
         raise ValueError('one recipe per context is required: ' + name)
     return recipes[0]
@@ -46,15 +50,18 @@ def context(name):
 def input_digest(name):
     recipe = context(name)
     files = list(recipe.parent.rglob('*')) + [ROOT / 'tools.lock.json', ROOT / 'scripts/build.py', ROOT / 'scripts/common.py']
+    if (ROOT / 'scripts/catalog.py').is_file():
+        files.append(ROOT / 'scripts/catalog.py')
     records = []
     for path in sorted(files):
         if any(part in {'.git', '__pycache__'} for part in path.relative_to(ROOT).parts):
             continue
         if path.is_symlink():
             raise ValueError('build contexts must not contain symlinks: ' + str(path))
-        if path.is_file():
-            records.append(dict(path=str(path.relative_to(ROOT)), sha256=sha256(path), mode=path.stat().st_mode & 0o7777))
-    return hashlib.sha256(encode(records)).hexdigest()
+        if path.is_file() and path != recipe.parent / 'metadata.json':
+            logical = str(Path(name) / path.relative_to(recipe.parent)) if path.is_relative_to(recipe.parent) else str(path.relative_to(ROOT))
+            records.append(dict(path=logical, sha256=sha256(path), mode=path.stat().st_mode & 0o7777))
+    return hashlib.sha256(encode(sorted(records, key=lambda r: Path(r['path']).parts))).hexdigest()
 
 
 def metadata(name):

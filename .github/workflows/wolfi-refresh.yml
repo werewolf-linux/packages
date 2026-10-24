@@ -1,0 +1,270 @@
+name: publish latest Wolfi packages
+# Every ten minutes, from one Wolfi snapshot, every package: capture its newest
+# stable recipe, verify, derive and patch it (scripts/discover.py), filing what
+# stops it as an issue; then build and publish each one whose release is
+# missing or staged. One package's failure holds back no other; it turns this
+# run red at the end.
+on:
+  schedule:
+    - cron: '7-57/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package name to recover with recover_run
+        type: string
+        default: ''
+      recover_run:
+        description: Resume validated artifacts from a prior runtime release run (no rebuild)
+        type: string
+        default: ''
+  push:
+    branches: [main]
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: wolfi
+jobs:
+  discover:
+    if: github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main' && inputs.recover_run == ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      # GitHub requires push access to discover recoverable draft releases.
+      contents: write
+      issues: write
+    outputs:
+      build: ${{ steps.discover.outputs.build }}
+      publish: ${{ steps.discover.outputs.publish }}
+      failed: ${{ steps.discover.outputs.failed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools and run the unit tests
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y patch
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r requirements.txt
+          make PYTHON=build/venv/bin/python test
+      - name: Check every package against Wolfi's newest recipes
+        id: discover
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: build/venv/bin/python scripts/discover.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.discover.outputs.publish != '[]'
+        with:
+          name: wolfi-inputs
+          path: wolfi/build/bundles/
+          if-no-files-found: error
+  build:
+    needs: discover
+    if: needs.discover.outputs.build != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.build) }}
+    uses: ./.github/workflows/wolfi-build.yml
+    with:
+      package: ${{ matrix.package }}
+      inputs_artifact: wolfi-inputs
+      production: true
+    secrets: inherit
+  feed:
+    # Backfill existing releases even when discovery needs no builds. New
+    # publications also merge their package before completing its release.
+    # R2 conditional index writes handle races with this job and other runs.
+    needs: discover
+    if: always() && !cancelled() && needs.discover.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r requirements.txt
+      - name: Write production signing key
+        env:
+          PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
+        run: |
+          test -n "$PACKAGES_APK_SIGNING_KEY"
+          build/venv/bin/python scripts/signing-key.py
+      - name: Merge existing signed packages into the hardened feed
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          build/venv/bin/python scripts/feed.py
+  publish:
+    needs: [discover, build]
+    if: >-
+      always() && !cancelled() && needs.discover.result == 'success' &&
+      needs.discover.outputs.publish != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.publish) }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+    env:
+      PACKAGE: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r requirements.txt
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wolfi-inputs
+          path: wolfi/build/input-bundle
+      - name: Restore captured inputs with their file modes
+        run: |
+          mkdir -p "build/$PACKAGE/inputs"
+          tar -xzf "build/input-bundle/$PACKAGE.tar.gz" -C "build/$PACKAGE/inputs"
+      # A package that did not build this run has no artifacts; that is checked below.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: ${{ matrix.package }}-x86_64
+          path: wolfi/artifacts/${{ matrix.package }}-x86_64
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: ${{ matrix.package }}-aarch64
+          path: wolfi/artifacts/${{ matrix.package }}-aarch64
+      - name: Stage a recoverable draft from both architectures' builds
+        id: stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=$(build/venv/bin/python scripts/publish.py status "$PACKAGE" | tail -1)
+          if [ "$state" = build ]; then
+            if [ -f "artifacts/$PACKAGE-x86_64/build.json" ] && [ -f "artifacts/$PACKAGE-aarch64/build.json" ]; then
+              build/venv/bin/python scripts/publish.py stage "$PACKAGE"
+            else
+              echo "$PACKAGE: not built on both architectures in this run; nothing to publish"
+              echo skip=true >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Write production signing key for the stable index
+        if: steps.stage.outputs.skip != 'true'
+        env:
+          PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
+        run: |
+          test -n "$PACKAGES_APK_SIGNING_KEY"
+          build/venv/bin/python scripts/signing-key.py
+      - name: Publish signed APK repositories and complete the GitHub release
+        if: steps.stage.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          build/venv/bin/python scripts/publish.py publish "$PACKAGE"
+  drifted:
+    defaults:
+      run:
+        working-directory: .
+    needs: discover
+    if: needs.discover.outputs.failed != '[]'
+    runs-on: ubuntu-26.04
+    steps:
+      - run: |
+          echo "Stopped this run, each filed as an issue: ${{ needs.discover.outputs.failed }}"
+          exit 1
+
+  recover:
+    if: github.repository == 'werewolf-linux/packages' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.recover_run != ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+      actions: read
+    env:
+      PACKAGE: ${{ inputs.package }}
+      RECOVER_RUN: ${{ inputs.recover_run }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: publisher
+      - name: Verify the source run passed both native builds
+        id: source
+        working-directory: .
+        run: python3 publisher/wolfi/scripts/recover-release.py "$RECOVER_RUN" "$PACKAGE"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ steps.source.outputs.source_sha }}
+          path: validated
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: wolfi-inputs
+          path: validated/wolfi/build/input-bundle
+          run-id: ${{ inputs.recover_run }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.package }}-x86_64
+          path: validated/wolfi/artifacts/${{ inputs.package }}-x86_64
+          run-id: ${{ inputs.recover_run }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.package }}-aarch64
+          path: validated/wolfi/artifacts/${{ inputs.package }}-aarch64
+          run-id: ${{ inputs.recover_run }}
+          github-token: ${{ github.token }}
+      - name: Validate and stage the original signed artifacts with the repaired publisher
+        working-directory: validated/wolfi
+        env:
+          BUILD_SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          BUILD_SOURCE_RUN_NUMBER: ${{ steps.source.outputs.source_run_number }}
+        run: |
+          cp ../../publisher/wolfi/scripts/publish.py scripts/publish.py
+          python3 -m venv build/venv
+          build/venv/bin/pip install -r requirements.txt
+          mkdir -p "build/$PACKAGE/inputs"
+          tar -xzf "build/input-bundle/$PACKAGE.tar.gz" -C "build/$PACKAGE/inputs"
+          build/venv/bin/python ../../publisher/wolfi/scripts/recover-release.py --verify-tag "$PACKAGE" "$BUILD_SOURCE_SHA"
+          GITHUB_SHA="$BUILD_SOURCE_SHA" GITHUB_RUN_NUMBER="$BUILD_SOURCE_RUN_NUMBER" GITHUB_RUN_ID="$RECOVER_RUN" \
+            build/venv/bin/python scripts/publish.py stage "$PACKAGE"
+      - name: Write the production signing key for the stable index
+        working-directory: validated/wolfi
+        env:
+          PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
+        run: |
+          test -n "$PACKAGES_APK_SIGNING_KEY"
+          build/venv/bin/python scripts/signing-key.py
+      - name: Publish both validated architectures and complete the release
+        working-directory: validated/wolfi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: 'true'
+          BUILD_SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          BUILD_SOURCE_RUN_NUMBER: ${{ steps.source.outputs.source_run_number }}
+        run: |
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          GITHUB_SHA="$BUILD_SOURCE_SHA" GITHUB_RUN_NUMBER="$BUILD_SOURCE_RUN_NUMBER" GITHUB_RUN_ID="$RECOVER_RUN" \
+            build/venv/bin/python scripts/publish.py publish "$PACKAGE"

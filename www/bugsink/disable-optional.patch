@@ -1,0 +1,311 @@
+--- a/bugsink/streams.py
++++ b/bugsink/streams.py
+@@ -2,7 +2,6 @@
+ 
+ import zlib
+ import io
+-import brotli
+ 
+ from bugsink.app_settings import get_settings
+ from bugsink.utils import assert_
+@@ -49,39 +48,7 @@
+ 
+ 
+ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
+-    # implementation notes: in principle chunk_size for input and output could be different, we keep them the same here.
+-    # I've also seen that the actual output data may be quite a bit larger than the output_buffer_limit; a detail that
+-    # I do not fully understand (but I understand that at least it's not _unboundedly_ larger).
+-
+-    # The brotli_assertions in the below are designed to guarantee that progress towards termination is made. In short:
+-    # when no progress is made on the input_stream, either progress must be made on the output_stream or we must be in
+-    # finished state.
+-    decompressor = brotli.Decompressor()
+-    input_is_finished = False
+-
+-    while not (decompressor.is_finished() and input_is_finished):
+-        if decompressor.can_accept_more_data():
+-            compressed_chunk = input_stream.read(chunk_size)
+-            if compressed_chunk:
+-                data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
+-                # brotli_assert not needed: we made progress on the `input_stream` in any case (we cannot infinitely be
+-                # in this branch because the input_stream is finite).
+-
+-            else:
+-                input_is_finished = True
+-                data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"": no input available, "drain"
+-                brotli_assert(
+-                    len(data) or decompressor.is_finished(),
+-                    "'Draining done' should imply 'decompressor finished'; if not, something's off")
+-
+-        else:
+-            data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"" compressor cannot accept more input
+-            brotli_assert(
+-                len(data) > 0,
+-                "A brotli processor that cannot accept input _must_ be able to produce output or it would be stuck.")
+-
+-        if data:
+-            yield data
++    raise BadRequest("Brotli is not supported by this build; use gzip or deflate")
+ 
+ 
+ class GeneratorReader:
+@@ -169,10 +136,7 @@
+         )
+ 
+     if encoding == "br":
+-        return GeneratorReader(
+-            brotli_generator(request._stream),
+-            bad_request_exceptions=(brotli.error, BrotliError)
+-        )
++        raise BadRequest("Brotli is not supported by this build; use gzip or deflate")
+ 
+     return request
+ 
+@@ -293,28 +257,7 @@
+ 
+ class BrotliStreamWriter(Writer):
+     def __init__(self, stream, quality, chunk_size=DEFAULT_CHUNK_SIZE):
+-        self.stream = stream
+-        self.compressor = brotli.Compressor(quality=quality)
+-        self.chunk_size = chunk_size
+-        self.closed = False
+-
+-    def write(self, data):
+-        out = self.compressor.process(data)
+-        if out:
+-            self.stream.write(out)
+-
+-    def flush(self):
+-        out = self.compressor.finish()
+-        if out:
+-            self.stream.write(out)
+-
+-    def close(self):
+-        if self.closed:
+-            return
+-        try:
+-            self.flush()
+-        finally:
+-            self.closed = True
++        raise ValueError("Brotli event storage is not supported by this build")
+ 
+ 
+ class ZlibStreamWriter(Writer):
+--- a/files/minidump.py
++++ b/files/minidump.py
+@@ -1,7 +1,7 @@
+ from collections import defaultdict
+ from uuid import UUID
+ import zipfile
+-import symbolic
++from django.core.exceptions import BadRequest
+ from sentry_sdk_extensions import capture_or_log_exception
+ 
+ from bugsink.utils import assert_
+@@ -11,50 +11,15 @@
+ 
+ 
+ def parse_debug_object(dif_bytes):
+-    """Parse exactly one native debug object from bytes"""
+-
+-    if dif_bytes.startswith(b"SYSB"):
+-        # we explicitly refuse source bundles here; this is security-critical. The reason is that source bundles can
+-        # contain highly compressed manifests that Symbolic decompresses and parses without a size limit, potentially
+-        # exhausting memory. Artifact uploads can label source bundles as "dbg", so we cannot trust the stored type.
+-        raise ValueError("Expected debug information, got a source bundle")
+-
+-    archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
+-    # our understanding: sentry-cli uploads single-object archives; we need to get the single object out of it...
+-    # ...but this does raise the question of why archives exist at all... hence the assert
+-    objects = list(archive.iter_objects())
+-    assert_(len(objects) == 1)
+-    return objects[0]
++    raise BadRequest("Native minidumps are not supported by this build")
+ 
+ 
+ def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
+-    process_state = symbolic.minidump.ProcessState.from_minidump_buffer(minidump_bytes)
+-
+-    module_ids_by_debug_id = defaultdict(set)
+-    for module in process_state.modules():
+-        if module.debug_id:
+-            debug_id = UUID(symbolic.debuginfo.id_from_breakpad(module.debug_id))
+-            module_ids_by_debug_id[debug_id].add(module.debug_id)
+-
+-    metadata = get_file_metadata_for_debug_ids(project, module_ids_by_debug_id, "dbg", defer_file_data=True)
+-    frame_info_map = symbolic.minidump.FrameInfoMap.new()
+-    for debug_id, module_ids in module_ids_by_debug_id.items():
+-        if debug_id not in metadata:
+-            continue
+-
+-        # Memory-critical: reading a deferred file caches its contents on the model. Pop it here so those contents
+-        # can be released when the helper returns, rather than keeping every debug file loaded.
+-        _add_cfi_for_modules(frame_info_map, metadata.pop(debug_id).file, module_ids)
+-
+-    return frame_info_map
++    raise BadRequest("Native minidumps are not supported by this build")
+ 
+ 
+ def _add_cfi_for_modules(frame_info_map, file, module_ids):
+-    dif_bytes = file.get_raw_data()
+-    debug_object = parse_debug_object(dif_bytes)
+-    for module_id in module_ids:
+-        cfi = symbolic.minidump.CfiCache.from_object(debug_object)
+-        frame_info_map.add(module_id, cfi)
++    raise BadRequest("Native minidumps are not supported by this build")
+ 
+ 
+ def extract_dif_kind(dif_bytes):
+@@ -109,53 +74,7 @@
+ 
+ 
+ def event_threads_for_process_state(process_state, project):
+-    modules = list(process_state.modules())
+-    debug_ids = {}
+-    frames_by_debug_id = defaultdict(list)
+-    threads = []
+-    for thread_index, symbolic_thread in enumerate(process_state.threads()):
+-        frames = []
+-
+-        for symbolic_frame in symbolic_thread.frames():
+-            module = _find_module_for_address(modules, symbolic_frame.instruction)
+-
+-            frame = {"instruction_addr": f"0x{symbolic_frame.instruction:x}"}
+-
+-            if module and module.debug_id:
+-                if module.debug_id not in debug_ids:
+-                    debug_ids[module.debug_id] = UUID(symbolic.debuginfo.id_from_breakpad(module.debug_id))
+-                debug_id = debug_ids[module.debug_id]
+-                frames_by_debug_id[debug_id].append((frame, symbolic_frame.instruction - module.addr))
+-
+-            frames.append(frame)
+-
+-        threads.append({
+-            "id": symbolic_thread.thread_id,
+-            "crashed": thread_index == process_state.requesting_thread,
+-            "stacktrace": {"frames": frames},
+-        })
+-
+-    metadata = get_file_metadata_for_debug_ids(project, frames_by_debug_id, "dbg", defer_file_data=True)
+-    source_frames_by_debug_id = {}
+-    for debug_id, frames in frames_by_debug_id.items():
+-        if debug_id not in metadata:
+-            continue
+-
+-        # Memory-critical: reading a deferred file caches its contents on the model. Pop it here so those contents
+-        # can be released when the helper returns, rather than keeping every debug file loaded.
+-        frames_by_filename = _symbolicate_frames(metadata.pop(debug_id).file, frames)
+-        if frames_by_filename:
+-            source_frames_by_debug_id[debug_id] = frames_by_filename
+-
+-    metadata = get_file_metadata_for_debug_ids(project, source_frames_by_debug_id, "src", defer_file_data=True)
+-    for debug_id, frames_by_filename in source_frames_by_debug_id.items():
+-        if debug_id not in metadata:
+-            continue
+-
+-        # Drop this model too, so the full source bundle isn't retained after the helper returns.
+-        _add_source_context(metadata.pop(debug_id).file, frames_by_filename)
+-
+-    return threads
++    raise BadRequest("Native minidumps are not supported by this build")
+ 
+ 
+ def _symbolicate_frames(file, frames):
+--- a/sentry/minidump.py
++++ b/sentry/minidump.py
+@@ -2,71 +2,9 @@
+ # https://github.com/getsentry/sentry/blob/f0ac91f2ec6b45ad18e5eea6df72c5c72573e964/src/sentry/models/minidump.py#L53
+ # with (as it stands) minor modifications.
+ 
+-import symbolic
++from django.core.exceptions import BadRequest
+ from files.minidump import build_cfi_map_from_minidump_bytes, event_threads_for_process_state
+ 
+ 
+ def merge_minidump_event(data, minidump_bytes, project):
+-    frame_info_map = build_cfi_map_from_minidump_bytes(minidump_bytes, project)
+-    process_state = symbolic.ProcessState.from_minidump_buffer(minidump_bytes, frame_infos=frame_info_map)
+-
+-    data['level'] = 'fatal' if process_state.crashed else 'info'
+-
+-    if process_state.timestamp:
+-        data['timestamp'] = float(process_state.timestamp)
+-
+-    # Extract as much system information as we can. TODO: We should create
+-    # a custom context and implement a specific minidump view in the event
+-    # UI.
+-    info = process_state.system_info
+-    context = data.setdefault('contexts', {})
+-    os = context.setdefault('os', {})
+-    device = context.setdefault('device', {})
+-    os['name'] = info.os_name
+-    os['version'] = info.os_version
+-    device['arch'] = info.cpu_family
+-
+-    threads = event_threads_for_process_state(process_state, project)
+-    data.setdefault("threads", {})["values"] = threads
+-
+-    if process_state.requesting_thread > -1:
+-        crashed_thread = threads[process_state.requesting_thread]
+-
+-        exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
+-             else 'Fatal Error: %s' % process_state.crash_reason
+-
+-        exception = {
+-            'value': exception_value,
+-            'thread_id': crashed_thread['id'],
+-            'type': process_state.crash_reason,
+-            'stacktrace': crashed_thread.pop('stacktrace'),
+-            'value': exception_value,
+-        }
+-
+-        for frame in exception['stacktrace']['frames']:
+-            frame['in_app'] = True  # minidumps don't distinguish in_app frames; assume all are in_app
+-
+-        exception['stacktrace']['frames'].reverse()  # "Frames should be sorted from oldest to newest."
+-
+-        if len(exception['stacktrace']['frames']) > 1 and exception['stacktrace']['frames'][-1].get('function'):
+-            exception["type"] = exception['stacktrace']['frames'][-1].get('function')
+-
+-        # TODO our UI doesn't actually display threads yet.
+-        # Whether it does or not, we may need to revert the per-thread stacktraces above as well.
+-
+-        data.setdefault('exception', {}) \
+-            .setdefault('values', []) \
+-            .append(exception)
+-
+-    # Extract referenced (not all loaded) images
+-    images = [{
+-        'type': 'elf',                    # TODO not sure what this should _actually_ be
+-        'image_addr': module.addr,
+-        'image_size': module.size,
+-        'code_file': module.code_file,
+-        'code_id': module.code_id,
+-        'debug_file': module.debug_file,
+-        'debug_id': symbolic.debuginfo.id_from_breakpad(module.debug_id) if module.debug_id else None,
+-    } for module in process_state.modules()]
+-
+-    data.setdefault('debug_meta', {})['images'] = images
++    raise BadRequest("Native minidumps are not supported by this build")
+--- a/events/storage.py
++++ b/events/storage.py
+@@ -48,7 +48,7 @@
+     suffix = ".json.br"
+ 
+     def __init__(self, quality):
+-        self.quality = quality
++        raise ValueError("Brotli event storage is not supported by this build")
+ 
+     @contextlib.contextmanager
+     def open_wrapper(self, raw, mode):
+--- a/bugsink/conf_templates/docker.py.template
++++ b/bugsink/conf_templates/docker.py.template
+@@ -206,7 +206,7 @@
+         os.getenv("ALERTS_WEBHOOK_DENY_NON_GLOBAL", "true").lower() in ("true", "1", "yes"),
+ 
+     # Feature flags
+-    "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
++    "FEATURE_MINIDUMPS": False,  # Not included in this package.
+ }
+ 
+ 

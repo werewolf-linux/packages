@@ -1,0 +1,18 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH 2/6] Disable the attach mechanism by default
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/hotspot/share/runtime/globals.hpp b/src/hotspot/share/runtime/globals.hpp
+--- a/src/hotspot/share/runtime/globals.hpp
++++ b/src/hotspot/share/runtime/globals.hpp
+@@ -1747,7 +1747,7 @@
+   product(bool, ManagementServer, false,                                    \
+           "Create JMX Management Server")                                   \
+                                                                             \
+-  product(bool, DisableAttachMechanism, false,                              \
++  product(bool, DisableAttachMechanism, true,  /* Werewolf */                              \
+           "Disable mechanism that allows tools to attach to this VM")       \
+                                                                             \
+   product(bool, StartAttachListener, false,                                 \

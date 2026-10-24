@@ -1,0 +1,31 @@
+SPDX-License-Identifier: PHP-3.01
+Subject: [PATCH] Require exec at the shared mail delivery helper
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 678778973bb4d4185c06ef1320de50f1a975d3c8
+
+--- a/ext/standard/mail.c
++++ b/ext/standard/mail.c
+@@ -19,6 +19,7 @@
+ #include <stdio.h>
+ #include <time.h>
+ #include "php.h"
++#include "main/runtime_hardening_log.h"
+ #include "ext/standard/info.h"
+ #include "ext/standard/php_string.h"
+ #include "ext/standard/basic_functions.h"
+@@ -443,6 +444,14 @@
+ /* {{{ php_mail */
+ PHPAPI bool php_mail(const char *to, const char *subject, const char *message, const char *headers, const char *extra_cmd)
+ {
++	/* mail(), mb_send_mail() and error_log(..., 1) share this shell path. */
++	if (!php_werewolf_allowed("exec")) {
++		runtime_hardening_denied("php", "exec", "mail", get_active_function_name());
++		php_error_docref(NULL, E_WARNING, "mail delivery is refused: "
++			"the image allows it only by php:exec");
++		return false;
++	}
++
+ 	FILE *sendmail;
+ 	char *sendmail_path = INI_STR("sendmail_path");
+ 	char *sendmail_cmd = NULL;

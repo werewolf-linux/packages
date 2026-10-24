@@ -1,0 +1,37 @@
+{
+  "update": {
+    "source": "github",
+    "repo": "greenbone/pg-gvm",
+    "prefix": "v",
+    "components": {
+      "gvm-libs-version": {
+        "prefix": "v",
+        "repo": "greenbone/gvm-libs",
+        "source": "github"
+      }
+    }
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "pg-gvm.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "PostgreSQL's Greenbone extension, built for the same Wolfi PostgreSQL 17 as the form. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "pg-gvm.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

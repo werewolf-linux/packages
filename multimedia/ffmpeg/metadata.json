@@ -1,0 +1,34 @@
+{
+  "update": {
+    "source": "wolfi",
+    "family": "ffmpeg-"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Keep local media conversion and codecs; omit network/device protocols, ffplay, display and font integrations.",
+    "pledge_reason": "This package removes features; it does not implement a pledge-style capability policy. Service restrictions live in the form.",
+    "evidence": [
+      "package.py",
+      "tests/test_derivation.py",
+      "tests/probe.sh"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "ffmpeg-*"
+    ],
+    "changes": [
+      {
+        "what": "Keep local media conversion and codecs; omit network/device protocols, ffplay, display and font integrations.",
+        "why": "Retain the media operations required by Mastodon while reducing library integrations and code paths.",
+        "evidence": [
+          "package.py",
+          "tests/probe.sh"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships an equivalent restricted profile and installed-package probes pass."
+  }
+}

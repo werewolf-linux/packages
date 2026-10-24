@@ -1,0 +1,78 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH 3/6] Read capability-group allowances from the read-only root
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java b/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java
+new file mode 100644
+--- /dev/null
++++ b/src/java.base/share/classes/jdk/internal/misc/WerewolfAllowance.java
+@@ -0,0 +1,67 @@
++/*
++ * SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
++ */
++package jdk.internal.misc;
++
++import java.io.IOException;
++import java.nio.file.Files;
++import java.nio.file.LinkOption;
++import java.nio.file.Path;
++import java.util.concurrent.ConcurrentHashMap;
++
++/**
++ * Werewolf (docs/design/hardened-interpreters.md): what the image takes back of
++ * this JDK's hardening, by capability group. A grant is an empty regular file,
++ * never a symlink, at /etc/runtime-hardening/allow/<ns>/java/<group> for this
++ * service, or .../all/java/<group> for every service. <ns> is the service, the
++ * last element of /proc/self/cgroup, which the supervisor sets and the service
++ * cannot change; argv, system properties and the environment grant nothing.
++ * The root does not change while the JDK runs, so each answer is kept.
++ */
++public final class WerewolfAllowance {
++    private static final String BASE = "/etc/runtime-hardening/allow";
++    private static final ConcurrentHashMap<String, Boolean> FOUND = new ConcurrentHashMap<>();
++
++    private WerewolfAllowance() { }
++
++    /** Whether the image allows group: deserialize or native. */
++    public static boolean allowed(String group) {
++        Boolean found = FOUND.get(group);
++        if (found == null) {
++            found = check(group);
++            FOUND.putIfAbsent(group, found);
++        }
++        return found;
++    }
++
++    private static boolean check(String group) {
++        String service = service();
++        if (service != null && file(service, group)) {
++            return true;
++        }
++        return file("all", group);
++    }
++
++    private static boolean file(String ns, String group) {
++        try {
++            return Files.isRegularFile(Path.of(BASE, ns, "java", group), LinkOption.NOFOLLOW_LINKS);
++        } catch (RuntimeException e) {
++            return false;
++        }
++    }
++
++    /** The service: the last element of /proc/self/cgroup (cgroup v2
++     * "0::/svc/web" gives "web"), or null when there is none. */
++    private static String service() {
++        try {
++            String line = Files.readAllLines(Path.of("/proc/self/cgroup")).get(0);
++            int slash = line.lastIndexOf('/');
++            if (slash < 0 || slash + 1 >= line.length()) {
++                return null;
++            }
++            return line.substring(slash + 1);
++        } catch (IOException | RuntimeException e) {
++            return null;
++        }
++    }
++}

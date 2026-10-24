@@ -1,0 +1,163 @@
+SPDX-License-Identifier: MIT
+Subject: [PATCH] Gate inline code and modules on writable mounts
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 26e72d85a611e222e3f06025de8a3c496923bacd
+
+diff --git a/src/node_credentials.cc b/src/node_credentials.cc
+--- a/src/node_credentials.cc
++++ b/src/node_credentials.cc
+@@ -103,6 +103,22 @@
+   return has_env;
+ }
+ 
++static void WerewolfInline(const FunctionCallbackInfo<Value>& args) {
++  Environment* env = Environment::GetCurrent(args);
++  if (!hardening::Allowed("inline")) {
++    THROW_ERR_ACCESS_DENIED(env, "node:inline required for code from strings or stdin");
++  }
++}
++
++static void WerewolfSource(const FunctionCallbackInfo<Value>& args) {
++  Environment* env = Environment::GetCurrent(args);
++  CHECK(args[0]->IsString());
++  Utf8Value filename(env->isolate(), args[0]);
++  if (!hardening::SourceAllowed(*filename)) {
++    THROW_ERR_ACCESS_DENIED(env, "node:writable-source required for code on a writable or unknown mount");
++  }
++}
++
+ static void SafeGetenv(const FunctionCallbackInfo<Value>& args) {
+   CHECK(args[0]->IsString());
+   Environment* env = Environment::GetCurrent(args);
+@@ -477,6 +493,8 @@
+ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
+   registry->Register(SafeGetenv);
+   registry->Register(GetTempDir);
++  registry->Register(WerewolfInline);
++  registry->Register(WerewolfSource);
+ 
+ #ifdef NODE_IMPLEMENTS_POSIX_CREDENTIALS
+   registry->Register(GetUid);
+@@ -500,6 +518,8 @@
+                        void* priv) {
+   SetMethod(context, target, "safeGetenv", SafeGetenv);
+   SetMethod(context, target, "getTempDir", GetTempDir);
++  SetMethod(context, target, "werewolfInline", WerewolfInline);
++  SetMethod(context, target, "werewolfSource", WerewolfSource);
+ 
+ #ifdef NODE_IMPLEMENTS_POSIX_CREDENTIALS
+   Environment* env = Environment::GetCurrent(context);
+diff --git a/src/node.cc b/src/node.cc
+--- a/src/node.cc
++++ b/src/node.cc
+@@ -378,6 +378,14 @@
+     return StartExecution(env, "internal/main/prof_process");
+   }
+ 
++  if (!hardening::Allowed("inline") &&
++      (env->options()->has_eval_string || env->options()->force_repl ||
++       first_argv.empty() || first_argv == "-")) {
++    fprintf(stderr, "node:inline required for eval, REPL or stdin\n");
++    env->set_exit_code(ExitCode::kGenericUserError);
++    return MaybeLocal<Value>();
++  }
++
+   // -e/--eval without -i/--interactive
+   if (env->options()->has_eval_string && !env->options()->force_repl) {
+     return StartExecution(env, "internal/main/eval_string");
+@@ -1046,8 +1054,10 @@
+     if (exit_code != ExitCode::kNoFailure) return exit_code;
+   }
+ 
+-  // Every option source has now been parsed, so cross-source option
+-  // constraints can finally be validated.
++  if (per_process::cli_options->per_isolate->build_snapshot ||
++      !per_process::cli_options->snapshot_blob.empty()) {
++    errors->emplace_back("node: custom startup snapshots are disabled");
++  }
+   CheckGlobalBenchOptions(errors);
+   CheckGlobalProcessTimeoutOptions(*argv, errors);
+   if (!errors->empty()) return ExitCode::kInvalidCommandLineArgument;
+diff --git a/src/node_options.cc b/src/node_options.cc
+--- a/src/node_options.cc
++++ b/src/node_options.cc
+@@ -301,6 +301,9 @@
+ 
+ void EnvironmentOptions::CheckOptions(std::vector<std::string>* errors,
+                                       std::vector<std::string>* argv) {
++  if ((experimental_vfs || vfs_load) && !hardening::Allowed("writable-source")) {
++    errors->emplace_back("node:writable-source required for virtual module filesystems");
++  }
+   if (!input_type.empty()) {
+     if (input_type != "commonjs" && input_type != "module" &&
+         input_type != "commonjs-typescript" &&
+diff --git a/lib/internal/modules/cjs/loader.js b/lib/internal/modules/cjs/loader.js
+--- a/lib/internal/modules/cjs/loader.js
++++ b/lib/internal/modules/cjs/loader.js
+@@ -20,6 +20,7 @@
+ // USE OR OTHER DEALINGS IN THE SOFTWARE.
+ 
+ 'use strict';
++const { werewolfSource } = internalBinding('credentials');
+ 
+ const {
+   ArrayIsArray,
+@@ -1981,6 +1982,7 @@
+  * @returns {{source: string, format?: string}}
+  */
+ function loadSource(mod, filename, formatFromNode) {
++  if (formatFromNode !== "json") werewolfSource(filename);
+   if (mod[kFormat] === undefined) {
+     mod[kFormat] = formatFromNode;
+   }
+diff --git a/lib/internal/modules/esm/load.js b/lib/internal/modules/esm/load.js
+--- a/lib/internal/modules/esm/load.js
++++ b/lib/internal/modules/esm/load.js
+@@ -1,4 +1,6 @@
+ 'use strict';
++const { werewolfInline, werewolfSource } = internalBinding('credentials');
++const { fileURLToPath } = require('internal/url');
+ 
+ const {
+   RegExpPrototypeExec,
+@@ -31,12 +33,14 @@
+   const responseURL = href;
+   let source;
+   if (protocol === 'file:') {
++    if (context.format !== 'json' && context.importAttributes?.type !== 'json') werewolfSource(fileURLToPath(url));
+     // If you are reading this code to figure out how to patch Node.js module loading
+     // behavior - DO NOT depend on the patchability in new code: Node.js
+     // internals may stop going through the JavaScript fs module entirely.
+     // Prefer module.registerHooks() or other more formal fs hooks released in the future.
+     source = loaderMethods.readFileSync(url);
+   } else if (protocol === 'data:') {
++    if (context.format !== 'json' && context.importAttributes?.type !== 'json') werewolfInline();
+     const { dataURLProcessor } = require('internal/data_url');  // Only for data: URLs.
+     const result = dataURLProcessor(url);
+     if (result === 'failure') {
+diff --git a/lib/internal/worker.js b/lib/internal/worker.js
+--- a/lib/internal/worker.js
++++ b/lib/internal/worker.js
+@@ -1,4 +1,5 @@
+ 'use strict';
++const { werewolfInline } = internalBinding('credentials');
+ 
+ const {
+   ArrayIsArray,
+@@ -224,6 +225,7 @@
+       doEval = 'internal';
+       url = `node:${filename}`;
+     } else if (options.eval) {
++      werewolfInline();
+       if (typeof filename !== 'string') {
+         throw new ERR_INVALID_ARG_VALUE(
+           'options.eval',
+@@ -235,6 +237,7 @@
+       doEval = 'classic';
+     } else if (isURL(filename) && filename.protocol === 'data:') {
+       url = null;
++      werewolfInline();
+       doEval = 'data-url';
+       filename = `${filename}`;
+     } else {

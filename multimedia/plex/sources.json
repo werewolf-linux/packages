@@ -1,0 +1,106 @@
+{
+  "version": "1.43.5.11029-6bf8af3f0",
+  "codec_set": "a336ba9-16a9aaf440ee9a92b75f070b",
+  "architectures": {
+    "aarch64": {
+      "deb": {
+        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_arm64.deb",
+        "sha256": "b289c218db9c4efa81effab8efb82ca9aba5576f58e95aeb7c485b07db41ec1b"
+      },
+      "codecs": [
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/libh264_decoder.so",
+          "fileSha": "ef94fe91f3446fa5edc494d88fa20b4484ebdab2",
+          "fileSha256": "1417c2fcf3b6a3d33d9006410f09d711086f53afc1ccbe7df37cb63018f95268",
+          "fileName": "libh264_decoder.so",
+          "build": "linux-aarch64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/liblibx264_encoder.so",
+          "fileSha": "45806c6a571554fe2325ff8956e678e500cb4842",
+          "fileSha256": "186cb0f59df5f7b16db1d4e3cbd1930b9ba9ca41b964727351de667540c43655",
+          "fileName": "liblibx264_encoder.so",
+          "build": "linux-aarch64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/libaac_decoder.so",
+          "fileSha": "bc06c8ae54fcb406a93c20fd5ace720f707127a2",
+          "fileSha256": "fbfc2cd1929cc9a825c9d222ee97aa62a44d2e531fa420bf48acba611265f5b4",
+          "fileName": "libaac_decoder.so",
+          "build": "linux-aarch64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/libaac_encoder.so",
+          "fileSha": "978261e173a408f22cb32231102962d8046f7f58",
+          "fileSha256": "52b1e80c0912b29112213125a564e1978506112e61151b081502c7f52933a4a1",
+          "fileName": "libaac_encoder.so",
+          "build": "linux-aarch64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/libhevc_decoder.so",
+          "fileSha": "efd46da0148672fb128e63562fc827f403a54abf",
+          "fileSha256": "a508d2241efe9f18bedd37c83ec790460012bc5a0277018dda9cee1731c7a6da",
+          "fileName": "libhevc_decoder.so",
+          "build": "linux-aarch64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-aarch64-standard/libmp3_decoder.so",
+          "fileSha": "485d5bb860b620eedcdbf84cd0612eae7ab60efa",
+          "fileSha256": "2deea159078946b9b60c51141cbbd971b6a233296ba5d6c4b5bd570066d3b78d",
+          "fileName": "libmp3_decoder.so",
+          "build": "linux-aarch64-standard"
+        }
+      ]
+    },
+    "x86_64": {
+      "deb": {
+        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_amd64.deb",
+        "sha256": "562edf9456be338a24182f837fe5d532d7e75ba7b3d5f6bea2503083e77622e1"
+      },
+      "codecs": [
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/libh264_decoder.so",
+          "fileSha": "dbabce05a044226113a22e25b4b39836cca9fc73",
+          "fileSha256": "88aa53dbd62b71251b0a0938da8dcb9cf450195ad453f35eb59f3ef213ee0773",
+          "fileName": "libh264_decoder.so",
+          "build": "linux-x86_64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/liblibx264_encoder.so",
+          "fileSha": "83db703926e974f3f3599bdc19c319271c877220",
+          "fileSha256": "987d78882567acb753a63e2d4521cec921405a2d6d091b76317a02c7cdba352c",
+          "fileName": "liblibx264_encoder.so",
+          "build": "linux-x86_64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/libaac_decoder.so",
+          "fileSha": "f4f15520e531bbd8627b9b1f080e6baae504f337",
+          "fileSha256": "24795482c7cbaa472434bd31c60cf95352d9c5614621581f440535679dfbd22c",
+          "fileName": "libaac_decoder.so",
+          "build": "linux-x86_64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/libaac_encoder.so",
+          "fileSha": "0599448e7d1c566a1454683a4122f3aa9a37fba1",
+          "fileSha256": "41b3bd181f50150849f640a17f0b0c57042a501d9960e7a07b2b8383920a8f1d",
+          "fileName": "libaac_encoder.so",
+          "build": "linux-x86_64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/libhevc_decoder.so",
+          "fileSha": "e6978461d48287f8f5bd8536a4cc2cf32d10a02e",
+          "fileSha256": "e116f04ecc6c51189cc26143293ac5a45b1c1bfeb1bde29741368132fcea97f0",
+          "fileName": "libhevc_decoder.so",
+          "build": "linux-x86_64-standard"
+        },
+        {
+          "url": "https://downloads.plex.tv/codecs/a336ba9-16a9aaf440ee9a92b75f070b/linux-x86_64-standard/libmp3_decoder.so",
+          "fileSha": "d381c7e54924b46e4b6398b4cd3b52c52e9eae56",
+          "fileSha256": "b397f344f9e49ee8912d8ba2486f240144955b7986784fc01e8ab50ef37503dd",
+          "fileName": "libmp3_decoder.so",
+          "build": "linux-x86_64-standard"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "update": {
+    "source": "github",
+    "repo": "open-webui/open-webui",
+    "prefix": "v"
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "open-webui.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "Open WebUI for werewolf's open-webui form, in its slim build: upstream's own variant for a machine whose models are served elsewhere (here, by Ollama), its vectors kept in PostgreSQL with pgvector, without torch, local speech or document models, or any cloud storage SDK. Built by melange in Wolfi's environment, into a virtual environment on Wolfi's Python 3.12 at /usr/lib/open-webui: the Python packages upstream's slim image installs (backend/requirements-slim.txt at the tag), resolved as PyPI stood on the date below, and the release's wheel, which carries the web interface upstream builds. Wolfi's own open-webui is the full build (torch, 7 GB installed) and lags upstream; when Wolfi ships a slim one, the form names the package and this file goes.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "open-webui.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

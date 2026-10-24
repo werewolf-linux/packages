@@ -1,0 +1,113 @@
+SPDX-License-Identifier: LGPL-2.1-or-later
+Subject: [PATCH 2/4] Disable loader injection and command-line search overrides
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: docs/glibc-vuln-audit.md; docs/design/glibc-neutered.md
+Base-Commit: 34106fee698c83eb0af71d4d0381e66b399be746
+
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -221,7 +221,7 @@
+   ElfW(Dyn) *info = main_map->l_info[ADDRIDX (tag)];
+   const char *strtab = (const char *) D_PTR (main_map, l_info[DT_STRTAB]);
+   if (info != NULL)
+-    audit_list_add_string (list, strtab + info->d_un.d_val);
++    _dl_fatal_printf ("ld.so: ELF audit requests are disabled\n");
+ }
+ 
+ static const char *
+@@ -783,6 +783,7 @@
+ static unsigned int
+ do_preload (const char *fname, struct link_map *main_map, const char *where)
+ {
++  _dl_fatal_printf ("ld.so: preloading is disabled\n");
+   const char *objname;
+   const char *err_str = NULL;
+   struct map_args args;
+@@ -907,6 +908,7 @@
+ static void
+ load_audit_module (const char *name, struct audit_ifaces **last_audit)
+ {
++  _dl_fatal_printf ("ld.so: audit modules are disabled\n");
+   int original_tls_idx = GL(dl_tls_max_dtv_idx);
+ 
+   struct dlmopen_args dlmargs;
+@@ -1392,7 +1394,15 @@
+       _dl_rtld_map.l_name = rtld_progname;
+ 
+       while (_dl_argc > 1)
+-	if (! strcmp (_dl_argv[1], "--list"))
++        if (!strcmp (_dl_argv[1], "--preload")
++            || !strcmp (_dl_argv[1], "--audit")
++            || !strcmp (_dl_argv[1], "--library-path")
++            || !strcmp (_dl_argv[1], "--inhibit-rpath")
++            || !strcmp (_dl_argv[1], "--inhibit-cache")
++            || !strcmp (_dl_argv[1], "--glibc-hwcaps-prepend")
++            || !strcmp (_dl_argv[1], "--glibc-hwcaps-mask"))
++          _dl_fatal_printf ("ld.so: loader overrides are disabled\n");
++	else if (! strcmp (_dl_argv[1], "--list"))
+ 	  {
+ 	    if (state.mode != rtld_mode_help)
+ 	      {
+@@ -1835,7 +1845,7 @@
+      the work but this does not matter, since it is not for production
+      use.  */
+   static const char preload_file[] = "/etc/ld.so.preload";
+-  if (__glibc_unlikely (__access (preload_file, R_OK) == 0))
++  if (false && __glibc_unlikely (__access (preload_file, R_OK) == 0))
+     {
+       /* Read the contents of the file.  */
+       file = _dl_sysdep_read_whole_file (preload_file, &file_size,
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 47147864..d146285d 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -1290,6 +1290,13 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+ 
+   elf_get_dynamic_info (l, false, false);
+ 
++  if (l->l_info[ADDRIDX (DT_AUDIT)] != NULL
++      || l->l_info[ADDRIDX (DT_DEPAUDIT)] != NULL)
++    {
++      errstring = N_("ELF audit requests are disabled");
++      goto lose;
++    }
++
+   /* Make sure we are not dlopen'ing an object that has the
+      DF_1_NOOPEN flag set, or a PIE object.  */
+   if ((__glibc_unlikely (l->l_flags_1 & DF_1_NOOPEN)
+diff --git a/elf/ldd.bash.in b/elf/ldd.bash.in
+index bfc40f65..6bad3be8 100644
+--- a/elf/ldd.bash.in
++++ b/elf/ldd.bash.in
+@@ -48,10 +48,6 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+     echo $"Usage: ldd [OPTION]... FILE...
+       --help              print this help and exit
+       --version           print version information and exit
+-  -d, --data-relocs       process data relocations
+-  -r, --function-relocs   process data and function relocations
+-  -u, --unused            print unused direct dependencies
+-  -v, --verbose           print all information
+ "
+     printf $"For bug reporting instructions, please see:\\n%s.\\n" \
+       "@REPORT_BUGS_TO@"
+@@ -101,6 +97,11 @@ nonelf ()
+   return 1;
+ }
+ 
++if test -n "$warn$bind_now$verbose$unused"; then
++  echo >&2 'ldd: optional loader controls are disabled'
++  exit 1
++fi
++
+ add_env="LD_TRACE_LOADED_OBJECTS=1 LD_WARN=$warn LD_BIND_NOW=$bind_now"
+ add_env="$add_env LD_VERBOSE=$verbose"
+ if test "$unused" = yes; then
+@@ -114,7 +115,7 @@ fi
+ # subshell compound list (using "(...)") to prevent parameter assignments from
+ # affecting the calling shell execution environment.
+ try_trace() (
+-  output=$(eval $add_env '"$@"' 2>&1; rc=$?; printf 'x'; exit $rc)
++  output=$("$1" --list "$2" 2>&1; rc=$?; printf 'x'; exit $rc)
+   rc=$?
+   printf '%s' "${output%x}"
+   return $rc

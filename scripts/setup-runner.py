@@ -6,7 +6,7 @@ import re
 import shutil
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).absolute().parents[1]
 PROFILE = Path('/etc/apparmor.d/bwrap-userns-restrict')
 
 

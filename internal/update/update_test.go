@@ -410,3 +410,81 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 		t.Fatalf("locks: %s / %s", lock, uuid)
 	}
 }
+
+func TestCategorizedUpdatesAndExplicitTrainingHold(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "wolfi", ".keep"), "")
+	mustWrite(t, filepath.Join(root, "www", "example", "metadata.json"), `{"update":{"source":"github","repo":"a/b","prefix":"v"}}`)
+	path := filepath.Join(root, "www", "example", "recipe.yaml")
+	mustWrite(t, path, fetchRecipe)
+	c := mockClient(t, map[string]string{
+		"https://api.github.com/repos/a/b/releases/latest": `{"tag_name":"v1.10.0"}`,
+		"https://example.org/1.10.0/arm64.tar.gz":          "arm", "https://example.org/1.10.0/amd64.tar.gz": "amd",
+	})
+	policies, err := LoadPolicies(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := c.Update(context.Background(), root, "example", policies["example"], true, noCommands)
+	if r.Status != "updated" {
+		t.Fatalf("%+v", r)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "1.10.0") {
+		t.Fatal("categorized context did not update")
+	}
+	if _, err := os.Stat(filepath.Join(root, "example")); !os.IsNotExist(err) {
+		t.Fatal("flat context unexpectedly created")
+	}
+	c = mockClient(t, nil)
+	r = c.Update(context.Background(), root, "example-vuln-demo", Policy{Source: "github", Repo: "a/b", Hold: "Training fixture"}, true, noCommands)
+	if r.Status != "pinned" {
+		t.Fatalf("training hold accessed upstream: %+v", r)
+	}
+}
+
+func TestPlexUsesTransactionalVendorPreparation(t *testing.T) {
+	for _, failure := range []bool{false, true} {
+		root := t.TempDir()
+		path := filepath.Join(root, "plex", "plex.yaml")
+		original := "package:\n  name: plexmediaserver\n  version: 1.0.0\n  epoch: 0\n"
+		mustWrite(t, path, original)
+		mustWrite(t, filepath.Join(root, "plex", "sources.json"), `{"version":"1.0.0-old"}`)
+		c := mockClient(t, map[string]string{"https://repo.plex.tv/deb/dists/public/main/binary-amd64/Packages": "Package: plexmediaserver\nVersion: 1.1.0-new\n"})
+		calls := 0
+		run := func(_ context.Context, dir, name string, _ ...string) error {
+			calls++
+			if name == "python3" {
+				mustWrite(t, filepath.Join(dir, "plex.yaml"), strings.Replace(original, "1.0.0", "1.1.0", 1))
+				if failure {
+					return errors.New("codec ABI changed")
+				}
+			}
+			return nil
+		}
+		r := c.Update(context.Background(), root, "plex", Policy{Source: "plex"}, true, run)
+		data, _ := os.ReadFile(path)
+		if failure {
+			if r.Status != "failed" || string(data) != original {
+				t.Fatalf("failed vendor preparation escaped scratch: %+v", r)
+			}
+		} else if r.Status != "updated" || !strings.Contains(string(data), "1.1.0") || calls != 2 {
+			t.Fatalf("%+v", r)
+		}
+	}
+}
+
+func TestUnderscoreReleaseTagsKeepTheExactSourcePin(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "example", "recipe.yaml")
+	mustWrite(t, path, "package:\n  name: example\n  version: 8.23.0\n  epoch: 0\npipeline:\n  - uses: git-checkout\n    with:\n      repository: https://github.com/curl/curl.git\n      tag: curl-8_23_0\n      expected-commit: "+strings.Repeat("a", 40)+"\n")
+	c := mockClient(t, map[string]string{
+		"https://api.github.com/repos/curl/curl/releases/latest":     `{"tag_name":"curl-8_24_0"}`,
+		"https://api.github.com/repos/curl/curl/commits/curl-8_24_0": `{"sha":"` + strings.Repeat("b", 40) + `"}`,
+	})
+	r := c.Update(context.Background(), root, "example", Policy{Source: "github", Repo: "curl/curl", Prefix: "curl-", Separator: "_"}, true, noCommands)
+	data, _ := os.ReadFile(path)
+	if r.Status != "updated" || !strings.Contains(string(data), `version: "8.24.0"`) || !strings.Contains(string(data), `tag: "curl-8_24_0"`) || !strings.Contains(string(data), strings.Repeat("b", 40)) {
+		t.Fatalf("%+v\n%s", r, data)
+	}
+}

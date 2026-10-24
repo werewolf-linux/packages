@@ -1,3 +1,14 @@
+const { createRequire } = require('node:module');
+const appRequire = createRequire('/usr/lib/n8n/node_modules/n8n-core/package.json');
+for (const name of ['@sentry/node-native', '@sentry/profiling-node', '@parcel/watcher']) {
+  let missing = false;
+  try { appRequire.resolve(name); } catch (error) {
+    if (error.code !== 'MODULE_NOT_FOUND') throw error;
+    missing = true;
+  }
+  if (!missing) throw new Error(`optional native package remains: ${name}`);
+}
+
 const sqlite = require('/usr/lib/n8n/node_modules/sqlite3');
 const ivm = require('/usr/lib/n8n/node_modules/isolated-vm');
 

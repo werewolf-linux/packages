@@ -1,0 +1,30 @@
+{
+  "update": {
+    "source": "github-tags",
+    "repo": "LimeSurvey/LimeSurvey",
+    "pattern": "^([0-9]+\\.[0-9]+\\.[0-9]+)\\+([0-9]+)$"
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
+    "evidence": [
+      "limesurvey.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "LimeSurvey for werewolf's limesurvey form: the project's release, as it ships it (its Composer and npm dependencies inside), pinned by sha256. Wolfi does not ship LimeSurvey. The code goes in /usr/share/limesurvey, read-only on the machine; its two writable trees, tmp/ (published assets, the runtime cache) and upload/ (themes, images, participants' files), are links into the php-fpm service's directory on /data, so every path LimeSurvey derives from them lands there. Its web installer, documentation and Apache files stay out. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form names the package and this file goes.",
+        "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
+        "evidence": [
+          "limesurvey.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+  }
+}

@@ -60,7 +60,11 @@ func check(name, arch string) error {
 		fmt.Println(name + ": native build and APK validation passed; no additional runtime smoke test")
 		return nil
 	}
-	paths, _ := filepath.Glob(filepath.Join(name, "*.yaml"))
+	directory, err := update.ContextPath(root, name)
+	if err != nil {
+		return err
+	}
+	paths, _ := filepath.Glob(filepath.Join(directory, "*.yaml"))
 	if len(paths) != 1 {
 		return fmt.Errorf("expected one recipe")
 	}
@@ -104,12 +108,22 @@ func check(name, arch string) error {
 	packages := append([]string{"busybox", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
 	mutations := []map[string]any{}
 	if len(s.Allow) != 0 {
-		mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node", "type": "directory", "permissions": 0o755})
+		directories := map[string]bool{}
 		for _, allow := range s.Allow {
-			if allow != "native" && allow != "writable-source" {
-				return fmt.Errorf("unsupported Node test allowance: %s", allow)
+			language, group := "node", allow
+			switch allow {
+			case "native", "writable-source":
+			case "python:writable-source":
+				language, group = "python", "writable-source"
+			default:
+				return fmt.Errorf("unsupported runtime test allowance: %s", allow)
 			}
-			mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node/" + allow, "type": "empty-file", "permissions": 0o444})
+			directory := "/etc/runtime-hardening/allow/all/" + language
+			if !directories[directory] {
+				mutations = append(mutations, map[string]any{"path": directory, "type": "directory", "permissions": 0o755})
+				directories[directory] = true
+			}
+			mutations = append(mutations, map[string]any{"path": directory + "/" + group, "type": "empty-file", "permissions": 0o444})
 		}
 	}
 	config := map[string]any{

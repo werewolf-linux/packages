@@ -54,10 +54,13 @@ jobs:
           scripts/ci-root python3 scripts/setup-runner.py
           scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
             --cap-add CAP_SYS_CHROOT -- /usr/bin/python3 -c 'import os; os.chroot("/")'
+      - name: Resolve the package context
+        id: context
+        run: echo "path=$(python3 scripts/catalog.py path "$PACKAGE" --engine upstream)" >>"$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/cache
-          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', inputs.package), 'tools.lock.json') }}
+          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', steps.context.outputs.path), 'tools.lock.json') }}
           restore-keys: source-${{ inputs.arch }}-${{ inputs.package }}-
       - name: Build and validate unsigned APKs
         run: |
