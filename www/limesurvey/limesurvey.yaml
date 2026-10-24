@@ -39,7 +39,7 @@ pipeline:
   - runs: |
       unzip -q limesurvey${{package.version}}+${{vars.build}}.zip
       cd limesurvey
-      # The shipped schema has only HTMLPurifier_ConfigSchema and stdClass;
+      # The shipped schema has only HTMLPurifier_ConfigSchema, PropertyList and stdClass;
       # keep writable HTML Purifier definition caches disabled.
       patch -p1 --fuzz=0 < ../serialized-cache.patch
       grep -q "versionnumber'\] = '${{package.version}}'" application/config/version.php

@@ -3,7 +3,7 @@
 @@ -2792,3 +2792,3 @@
          $contents = file_get_contents(HTMLPURIFIER_PREFIX . '/HTMLPurifier/ConfigSchema/schema.ser');
 -        $r = unserialize($contents);
-+        $r = unserialize($contents, ["allowed_classes" => [self::class, stdClass::class]]);
++        $r = unserialize($contents, ["allowed_classes" => [self::class, HTMLPurifier_PropertyList::class, stdClass::class]]);
          if (!$r) {
 @@ -4465,3 +4465,3 @@
          }

@@ -1,0 +1,22 @@
+--- a/public/lib/htmlpurifier/HTMLPurifier/ConfigSchema.php
++++ b/public/lib/htmlpurifier/HTMLPurifier/ConfigSchema.php
+@@ -71,3 +71,3 @@
+         $contents = file_get_contents(HTMLPURIFIER_PREFIX . '/HTMLPurifier/ConfigSchema/schema.ser');
+-        $r = unserialize($contents);
++        $r = unserialize($contents, ["allowed_classes" => [self::class, HTMLPurifier_PropertyList::class, stdClass::class]]);
+         if (!$r) {
+--- a/public/lib/htmlpurifier/HTMLPurifier/EntityLookup.php
++++ b/public/lib/htmlpurifier/HTMLPurifier/EntityLookup.php
+@@ -25,3 +25,3 @@
+         }
+-        $this->table = unserialize(file_get_contents($file));
++        $this->table = unserialize(file_get_contents($file), ["allowed_classes" => false]);
+     }
+--- a/public/lib/weblib.php
++++ b/public/lib/weblib.php
+@@ -1113,4 +1113,3 @@
+         $config->set('CSS.Proprietary', true);
+-        $config->set('Cache.SerializerPath', $cachedir);
+-        $config->set('Cache.SerializerPermissions', $CFG->directorypermissions);
++        $config->set('Cache.DefinitionImpl', null); // No writable serialized definitions.
+         $config->set('Core.NormalizeNewlines', false);

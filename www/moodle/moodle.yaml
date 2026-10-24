@@ -9,7 +9,7 @@
 package:
   name: moodle
   version: "5.3"
-  epoch: 1
+  epoch: 2
   description: Moodle, a learning management system
   copyright:
     - license: GPL-3.0-or-later
@@ -22,6 +22,7 @@ environment:
       - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
     packages:
       - busybox
+      - patch
 
 pipeline:
   - runs: mkdir -p moodle
@@ -33,12 +34,16 @@ pipeline:
       directory: moodle
 
   # The developers' dotfiles (lint, Grunt, Jest, GitHub's) run nothing on
-  # a machine. One change: PHP-DI makes the container Moodle compiles into
+  # a machine. PHP-DI makes the container Moodle compiles into
   # its local cache, PHP that Moodle then includes, writable by everyone
   # (chmod 0666); the umask, 0007 from Moodle's own setup, decides instead.
-  # The code is otherwise as Moodle ships it, and the form lays its
+  # HTML Purifier loads only named classes from its bundled schema and has
+  # no writable serialized definition cache. The form lays Moodle's
   # config.php beside it.
   - runs: |
+      # Moodle's bundled schema has only HTMLPurifier_ConfigSchema, PropertyList and stdClass.
+      # Do not restore writable serialized Purifier definitions.
+      (cd moodle && patch -p1 --fuzz=0 < ../serialized-cache.patch)
       find moodle -maxdepth 1 -name '.?*' -exec rm -rf {} +
       c=moodle/public/lib/php-di/php-di/src/Compiler/Compiler.php
       sed -i 's/@chmod(\$tmpFile, 0666);/@chmod($tmpFile, 0666 \& ~umask());/' $c
