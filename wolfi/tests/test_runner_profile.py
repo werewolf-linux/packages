@@ -41,7 +41,9 @@ class RunnerProfile(unittest.TestCase):
             copy.assert_called_once_with('/usr/bin/bwrap', executable)
             self.assertEqual(0o755, executable.stat().st_mode & 0o777)
             self.assertFalse(executable.with_suffix('.apparmor').exists())
-            run.assert_not_called()
+            run.assert_called_once()
+            self.assertEqual(str(executable), run.call_args.args[0][0])
+            self.assertIn('--tmpfs', run.call_args.args[0])
 
     def test_capability_is_scoped_to_the_private_runner_child(self):
         executable = Path('/home/runner/work/project/build/tools/bwrap')
@@ -49,9 +51,8 @@ class RunnerProfile(unittest.TestCase):
         name = re.search(r'^profile (\S+) "', result, re.M)[1]
         self.assertIn('profile ' + name + ' "' + str(executable.resolve()) + '"', result)
         child = result.split('profile ' + name + '_child flags=', 1)[1]
-        self.assertIn('allow capability sys_chroot,', child)
-        self.assertIn('allow capability setuid,', child)
-        self.assertIn('allow capability setgid,', child)
+        self.assertEqual({'sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override'},
+                         set(re.findall(r'allow capability (\w+),', child)))
         self.assertNotIn('allow capability,', child)
         self.assertNotIn('unconfined', result)
         self.assertNotIn('local/', result)
@@ -86,8 +87,9 @@ class RunnerProfile(unittest.TestCase):
             policy = executable.with_suffix('.apparmor').read_text()
             self.assertIn('"' + str(binary) + '"', policy)
             self.assertNotIn('"' + str(executable) + '"', policy)
-            run.assert_called_once()
-            self.assertEqual('--replace', run.call_args.args[0][1])
+            self.assertEqual(2, run.call_count)
+            self.assertEqual('--replace', run.call_args_list[0].args[0][1])
+            self.assertEqual(str(executable), run.call_args_list[1].args[0][0])
 
     def test_new_child_capabilities_and_unknown_profiles_fail_closed(self):
         for template in (TEMPLATE.replace('audit deny capability,', 'allow capability,'),
