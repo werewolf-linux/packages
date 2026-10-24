@@ -25,7 +25,8 @@ Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with
 | [ffmpeg](../multimedia/ffmpeg/README.md) | newest `ffmpeg-*` | local media only; no network protocols, display, devices or font rendering |
 | [libffi](../devel/libffi/README.md) | `libffi` | callbacks from read-only library code (static trampolines), so they work under MDWE |
 | [busybox](../devel/busybox/README.md) | `busybox` | applets a tool runs by name come from busybox itself, as glibc searches no PATH |
-| PostgreSQL | newest `postgresql-*` | latest stable only; unversioned packages, no PAM/LDAP/GSSAPI, PL/Perl, PL/Python or OCI entrypoints; retain JIT, ICU, TLS, compression and contrib |
+| PostgreSQL | newest `postgresql-*` | unversioned latest stable packages; no PAM/LDAP/GSSAPI, PL/Perl, PL/Python or OCI entrypoints; retain JIT, ICU, TLS, compression and contrib |
+| PostgreSQL 17 | `postgresql-17` | versioned compatibility stream for existing Werewolf data clusters until an explicit major upgrade path exists |
 
 Each package guide covers installation on Werewolf/Wolfi, every patch and allowance,
 build changes and troubleshooting. Start with [feed setup, grants and denial logs](docs/usage.md).

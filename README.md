@@ -20,7 +20,8 @@ sources, unsupported handlers, unexplained divergences and invalid evidence.
 Applications track upstream releases; Wolfi overlays capture its exact recipes
 and independently advance to the latest upstream stable release with checked
 source and hardening changes. PostgreSQL follows the latest stable major through
-one unversioned context and package set. Deliberately vulnerable demonstrations retain
+one unversioned context and package set; the versioned PostgreSQL 17 package stays
+available until existing Werewolf data clusters have a migration path. Deliberately vulnerable demonstrations retain
 real source metadata and an explicit update hold.
 
 ```sh
