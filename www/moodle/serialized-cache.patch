@@ -67,3 +67,8 @@
 +                    // Keep the original selectors; only their comparison keys are strings.
 +                    $keys = array_unique(array_map('serialize', $selectors));
 +                    $selectors = array_intersect_key($selectors, $keys);
+--- a/public/course/classes/modinfo.php
++++ b/public/course/classes/modinfo.php
+@@ -679,1 +679,1 @@
+-        $this->course = fullclone($course);
++        $this->course = unserialize(serialize($course), ['allowed_classes' => [\stdClass::class]]);
