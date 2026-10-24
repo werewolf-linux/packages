@@ -1,7 +1,7 @@
 package:
   name: postgresql-17
   version: "17.11"
-  epoch: 0
+  epoch: 1
   description: PostgreSQL 17 with LLVM JIT and local/SCRAM authentication
   copyright:
   - license: BSD-3-Clause
@@ -36,7 +36,6 @@ environment:
     - openssl-3.6-dev
     - openssl~3.6
     - patch
-    - shadow
     - tzdata
 vars:
   mangled-package-name: postgresql17
@@ -56,8 +55,6 @@ pipeline:
 - runs: 'make install
 
     make -C contrib install
-
-    useradd -M -s /bin/sh pgtest
 
     sh tests/consumers.sh
 
