@@ -38,7 +38,9 @@ def main():
         run(sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_*.py', cwd=catalog.ROOT / 'wolfi')
         for meta in selected.values():
             if meta['engine'] == 'wolfi':
-                run(sys.executable, '-m', 'unittest', 'discover', '-s', catalog.ROOT / meta['path'] / 'tests', '-p', 'test_*.py', cwd=catalog.ROOT / 'wolfi')
+                tests = catalog.ROOT / meta['path'] / 'tests'
+                if any(tests.glob('test_*.py')):
+                    run(sys.executable, '-m', 'unittest', 'discover', '-s', tests, '-p', 'test_*.py', cwd=catalog.ROOT / 'wolfi')
         return
     if not args.package and args.command in ('updates', 'refresh', 'discover'):
         if args.command == 'updates':
