@@ -5,6 +5,11 @@
 -        $r = unserialize($contents);
 +        $r = unserialize($contents, ["allowed_classes" => [self::class, HTMLPurifier_PropertyList::class, stdClass::class]]);
          if (!$r) {
+@@ -3349,3 +3349,3 @@
+         $method = $config->get('Cache.DefinitionImpl');
+-        if ($method === null) {
++        if ($method === null || $method === 'Serializer') {
+             return new HTMLPurifier_DefinitionCache_Null($type);
 @@ -4465,3 +4465,3 @@
          }
 -        $this->table = unserialize(file_get_contents($file));
