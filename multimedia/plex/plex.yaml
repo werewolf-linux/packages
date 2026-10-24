@@ -4,8 +4,12 @@
 package:
   name: plexmediaserver
   version: 1.43.5.11029
-  epoch: 3
+  epoch: 4
   description: Plex Media Server with build-time codec dependencies
+  # The vendor tree carries its private musl ABI and Python Script Host.
+  # Resource-script shebangs must not pull an unrelated system Python 2.
+  options:
+    no-depends: true
   copyright:
     - license: LicenseRef-Plex
 
