@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Give the private runner chroot and the identity changes its UID probes need."""
+"""Allow and verify the private build guest's file and identity operations."""
 import hashlib
 import os
 from pathlib import Path
@@ -9,6 +9,28 @@ import subprocess
 
 ROOT = Path(__file__).absolute().parents[1]
 PROFILE = Path('/etc/apparmor.d/bwrap-userns-restrict')
+CAPABILITIES = ('sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override')
+
+
+def check_guest(executable):
+    # Probe inside a read-only host mount with a private writable /tmp.
+    # Account creation opens mode-000 shadow files; nginx changes cache owners.
+    code = '''import os, pathlib, tempfile
+os.chroot('/')
+with tempfile.TemporaryDirectory() as directory:
+    path = pathlib.Path(directory) / 'permissions'
+    path.write_bytes(b'probe')
+    path.chmod(0)
+    with path.open('r+b') as stream:
+        assert stream.read() == b'probe'
+    os.chown(path, 65532, 65532)
+    assert path.stat().st_uid == 65532 and path.stat().st_gid == 65532
+'''
+    subprocess.run([str(executable), '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc',
+                    '--tmpfs', '/tmp', '--unshare-pid', '--cap-add', 'CAP_SYS_CHROOT',
+                    '--cap-add', 'CAP_CHOWN', '--cap-add', 'CAP_DAC_OVERRIDE',
+                    '--', '/usr/bin/python3', '-c', code], check=True, timeout=30)
+    print('setup-runner: guest chroot, shadow-file access and ownership changes passed')
 
 
 def profile(template, executable):
@@ -29,7 +51,7 @@ def profile(template, executable):
         ('&bwrap//&unpriv_bwrap', '&' + name + '//&' + child_name),
         (marker, 'profile ' + child_name + ' flags='),
         ('&unpriv_bwrap', '&' + child_name),
-        ('audit deny capability,', 'allow capability sys_chroot,\n    allow capability setuid,\n    allow capability setgid,'),
+        ('audit deny capability,', '\n    '.join('allow capability ' + cap + ',' for cap in CAPABILITIES)),
         ('include if exists <local/bwrap-userns-restrict>', ''),
         ('include if exists <local/unpriv_bwrap>', ''),
     ]
@@ -54,6 +76,7 @@ def main():
     binary.chmod(0o755)
     if policy is None:
         print('setup-runner: no Ubuntu bubblewrap child profile; using system confinement')
+        check_guest(executable)
         return
     target = binary.with_suffix('.apparmor')
     target.write_text(policy)
@@ -63,7 +86,8 @@ def main():
         link.unlink(missing_ok=True)
         link.symlink_to(source.name)
         link.replace(alias)
-    print('setup-runner: private child capabilities: sys_chroot, setuid, setgid')
+    print('setup-runner: private child capabilities: ' + ', '.join(CAPABILITIES))
+    check_guest(executable)
 
 
 if __name__ == '__main__':
