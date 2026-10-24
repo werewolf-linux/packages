@@ -21,13 +21,11 @@
     ]
   },
   "wolfi": {
-    "relationship": "replacement",
-    "recipes": [
-      "n8n.yaml"
-    ],
+    "relationship": "independent",
+    "recipes": [],
     "changes": [
       {
-        "what": "Package the intentionally vulnerable application release under an isolated training package name.",
+        "what": "Package the npm release with a pinned dependency lock; omit optional native profilers and watchers while retaining workflow backends.",
         "why": "Prune optional native profilers and watchers while retaining workflow backends and pinned dependency locks.",
         "evidence": [
           "n8n.yaml"

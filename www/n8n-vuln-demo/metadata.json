@@ -15,10 +15,8 @@
     ]
   },
   "wolfi": {
-    "relationship": "replacement",
-    "recipes": [
-      "n8n.yaml"
-    ],
+    "relationship": "independent",
+    "recipes": [],
     "changes": [
       {
         "what": "Package the intentionally vulnerable application release under an isolated training package name.",
@@ -28,6 +26,6 @@
         ]
       }
     ],
-    "removal_condition": "Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context."
+    "removal_condition": "Retire with the training scenario; never replace its deliberately vulnerable release automatically."
   }
 }

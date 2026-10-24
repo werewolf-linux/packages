@@ -18,7 +18,7 @@
     "recipes": [],
     "changes": [
       {
-        "what": "Package the intentionally vulnerable application release under an isolated training package name.",
+        "what": "Package the official SQLite integration release and generate the database drop-in from its matching template.",
         "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
         "evidence": [
           "wordpress-sqlite.yaml"

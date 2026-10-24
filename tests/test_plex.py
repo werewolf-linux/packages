@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1] / 'plex'
+ROOT = Path(__file__).resolve().parents[1] / 'multimedia' / 'plex'
 spec = importlib.util.spec_from_file_location('plex_provenance', ROOT / 'verify.py')
 provenance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(provenance)

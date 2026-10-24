@@ -18,7 +18,7 @@
     "recipes": [],
     "changes": [
       {
-        "what": "Package the intentionally vulnerable application release under an isolated training package name.",
+        "what": "Package the editor and API with coordinated wheel pins, Python 3.15 dependency overrides and a separately compiled fastuuid dependency.",
         "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
         "evidence": [
           "langflow.yaml"
