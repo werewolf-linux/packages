@@ -14,6 +14,8 @@ check_apk = runtime.check_apk
 GROUPS = ('exec', 'native', 'inline', 'writable-source', 'environment')
 ALLOW = 'Permit capabilities only in the build guest'
 BUILD = 'Configure and build'
+BUILD_COMMAND = 'make BUILDTYPE=Release -j$(nproc)'
+BUILD_JOBS = 4
 PRUNE = 'Omit package managers and documentation'
 FLAGS = (' --without-inspector --without-npm --without-node-options'
          ' --disable-single-executable-application --without-lief'
@@ -62,10 +64,13 @@ def grant_all():
 
 def configure(script):
     before = 'configure.py ${{vars.configure-flags}}'
-    if script.count(before) != 1 or '--without-' in script.replace(
+    if script.count(before) != 1 or script.count(BUILD_COMMAND) != 1 or '--without-' in script.replace(
             '# NOTE: --without-corepack is no longer supported in Node.js 25+', ''):
         raise ValueError('Review changed upstream Node configure step')
-    return script.replace(before, before + FLAGS)
+    # Bubblewrap sees the host's CPU count, not Melange's requested budget.
+    # Set JOBS too: Node forwards it explicitly to Ninja.
+    return script.replace(before, before + FLAGS).replace(
+        BUILD_COMMAND, f'make BUILDTYPE=Release JOBS={BUILD_JOBS} -j{BUILD_JOBS}')
 
 
 def prune():

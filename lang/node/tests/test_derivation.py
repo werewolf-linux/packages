@@ -1,6 +1,8 @@
 import copy
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -66,6 +68,36 @@ class NodeDerivation(unittest.TestCase):
         self.assertIn('effective root', result['test']['pipeline'][-1]['runs'])
         self.assertEqual({'packages': ['build-base', 'openssl']}, result['test']['pipeline'][-1]['needs'])
 
+    def test_many_core_hosts_do_not_start_unbounded_compiler_jobs(self):
+        _, result = self.derived()
+        script = named(result['pipeline'], PACKAGE.hooks.BUILD)['runs']
+        script = script.replace('${{build.arch}}', 'x86_64').replace(
+            '${{vars.configure-flags}}', result['vars']['configure-flags']).replace(
+            '${{vars.python-version}}', str(result['vars']['python-version']))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = {
+                'python' + str(result['vars']['python-version']): '#!/bin/sh\nexit 0\n',
+                'icu-config': '#!/bin/sh\necho /fixture/icu\n',
+                'make': '#!/bin/sh\nprintf "%s\\n" "$@" > "$NODE_BUILD_ARGS"\n',
+                'nproc': '#!/bin/sh\ntouch "$NODE_NPROC_CALLED"\necho 128\n',
+            }
+            for name, code in tools.items():
+                tool = root / name
+                tool.write_text(code)
+                tool.chmod(0o755)
+            capture, nproc = root / 'args', root / 'nproc-called'
+            env = {**os.environ, 'PATH': str(root) + os.pathsep + os.environ['PATH'],
+                   'NODE_BUILD_ARGS': str(capture), 'NODE_NPROC_CALLED': str(nproc),
+                   'CFLAGS': '-Os', 'CXXFLAGS': '-Os', 'CPPFLAGS': '-Os'}
+            subprocess.run(['bash', '-eu', '-c', script], cwd=root, env=env, check=True)
+            args = capture.read_text().splitlines()
+            jobs = int(next(arg[2:] for arg in args if arg.startswith('-j')))
+            self.assertGreater(jobs, 0)
+            self.assertLessEqual(jobs, 4)
+            self.assertIn('JOBS=' + str(jobs), args)
+            self.assertFalse(nproc.exists())
+
     def test_reviewed_wolfi_patches_apply_before_ours(self):
         upstream, result = self.derived()
         uses = [s.get('uses') or s.get('name') for s in result['pipeline'][:4]]
@@ -83,6 +115,8 @@ class NodeDerivation(unittest.TestCase):
             lambda c: c['pipeline'][0]['with'].update(repository='https://example.com/node'),
             lambda c: named(c['pipeline'], PACKAGE.hooks.BUILD).update(name='Build changed'),
             lambda c: named(c['pipeline'], PACKAGE.hooks.BUILD).update(runs='configure differently'),
+            lambda c: named(c['pipeline'], PACKAGE.hooks.BUILD).update(
+                runs=named(c['pipeline'], PACKAGE.hooks.BUILD)['runs'].replace('-j$(nproc)', '-j128')),
         ]
         for change in changes:
             with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'Review'):
@@ -98,6 +132,8 @@ class NodeDerivation(unittest.TestCase):
             lambda c: c['subpackages'].append(upstream['subpackages'][0]),
             lambda c: c['test']['pipeline'].pop(0),
             lambda c: c.update(update={'enabled': True}),
+            lambda c: named(c['pipeline'], PACKAGE.hooks.BUILD).update(
+                runs=named(c['pipeline'], PACKAGE.hooks.BUILD)['runs'].replace('JOBS=4 -j4', '-j$(nproc)')),
         ]:
             changed = copy.deepcopy(result)
             change(changed)

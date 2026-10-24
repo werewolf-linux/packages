@@ -68,6 +68,8 @@ use `--ignore-scripts` during dependency installation and run reviewed builds ex
 ## Build differences
 
 Keep Wolfi's commit, toolchain, ordinary runtime and headers for application builds.
+Build with four compiler jobs, including Ninja's `JOBS` setting. Bubblewrap exposes
+all host CPUs through `nproc`; using that count exhausts memory on large runners.
 Configure without inspector, npm/npx, `NODE_OPTIONS`, SEA, LIEF, Brotli and Zstd; discard manpages.
 Gzip/deflate remain. Fetch advertises only available encodings; Brotli/Zstd responses
 fail. No allowance restores omitted codecs. Native addons may carry independent
