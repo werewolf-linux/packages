@@ -100,6 +100,14 @@ def derive(pkg, config, lock):
         deps['provides'] = [p for p in deps.get('provides', []) if p != own + '=${{package.full-version}}']
         deps['provides'].append('upstream-origin:' + original + ':' + lock['version'] + '-r' + str(lock['epoch']))
         section['dependencies'] = deps
+        if own == 'postgresql-client':
+            # Wolfi tests that its virtual alias is absent. Here that name is
+            # the real package, so the assertion would reject a correct build.
+            expected = [{'uses':'test/virtualpackage', 'with':{
+                'virtual-pkg-name':'postgresql-client', 'real-pkg-name':'${{subpkg.name}}'}}]
+            if section.get('test', {}).get('pipeline') != expected:
+                raise ValueError('Review changed PostgreSQL client virtual-package test')
+            section.pop('test')
     config['test']['pipeline'] = [s for s in config['test']['pipeline'] if s.get('name') != KERBEROS]
     probe = (pkg.dir / 'tests/consumers.sh').read_text()
     marker = 'WEREWOLF_POSTGRESQL_CONSUMERS'

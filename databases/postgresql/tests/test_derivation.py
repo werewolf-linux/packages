@@ -32,6 +32,9 @@ class PostgreSQL(unittest.TestCase):
         self.assertTrue({'postgresql','postgresql-client','postgresql-contrib','postgresql-dev','libpq'} <= names)
         self.assertFalse(any('17' in name or '18' in name or 'plperl' in name or 'oci-entrypoint' in name for name in names))
         self.assertNotIn('ecpg=${{package.full-version}}',derived['package']['dependencies']['runtime'])
+        client = next(s for s in derived['subpackages'] if s['name'] == '${{package.name}}-client')
+        self.assertNotIn('test', client)
+        self.assertNotIn('postgresql-client=${{package.full-version}}', client['dependencies']['provides'])
         for step in BASELINE['test']['pipeline']:
             if step.get('name') != PKG.hooks.KERBEROS:
                 self.assertIn(step, derived['test']['pipeline'])
