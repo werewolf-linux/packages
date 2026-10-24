@@ -100,6 +100,9 @@ def main(binary='curl'):
             upload.write_bytes(b'uploaded')
             assert curl('-T', str(upload), base + '/put') == b'uploaded'
             assert curl('-f', '-u', 'user:pass', base + '/auth') == b'hello'
+            netrc = root / 'netrc'
+            netrc.write_text('machine 127.0.0.1 login user password pass\n')
+            curl('-f', '--netrc', '--netrc-file', str(netrc), base + '/auth', code=22)
             jar = root / 'cookies'
             curl('-c', str(jar), base + '/cookie')
             assert curl('-b', str(jar), base + '/check-cookie') == b'session=ok'
