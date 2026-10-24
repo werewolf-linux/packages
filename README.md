@@ -32,8 +32,11 @@ make PACKAGE=caddy build          # build through ../werewolf
 make PACKAGE=php build            # build the Wolfi derivation
 ```
 
-Python 3.12+ with PyYAML, Go 1.27+, pinned Melange and package-specific test tools
-are required. Plex provenance checks also require GnuPG (`gpg`). Create a local
+Python 3.12+ with PyYAML, Go 1.27+, pinned Melange, OpenSSL 3+ and package-specific
+test tools are required. Put OpenSSL 3+ on `PATH` for signing tests; macOS's system
+LibreSSL does not support the required key conversion. Java logging probes run
+when a JDK 11+ is available on `PATH`.
+Plex provenance checks also require GnuPG (`gpg`). Create a local
 environment with a supported interpreter before running the tests:
 
 ```sh

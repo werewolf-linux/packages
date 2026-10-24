@@ -1,0 +1,18 @@
+--- a/src/network/res_msend.c
++++ b/src/network/res_msend.c
+@@ -150,6 +150,15 @@
+ 	}
+ 
+ 	sa.sin.sin_family = family;
++	/* A local-only resolver needs no externally bound UDP socket. */
++	if (family == AF_INET && nns) {
++		int local = 1;
++		for (i=0; i<nns; i++)
++			if (ns[i].sin.sin_family != AF_INET ||
++			    (ntohl(ns[i].sin.sin_addr.s_addr) >> 24) != 127)
++				local = 0;
++		if (local) sa.sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++	}
+ 	if (fd < 0 || bind(fd, (void *)&sa, sl) < 0) {
+ 		if (fd >= 0) close(fd);
+ 		pthread_setcancelstate(cs, 0);

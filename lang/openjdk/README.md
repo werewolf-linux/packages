@@ -59,12 +59,14 @@ Some exception text names the obsolete `/etc/werewolf/allow/java` path; use
 
 `CLASSPATH` still applies without `-cp`/`-jar`; set the class path explicitly.
 `JDK_AOT_VM_OPTIONS` still applies with `-XX:AOTMode=create`; `_JAVA_LAUNCHER_DEBUG`
-still traces the launcher; `_JAVA_SPLASH_FILE`/`_JAVA_SPLASH_JAR` still select splash images.
+still traces the launcher. The headless build omits splash-screen support.
 `inline`/`writable-source` names accepted by forms have no Java enforcement yet:
 jshell, writable classes/JARs, generated classes and custom loaders remain available.
 Process execution remains subject to OS/Werewolf policy, without a Java `exec` gate.
 
-Keep Wolfi's commit, patches, configure options, toolchain, JDK/JRE builds and JIT.
+Keep Wolfi's commit, patches, toolchain, JDK/JRE builds and JIT. Add
+`--enable-headless-only` to omit desktop windows and X11 integration; retain
+fontconfig, fonts and image codecs for server-side text and image rendering.
 Fetch the locked commit from `jdk27u`, with mainline `jdk` as fallback.
 Ship the JDK, JRE and default-jdk/default-jvm selectors. Omit demos, the separate
 jmods package/build target and OCI-entrypoint compatibility/download; remove demo files.

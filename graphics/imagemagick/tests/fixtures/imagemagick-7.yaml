@@ -1,0 +1,160 @@
+package:
+  name: imagemagick-7
+  version: "7.1.2.34" # when bumping this version also bump php-*-imagick
+  epoch: 0 # glibc: 2.43->2.44
+  description: ImageMagick® is a free, open-source software suite, used for editing and manipulating digital images.
+  copyright:
+    - license: GPL-3.0-only
+  dependencies:
+    provides:
+      - imagemagick=${{package.full-version}}
+    runtime:
+      - libgomp
+  resources:
+    cpu: "2"
+    memory: 7Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+
+environment:
+  contents:
+    packages:
+      - autoconf
+      - automake
+      - build-base
+      - busybox
+      - ca-certificates-bundle
+      - chrpath
+      - fftw-dev
+      - fontconfig-dev
+      - freetype-dev
+      - ghostscript-dev
+      - glibc-2.44-dev
+      - lcms2-dev
+      - libheif-dev
+      - libjpeg-turbo-dev
+      - libpng-dev
+      - libtool
+      - libwebp-dev
+      - libx11-dev
+      - libxext-dev
+      - libxml2-dev
+      - openjpeg-dev
+      - pango-dev
+      - perl-dev
+      - tiff-dev
+      - zlib-dev
+
+var-transforms:
+  - from: ${{package.version}}
+    match: \.([^\[.-]*)$
+    replace: "-$1"
+    to: mangled-package-version
+
+pipeline:
+  - uses: git-checkout
+    with:
+      expected-commit: a0c4bf729a26a5c2feb28b0365b47a8db736078a
+      repository: https://github.com/ImageMagick/ImageMagick.git
+      tag: ${{vars.mangled-package-version}}
+
+  - uses: autoconf/configure
+
+  - uses: autoconf/make
+
+  - uses: autoconf/make-install
+
+  - uses: strip
+
+subpackages:
+  - name: ${{package.name}}-doc
+    dependencies:
+      provides:
+        - imagemagick-doc=${{package.full-version}}
+    description: "ImageMagick documentation and manpages"
+    pipeline:
+      - uses: split/manpages
+      - runs: |
+          mkdir -p "${{targets.subpkgdir}}"/usr/share
+          mv "${{targets.destdir}}"/usr/share/doc/ "${{targets.subpkgdir}}"/usr/share
+    test:
+      pipeline:
+        - uses: test/tw/docs
+
+  - name: ${{package.name}}-static
+    dependencies:
+      provides:
+        - imagemagick-static=${{package.full-version}}
+    description: ImageMagick static libraries
+    pipeline:
+      - uses: split/static
+    test:
+      pipeline:
+        - uses: test/tw/staticpackage
+
+  - name: ${{package.name}}-dev
+    description: ImageMagick dev headers
+    pipeline:
+      - uses: split/dev
+    dependencies:
+      provides:
+        - imagemagick-dev=${{package.full-version}}
+      runtime:
+        - ${{package.name}}
+    test:
+      pipeline:
+        - uses: test/tw/devpackage
+        - uses: test/tw/ver-check
+          with:
+            bins: |
+              MagickCore-config
+              MagickWand-config
+            version: ${{vars.mangled-package-version}}
+        - runs: |
+            Magick++-config --version
+        - uses: test/pkgconf
+        - uses: test/tw/ldd-check
+          with:
+            packages: imagemagick-7-dev
+
+update:
+  enabled: true
+  version-transform:
+    - match: "-"
+      replace: .
+  github:
+    identifier: ImageMagick/ImageMagick
+    use-tag: true
+    tag-filter-prefix: "7."
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: |
+          animate
+          compare
+          composite
+          convert
+          display
+          identify
+          import
+          magick
+          magick-script
+          mogrify
+          montage
+        version: ${{vars.mangled-package-version}}
+    - uses: test/tw/help-check
+      with:
+        bins: |
+          stream
+          convert
+          magick
+          magick-script
+          montage
+    - runs: |
+        # Confirm HEIC format support
+        magick -list format | grep 'HEIC \+rw'
+    - uses: test/tw/ldd-check
+    - uses: test/no-docs

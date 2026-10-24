@@ -8,7 +8,7 @@
 package:
   name: vaultwarden
   version: 1.37.4
-  epoch: 2
+  epoch: 3
   description: Bitwarden-compatible password manager server
   copyright:
     - license: AGPL-3.0-only
@@ -26,9 +26,11 @@ environment:
       - build-base
       - busybox
       - ca-certificates-bundle
+      - curl
       - cargo-auditable
       - openssl-dev
       - pkgconf
+      - patch
       - rust-1.98
       - sqlite-dev
 
@@ -41,7 +43,11 @@ pipeline:
   # SQLite and OpenSSL from Wolfi, dynamically; mimalloc in its secure mode
   # (guard pages, encrypted free lists), compiled in.
   - runs: |
+      patch --batch --fuzz=0 -p1 < http-features.patch
       VW_VERSION=${{package.version}} cargo auditable build --release --locked --features sqlite_system,enable_mimalloc
+      cargo tree --locked --edges normal --prefix none --format '{p}' --features sqlite_system,enable_mimalloc > /tmp/runtime-crates
+      if grep -E '^(brotli|brotli-decompressor|zstd|zstd-sys) ' /tmp/runtime-crates; then exit 1; fi
+      sh consumers.sh
       install -Dm755 target/release/vaultwarden ${{targets.destdir}}/usr/bin/vaultwarden
 
   - uses: strip

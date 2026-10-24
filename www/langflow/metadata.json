@@ -5,12 +5,15 @@
     "lock": "langflow"
   },
   "hardening": {
-    "minimized": false,
+    "minimized": true,
     "pledge": false,
-    "minimized_reason": "No feature-minimization claim has been established for this package.",
+    "minimized_reason": "Omit external tracing integrations and instrumentation, uvloop, runtime developer/test tools, and optional IBM Db2, Oracle, Cassandra and DuckDB drivers; retain native graph traces, SQLite, Chroma and common model clients.",
     "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "langflow.yaml"
+      "langflow.yaml",
+      "minimal-requirements.py",
+      "native-tracing.patch",
+      "consumers.py"
     ]
   },
   "wolfi": {

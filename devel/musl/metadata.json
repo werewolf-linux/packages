@@ -1,0 +1,36 @@
+{
+  "update": {
+    "source": "github-tags",
+    "repo": "ifduyue/musl",
+    "prefix": "v",
+    "reason": "Use the upstream mirror for release tags; recipe inputs come from the official musl release archive. New releases must apply the policy patch and pass the resolver probes."
+  },
+  "hardening": {
+    "minimized": false,
+    "pledge": false,
+    "minimized_reason": "Retain the full musl ABI. The APK ships only the shared runtime, with no headers, static archives or compiler wrappers.",
+    "pledge_reason": "The resolver binding change does not implement a capability policy; service confinement remains in Werewolf forms.",
+    "evidence": [
+      "musl.yaml",
+      "0002-local-resolver-bind.patch",
+      "tests/resolver.c"
+    ]
+  },
+  "wolfi": {
+    "relationship": "independent",
+    "recipes": [],
+    "changes": [
+      {
+        "what": "An opt-in musl shared runtime with the upstream CVE-2026-107891 fix and loopback-bound UDP resolver sockets when all configured IPv4 nameservers are loopback.",
+        "why": "Programs using musl with Werewolf\u2019s local DNS proxy need no externally bound DNS socket. A private install path lets forms adopt this without replacing the system libc.",
+        "evidence": [
+          "musl.yaml",
+          "0001-regcomp-overflow.patch",
+          "0002-local-resolver-bind.patch",
+          "tests/resolver.c"
+        ]
+      }
+    ],
+    "removal_condition": "Upstream musl provides equivalent local resolver socket binding and a maintained runtime suitable for these forms."
+  }
+}

@@ -8,7 +8,7 @@
 package:
   name: postdoc
   version: "0.2.0_git20261023"
-  epoch: 1
+  epoch: 2
   description: Worker and server coordination for the Atomdrift analysis fleet
   copyright:
     - license: Apache-2.0
@@ -42,7 +42,13 @@ pipeline:
   # environment's CA bundle and proxy as the rest of the build does.
   - runs: |
       export CARGO_NET_GIT_FETCH_WITH_CLI=true
-      cargo auditable build --release --locked
+      cargo auditable build --release --locked --no-default-features --features cleave-breadcrumbs
+      cargo tree --locked --no-default-features --features cleave-breadcrumbs --edges normal --format '{p} {f}' > /tmp/runtime-features
+      if grep tikv-jemalloc /tmp/runtime-features | grep -q profiling; then
+        echo "unexpected jemalloc profiling in the default server" >&2
+        exit 1
+      fi
+      target/release/postdoc --help
       install -Dm755 target/release/postdoc ${{targets.destdir}}/usr/bin/postdoc
 
   - uses: strip

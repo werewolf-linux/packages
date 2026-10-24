@@ -1,7 +1,7 @@
 package:
   name: langflow
   version: "1.13.0"
-  epoch: 3
+  epoch: 4
   description: Langflow editor, API and local CPU inference on hardened Python
   copyright:
     - license: MIT
@@ -27,8 +27,8 @@ environment:
       - ca-certificates-bundle
       - python-3.15
       - python-3.15-dev
-      - libev-dev
       - uv
+      - patch
   environment:
     CC: clang
     CXX: clang++
@@ -59,13 +59,14 @@ pipeline:
   - runs: |
       # Use CP315 wheel tags. Only metadata's Python upper bounds are bypassed;
       # no CP314 binary or alternate interpreter is installed.
+      python3.15 minimal-requirements.py requirements.txt /tmp/minimal-requirements.txt
       python3.15 -m venv --system-site-packages /usr/lib/langflow
       # FastUUID's PyO3 0.26 supports Python through 3.14. Its documented
       # stable ABI mode is forward compatible; scope this to that build alone.
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 /usr/lib/langflow/bin/python -m pip install \
         --no-deps --require-hashes --no-binary=fastuuid -r fastuuid-requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
-        --require-hashes --prefer-binary --only-binary=apsw,chromadb -r requirements.txt
+        --require-hashes --prefer-binary --only-binary=apsw,chromadb -r /tmp/minimal-requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
         langflow-1.13.0-py3-none-any.whl langflow_base-1.13.0-py3-none-any.whl lfx-1.13.0-py3-none-any.whl
       # APSW's wheel bundles non-PIE SQLite diagnostic executables. Langflow
@@ -73,6 +74,8 @@ pipeline:
       rm -rf /usr/lib/langflow/lib/python3.15/site-packages/apsw/sqlite_extra_binaries
       /usr/lib/langflow/bin/python -P -c 'import fastuuid; value=fastuuid.uuid4(); assert fastuuid.UUID(str(value)) == value'
       /usr/lib/langflow/bin/python port-python.py /usr/lib/langflow/lib/python3.15/site-packages
+      patch --batch --fuzz=0 -p1 -d /usr/lib/langflow/lib/python3.15/site-packages < native-tracing.patch
+      /usr/lib/langflow/bin/python consumers.py
       # Import the complete API during packaging, so missing runtime providers
       # and interpreter compatibility errors fail before an image is shipped.
       cp check-import.py /usr/lib/langflow/check-import.py

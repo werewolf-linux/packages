@@ -1,0 +1,17 @@
+--- a/langflow/services/tracing/service.py
++++ b/langflow/services/tracing/service.py
+@@ -310,14 +310,7 @@
+             return
+ 
+         for initialize_tracer in (
+-            self._initialize_langsmith_tracer,
+-            self._initialize_langwatch_tracer,
+-            self._initialize_langfuse_tracer,
+-            self._initialize_arize_phoenix_tracer,
+-            self._initialize_opik_tracer,
+-            self._initialize_traceloop_tracer,
+             self._initialize_native_tracer,
+-            self._initialize_openlayer_tracer,
+         ):
+             try:
+                 initialize_tracer(trace_context)
