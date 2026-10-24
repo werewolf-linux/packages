@@ -66,7 +66,7 @@ func (c *Client) locks(ctx context.Context, dir string, p Policy, release Releas
 	case "langflow":
 		// Resolve the release's dependency metadata, including the exact
 		// langflow-base and lfx it requires, against our interpreter overrides.
-		if err := os.WriteFile(filepath.Join(dir, "requirements.in"), []byte("langflow=="+release.Version+"\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "requirements.in"), []byte("langflow=="+release.Version+"\nchromadb\n"), 0o644); err != nil {
 			return err
 		}
 		// Resolve against upstream's supported Python range. The recipe

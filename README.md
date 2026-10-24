@@ -170,9 +170,11 @@ imports, n8n's native SQLite and isolate modules, model parsing and ONNX CPU
 inference with invalid-shape and unknown-input rejection. The ONNX fixture comes
 from Werewolf's form tests. APK installation uses unsigned local test indexes;
 release artifact validation and signing still use the normal authenticated path.
-Runtime checks run as UID 1000 with the installed root and test fixtures mounted
-read-only, and writable scratch in `/tmp`. Python checks also prove inline code
+Runtime checks run offline as UID 1000 with the installed root and test fixtures
+mounted read-only, and writable scratch in `/tmp`. Python checks also prove inline code
 and scripts on writable mounts remain refused.
+Langflow also checks SQLite full-text search and offline MiniLM embeddings using
+the packaged model, with its form's `python:native` allowance.
 Other contexts retain native build and APK validation. These are package smoke
 checks; full service, database migration and appliance security checks remain in
 Werewolf's form suites.

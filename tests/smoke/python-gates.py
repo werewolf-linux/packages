@@ -9,7 +9,7 @@ assert os.geteuid() == 1000
 assert os.statvfs(__file__).f_flag & os.ST_RDONLY
 assert os.statvfs(sys.executable).f_flag & os.ST_RDONLY
 capabilities = dict(line.split(':', 1) for line in Path('/proc/self/status').read_text().splitlines())
-for field in ('CapInh', 'CapPrm', 'CapEff', 'CapAmb'):
+for field in ('CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb'):
     assert int(capabilities[field], 16) == 0, (field, capabilities[field])
 
 def refused(args, reason):

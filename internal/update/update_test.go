@@ -395,6 +395,10 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 	if err := c.locks(context.Background(), dir, Policy{Lock: "langflow"}, Release{Version: "1.13.0"}, run); err != nil {
 		t.Fatal(err)
 	}
+	inputs, err := os.ReadFile(filepath.Join(dir, "requirements.in"))
+	if err != nil || !strings.Contains(string(inputs), "\nchromadb\n") {
+		t.Fatalf("embedding dependency lost during update: %s (%v)", inputs, err)
+	}
 	data, _ := os.ReadFile(path)
 	if strings.Contains(string(data), "1.12.6") {
 		t.Fatalf("stale wheel pin: %s", data)

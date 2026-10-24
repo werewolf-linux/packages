@@ -20,6 +20,7 @@ type spec struct {
 	Packages []string `json:"packages"`
 	Runs     string   `json:"runs"`
 	Allow    []string `json:"allow,omitempty"`
+	Runtime  string   `json:"runtime,omitempty"`
 }
 
 func main() {
@@ -80,7 +81,18 @@ func check(name, arch string) error {
 	}
 	meta := recipe.Package
 	version := fmt.Sprintf("%s-r%d", meta.Version, meta.Epoch)
-	dir := filepath.Join(root, "build/smoke", name, arch)
+	base := filepath.Join(root, "build/smoke", name)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp(base, arch+"-")
+	if err != nil {
+		return err
+	}
+	// Test roots can be gigabytes. A runner's /tmp may be a small tmpfs.
+	if err := os.Setenv("TMPDIR", dir); err != nil {
+		return err
+	}
 	repository := filepath.Join(dir, "repository")
 	if err := os.MkdirAll(filepath.Join(repository, arch), 0o755); err != nil {
 		return err
@@ -104,12 +116,20 @@ func check(name, arch string) error {
 	packages := append([]string{"busybox", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
 	mutations := []map[string]any{}
 	if len(s.Allow) != 0 {
-		mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node", "type": "directory", "permissions": 0o755})
+		runtime := s.Runtime
+		if runtime == "" {
+			runtime = "node"
+		}
+		if runtime != "node" && runtime != "python" {
+			return fmt.Errorf("unsupported test runtime: %s", runtime)
+		}
+		allowDir := "/etc/runtime-hardening/allow/all/" + runtime
+		mutations = append(mutations, map[string]any{"path": allowDir, "type": "directory", "permissions": 0o755})
 		for _, allow := range s.Allow {
-			if allow != "native" && allow != "writable-source" {
-				return fmt.Errorf("unsupported Node test allowance: %s", allow)
+			if allow != "native" && !(runtime == "node" && allow == "writable-source") {
+				return fmt.Errorf("unsupported %s test allowance: %s", runtime, allow)
 			}
-			mutations = append(mutations, map[string]any{"path": "/etc/runtime-hardening/allow/all/node/" + allow, "type": "empty-file", "permissions": 0o444})
+			mutations = append(mutations, map[string]any{"path": allowDir + "/" + allow, "type": "empty-file", "permissions": 0o444})
 		}
 	}
 	config := map[string]any{
@@ -139,7 +159,7 @@ func check(name, arch string) error {
 // namespace makes the runtime and fixtures read-only, with scratch in /tmp.
 func smokeCommand(runs string) string {
 	runs = "test \"$(id -u)\" -ne 0\n" + runs
-	return "exec bwrap --unshare-user --unshare-pid --die-with-parent " +
+	return "exec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
 		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"

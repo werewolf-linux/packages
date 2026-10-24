@@ -65,7 +65,7 @@ pipeline:
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 /usr/lib/langflow/bin/python -m pip install \
         --no-deps --require-hashes --no-binary=fastuuid -r fastuuid-requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
-        --require-hashes --prefer-binary --only-binary=apsw -r requirements.txt
+        --require-hashes --prefer-binary --only-binary=apsw,chromadb -r requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
         langflow-1.13.0-py3-none-any.whl langflow_base-1.13.0-py3-none-any.whl lfx-1.13.0-py3-none-any.whl
       /usr/lib/langflow/bin/python -P -c 'import fastuuid; value=fastuuid.uuid4(); assert fastuuid.UUID(str(value)) == value'

@@ -11,3 +11,5 @@ setuptools>=83,<84
 clickhouse-connect>=1.11,<2
 # CP315 wheels avoid the older sdist's obsolete SQLite extension download.
 apsw==3.54.1.0
+# The appliance launcher and offline embedding test use Chroma's MiniLM provider.
+chromadb>=1.5.9,<2

@@ -62,6 +62,8 @@ jobs:
       - name: Build and validate unsigned APKs
         run: |
           set -o pipefail
+          # Melange binds the compiler cache only if the directory exists.
+          scripts/ci-root mkdir -p build/cache/melange
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
             python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee build/build.log
