@@ -1,0 +1,23 @@
+--- a/vendor/yiisoft/yii/framework/vendors/htmlpurifier/HTMLPurifier.standalone.php
++++ b/vendor/yiisoft/yii/framework/vendors/htmlpurifier/HTMLPurifier.standalone.php
+@@ -2792,3 +2792,3 @@
+         $contents = file_get_contents(HTMLPURIFIER_PREFIX . '/HTMLPurifier/ConfigSchema/schema.ser');
+-        $r = unserialize($contents);
++        $r = unserialize($contents, ["allowed_classes" => [self::class, HTMLPurifier_PropertyList::class, stdClass::class]]);
+         if (!$r) {
+@@ -3349,3 +3349,3 @@
+         $method = $config->get('Cache.DefinitionImpl');
+-        if ($method === null) {
++        if ($method === null || $method === 'Serializer') {
+             return new HTMLPurifier_DefinitionCache_Null($type);
+@@ -4465,3 +4465,3 @@
+         }
+-        $this->table = unserialize(file_get_contents($file));
++        $this->table = unserialize(file_get_contents($file), ["allowed_classes" => false]);
+     }
+--- a/application/core/LSYii_HtmlPurifier.php
++++ b/application/core/LSYii_HtmlPurifier.php
+@@ -39,2 +39,3 @@
+         $instance->options = array(
++            'Cache.DefinitionImpl' => null, // No writable serialized definitions.
+             'AutoFormat.RemoveEmpty' => false,

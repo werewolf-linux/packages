@@ -1,8 +1,10 @@
 """Exercise the API import and the SQLite binding used by SQLite flows."""
 import apsw
 from langflow.main import setup_app
+from litellm.router_strategy.complexity_router.config import ComplexityTier
 
 assert callable(setup_app)
+assert ComplexityTier.SIMPLE.value == "SIMPLE"
 with apsw.Connection(":memory:") as connection:
     connection.execute("CREATE VIRTUAL TABLE documents USING fts5(body)")
     connection.execute("INSERT INTO documents VALUES ('werewolf sqlite check')")

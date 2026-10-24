@@ -10,7 +10,7 @@
 package:
   name: limesurvey
   version: 7.5.1
-  epoch: 1
+  epoch: 2
   description: Online survey tool
   copyright:
     - license: GPL-2.0-or-later
@@ -27,6 +27,7 @@ environment:
     packages:
       - busybox
       - ca-certificates-bundle
+      - patch
 
 pipeline:
   - uses: fetch
@@ -38,6 +39,9 @@ pipeline:
   - runs: |
       unzip -q limesurvey${{package.version}}+${{vars.build}}.zip
       cd limesurvey
+      # The shipped schema has only HTMLPurifier_ConfigSchema, PropertyList and stdClass;
+      # keep writable HTML Purifier definition caches disabled.
+      patch -p1 --fuzz=0 < ../serialized-cache.patch
       grep -q "versionnumber'\] = '${{package.version}}'" application/config/version.php
       # Not served or run on the machine: the release notes (they name the
       # version), Apache's files, the samples, and the trees that become

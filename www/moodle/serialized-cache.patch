@@ -1,0 +1,74 @@
+--- a/public/lib/htmlpurifier/HTMLPurifier/ConfigSchema.php
++++ b/public/lib/htmlpurifier/HTMLPurifier/ConfigSchema.php
+@@ -71,3 +71,3 @@
+         $contents = file_get_contents(HTMLPURIFIER_PREFIX . '/HTMLPurifier/ConfigSchema/schema.ser');
+-        $r = unserialize($contents);
++        $r = unserialize($contents, ["allowed_classes" => [self::class, HTMLPurifier_PropertyList::class, stdClass::class]]);
+         if (!$r) {
+--- a/public/lib/htmlpurifier/HTMLPurifier/EntityLookup.php
++++ b/public/lib/htmlpurifier/HTMLPurifier/EntityLookup.php
+@@ -25,3 +25,3 @@
+         }
+-        $this->table = unserialize(file_get_contents($file));
++        $this->table = unserialize(file_get_contents($file), ["allowed_classes" => false]);
+     }
+--- a/public/lib/weblib.php
++++ b/public/lib/weblib.php
+@@ -1113,4 +1113,3 @@
+         $config->set('CSS.Proprietary', true);
+-        $config->set('Cache.SerializerPath', $cachedir);
+-        $config->set('Cache.SerializerPermissions', $CFG->directorypermissions);
++        $config->set('Cache.DefinitionImpl', null); // No writable serialized definitions.
+         $config->set('Core.NormalizeNewlines', false);
+--- a/public/cache/classes/cache.php
++++ b/public/cache/classes/cache.php
+@@ -919,3 +919,3 @@
+             // We unserialise immediately so that we don't have to do it every time on get.
+-            $data = unserialize($data);
++            $data = unserialize($data, ["allowed_classes" => [\stdClass::class, \database_column_info::class, \core_cache\version_wrapper::class]]);
+         } else if (!is_scalar($data)) {
+@@ -1349,3 +1349,3 @@
+             } else if ($this->staticaccelerationarray[$key]['serialized']) {
+-                $result = unserialize($data);
++                $result = unserialize($data, ["allowed_classes" => [\stdClass::class, \database_column_info::class, \core_cache\version_wrapper::class]]);
+             } else {
+--- a/public/cache/stores/file/lib.php
++++ b/public/cache/stores/file/lib.php
+@@ -1120,3 +1120,3 @@
+             case self::SERIALIZER_PHP:
+-                return unserialize($value);
++                return unserialize($value, ["allowed_classes" => [\stdClass::class, \database_column_info::class, \core_cache\version_wrapper::class]]);
+             case self::SERIALIZER_IGBINARY:
+@@ -1127,3 +1127,3 @@
+         debugging("Unknown or unavailable serializer: {$this->serializer}");
+-        return unserialize($value);
++        return unserialize($value, ["allowed_classes" => [\stdClass::class, \database_column_info::class, \core_cache\version_wrapper::class]]);
+     }
+--- a/public/cache/stores/static/lib.php
++++ b/public/cache/stores/static/lib.php
+@@ -262,3 +262,3 @@
+         } else {
+-            return unserialize($str);
++            return unserialize($str, ["allowed_classes" => [\stdClass::class, \database_column_info::class, \core_cache\version_wrapper::class]]);
+         }
+--- a/public/lib/scssphp/src/Compiler.php
++++ b/public/lib/scssphp/src/Compiler.php
+@@ -824,10 +824,3 @@
+-                    // remove duplicates
+-                    array_walk($selectors, function (&$value) {
+-                        $value = serialize($value);
+-                    });
+-
+-                    $selectors = array_unique($selectors);
+-
+-                    array_walk($selectors, function (&$value) {
+-                        $value = unserialize($value);
+-                    });
++                    // Keep the original selectors; only their comparison keys are strings.
++                    $keys = array_unique(array_map('serialize', $selectors));
++                    $selectors = array_intersect_key($selectors, $keys);
+--- a/public/course/classes/modinfo.php
++++ b/public/course/classes/modinfo.php
+@@ -679,1 +679,1 @@
+-        $this->course = fullclone($course);
++        $this->course = unserialize(serialize($course), ['allowed_classes' => [\stdClass::class]]);
