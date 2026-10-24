@@ -81,7 +81,8 @@ def derive(pkg, config, lock):
         raise ValueError('Review changed upstream curl identity')
     pipeline = config['pipeline']
     if [s.get('uses') for s in pipeline] != [
-            'git-checkout', 'autoconf/configure', 'autoconf/make', 'autoconf/make-install', 'strip']:
+            'git-checkout', 'autoconf/configure', 'autoconf/make', None, 'autoconf/make-install', 'strip'] or \
+            pipeline[3].get('name') != 'Run upstream test suite' or not pipeline[3].get('runs'):
         raise ValueError('Review changed upstream curl pipeline')
     if pipeline[0]['with'] != {'repository': UPSTREAM + '.git', 'tag': 'curl-${{vars.mangled-package-version}}',
                               'expected-commit': lock['source_commit']}:

@@ -75,6 +75,22 @@ class Derivation(unittest.TestCase):
         pkg, upstream, derived = self.derived()
         verify.check(pkg, upstream, derived)
 
+    def test_upstream_fontconfig_dependency_is_kept_once_in_jdk_and_jre(self):
+        pkg = packages.Package('openjdk', root=self.root)
+        upstream = yaml.safe_load((Path(__file__).parent / 'fixtures/openjdk-27.0.1.yaml').read_text())
+        lock = dict(LOCK, version=str(upstream['package']['version']),
+                    source_commit=pkg.hooks.source_commit(upstream))
+        derived = pkg.hooks.derive(pkg, copy.deepcopy(upstream), lock)
+        verify.check(pkg, upstream, derived)
+        for name in ('jdk', 'jre'):
+            with self.subTest(package=name):
+                relaxed = copy.deepcopy(derived)
+                section = relaxed['package'] if name == 'jdk' else relaxed['subpackages'][0]
+                self.assertEqual(1, section['dependencies']['runtime'].count('libfontconfig1'))
+                section['dependencies']['runtime'].remove('libfontconfig1')
+                with self.assertRaises(AssertionError):
+                    verify.check(pkg, upstream, relaxed)
+
     def test_omitted_packages_do_not_build_jmods_or_fetch_a_container_entrypoint(self):
         _, _, derived = self.derived()
         self.assertIn('make jdk-image legacy-jre-image\n', [s.get('runs') for s in derived['pipeline']])
