@@ -16,6 +16,14 @@ LOCK = dict(recipe='ffmpeg-9.0.yaml', version='9.0.2', epoch=3, revision=1,
 
 
 class FFmpeg(unittest.TestCase):
+    def test_upstream_fate_suite_stays_in_the_build(self):
+        source = copy.deepcopy(SOURCE)
+        suite = {'uses': 'upstream-tests/ffmpeg-fate'}
+        source['pipeline'].insert(3, suite)
+        result = PKG.hooks.derive(PKG, copy.deepcopy(source), LOCK)
+        verify.check(PKG, source, result)
+        self.assertEqual(suite, result['pipeline'][3])
+
     def test_codecs_and_conversion_tests_remain(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(SOURCE), LOCK)
         verify.check(PKG, SOURCE, result)

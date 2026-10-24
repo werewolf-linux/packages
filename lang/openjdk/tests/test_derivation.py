@@ -75,6 +75,13 @@ class Derivation(unittest.TestCase):
         pkg, upstream, derived = self.derived()
         verify.check(pkg, upstream, derived)
 
+    def test_upstream_font_library_is_not_duplicated(self):
+        def add(recipe):
+            recipe['subpackages'][0]['dependencies']['runtime'].append('libfontconfig1')
+        pkg, upstream, derived = self.derived(add)
+        verify.check(pkg, upstream, derived)
+        self.assertEqual(1, derived['subpackages'][0]['dependencies']['runtime'].count('libfontconfig1'))
+
     def test_omitted_packages_do_not_build_jmods_or_fetch_a_container_entrypoint(self):
         _, _, derived = self.derived()
         self.assertIn('make jdk-image legacy-jre-image\n', [s.get('runs') for s in derived['pipeline']])

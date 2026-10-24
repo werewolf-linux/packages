@@ -173,7 +173,8 @@ def check(pkg, upstream, derived):
         p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]}}
         for s in subs]
     expected_subpackages = deepcopy(retained_subpackages(upstream))
-    expected_subpackages[0]['dependencies']['runtime'].append('libfontconfig1')
+    if 'libfontconfig1' not in expected_subpackages[0]['dependencies']['runtime']:
+        expected_subpackages[0]['dependencies']['runtime'].append('libfontconfig1')
     assert strip(expected_subpackages) == strip(derived['subpackages']), 'an upstream subpackage changed'
     for test in upstream['test']['pipeline']:
         assert test in derived['test']['pipeline'], "Wolfi's package test removed"

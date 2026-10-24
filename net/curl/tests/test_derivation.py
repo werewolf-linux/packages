@@ -16,6 +16,14 @@ LOCK = dict(recipe='curl.yaml', version='8.23.0', epoch=1, revision=1,
 
 
 class Curl(unittest.TestCase):
+    def test_upstream_suite_stays_in_the_build(self):
+        source = copy.deepcopy(FIXTURE)
+        suite = {'name': 'Run upstream test suite', 'runs': 'make test\n'}
+        source['pipeline'].insert(3, suite)
+        result = PKG.hooks.derive(PKG, copy.deepcopy(source), LOCK)
+        verify.check(PKG, source, result)
+        self.assertEqual(suite, result['pipeline'][3])
+
     def test_only_cli_headers_and_shared_library_are_published(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
         verify.check(PKG, FIXTURE, result)

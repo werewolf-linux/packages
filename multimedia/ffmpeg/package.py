@@ -67,7 +67,10 @@ def derive(pkg, config, lock):
     if config['package']['name'] != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed FFmpeg identity')
     steps = config['pipeline']
-    if [s.get('uses') for s in steps] != ['git-checkout', None, 'autoconf/make', 'autoconf/make-install', None, 'strip']:
+    kinds = [s.get('uses') for s in steps]
+    prefix = ['git-checkout', None, 'autoconf/make']
+    suffix = ['autoconf/make-install', None, 'strip']
+    if kinds not in (prefix + suffix, prefix + ['upstream-tests/ffmpeg-fate'] + suffix):
         raise ValueError('Review changed FFmpeg build pipeline')
     if steps[0]['with'] != {'repository': 'https://github.com/FFmpeg/FFmpeg', 'expected-commit': lock['source_commit'], 'tag': 'n${{package.version}}'}:
         raise ValueError('Review changed source')
