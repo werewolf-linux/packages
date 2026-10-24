@@ -1,0 +1,19 @@
+--- a/pkg/cli/server/root.go
++++ b/pkg/cli/server/root.go
+@@ -28,6 +28,7 @@
+ 	"zotregistry.dev/zot/v2/pkg/api"
+ 	"zotregistry.dev/zot/v2/pkg/api/config"
+ 	"zotregistry.dev/zot/v2/pkg/api/constants"
++	"zotregistry.dev/zot/v2/pkg/buildinfo"
+ 	extconf "zotregistry.dev/zot/v2/pkg/extensions/config"
+ 	eventsconf "zotregistry.dev/zot/v2/pkg/extensions/config/events"
+ 	syncconf "zotregistry.dev/zot/v2/pkg/extensions/config/sync"
+@@ -258,7 +259,7 @@
+ 
+ 			if showVersion {
+ 				commit, binaryType, goVersion, _ := conf.GetVersionInfo()
+-				logger.Info().Str("distribution-spec", distspec.Version).Str("commit", commit).
++				logger.Info().Str("release", buildinfo.ReleaseTag).Str("distribution-spec", distspec.Version).Str("commit", commit).
+ 					Str("binary-type", binaryType).Str("go version", goVersion).Msg("version")
+ 			} else {
+ 				_ = cmd.Usage()

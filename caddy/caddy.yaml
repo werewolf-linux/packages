@@ -4,14 +4,14 @@
 # which werewolf's image build refuses (lib/image.zig). Built by melange
 # in Wolfi's environment with Wolfi's Go, static (no cgo) but for the
 # loader that relocates it, from the release tag's commit, with Wolfi's
-# build tags, so Go stamps the binary with its version for `caddy
-# version`. The welcome page and Caddyfile are the form's. Named apart
+# build tags and an explicit version stamp for `caddy version`.
+# The welcome page and Caddyfile are the form's. Named apart
 # from Wolfi's caddy, so a form gets this one or none. When Wolfi builds
 # Go as PIE, the form names Wolfi's caddy and this file goes.
 package:
   name: caddy-werewolf
   version: 2.11.7
-  epoch: 0
+  epoch: 1
   description: Fast, multi-platform web server with automatic HTTPS, position independent
   copyright:
     - license: Apache-2.0
@@ -38,9 +38,10 @@ pipeline:
   # The binary says how it was built; a build that lost PIE stops here.
   - runs: |
       CGO_ENABLED=0 go build -buildmode=pie -trimpath -tags netgo,osusergo \
-        -ldflags='-s -w' -o caddy ./cmd/caddy
+        -ldflags='-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v${{package.version}}' \
+        -o caddy ./cmd/caddy
       go version -m caddy | grep -q '^[[:space:]]*build[[:space:]]*-buildmode=pie$'
-      ./caddy version
+      ./caddy version | grep -F 'v${{package.version}}'
       install -Dm755 caddy ${{targets.destdir}}/usr/bin/caddy
 
 update:

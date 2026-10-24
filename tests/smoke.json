@@ -1,10 +1,10 @@
 {
   "authelia": {"runs": "authelia --version | grep -F '${{package.version}}'"},
-  "bugsink": {"runs": "/usr/lib/bugsink/bin/python -c 'import bugsink; from django.core.management import execute_from_command_line; assert callable(execute_from_command_line)'"},
+  "bugsink": {"runs": "/usr/lib/bugsink/bin/python python-gates.py\n/usr/lib/bugsink/bin/bugsink-manage --version"},
   "caddy": {"runs": "caddy version | grep -F 'v${{package.version}}'\ncaddy list-modules >/dev/null"},
   "continuwuity": {"runs": "conduwuit --version | grep -F '${{package.version}}'"},
   "keycloak": {"packages": ["openjdk-21-default-jvm"], "runs": "java @/usr/lib/keycloak/java.args --version | grep -F '${{package.version}}'"},
-  "langflow": {"runs": "/usr/lib/langflow/bin/python -P -c 'from langflow.main import setup_app; assert callable(setup_app)'"},
+  "langflow": {"packages": ["onnx-minilm-l6-v2"], "runs": "/usr/lib/langflow/bin/python -P python-gates.py\n/usr/lib/langflow/bin/python -P /usr/lib/langflow/check-import.py\n/usr/lib/langflow/bin/python -P /usr/lib/langflow/check-embedding.py", "runtime": "python", "allow": ["native"]},
   "mattermost": {"runs": "/usr/lib/mattermost/bin/mattermost version | grep -F '${{package.version}}'"},
   "miniflux": {"runs": "miniflux -version | grep -F '${{package.version}}'"},
   "mox": {"runs": "mox version | grep -F '${{package.version}}'"},
