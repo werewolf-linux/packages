@@ -51,3 +51,19 @@
 -            return unserialize($str);
 +            return unserialize($str, ["allowed_classes" => [\stdClass::class]]);
          }
+--- a/public/lib/scssphp/src/Compiler.php
++++ b/public/lib/scssphp/src/Compiler.php
+@@ -824,10 +824,3 @@
+-                    // remove duplicates
+-                    array_walk($selectors, function (&$value) {
+-                        $value = serialize($value);
+-                    });
+-
+-                    $selectors = array_unique($selectors);
+-
+-                    array_walk($selectors, function (&$value) {
+-                        $value = unserialize($value);
+-                    });
++                    // Keep the original selectors; only their comparison keys are strings.
++                    $keys = array_unique(array_map('serialize', $selectors));
++                    $selectors = array_intersect_key($selectors, $keys);
