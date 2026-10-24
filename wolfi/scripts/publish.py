@@ -30,6 +30,7 @@ from derive import derive
 from inputs import ROOT, verify, sha256
 import notes as generic_notes
 import packages
+import releases
 
 ARCHES = ('x86_64', 'aarch64')
 ENDPOINT = 'https://c860af766754fb92eec27bc723e6db5d.r2.cloudflarestorage.com'
@@ -279,7 +280,8 @@ def subjects(commits):
 def gather(pkg, artifacts, lock, records):
     # Facts for the shared notes: this build's packages, the previous release's
     # provenance and Wolfi's advisories. A package may gather its own.
-    wolfi = lock['version'] + '-r' + str(lock['epoch'])
+    wolfi = releases.baseline_version(lock)
+    source_version = lock['version'] + '-r' + str(lock['epoch'])
     previous = None
     pointer = download(pkg.public + 'current.json')
     if pointer is not None:
@@ -291,7 +293,8 @@ def gather(pkg, artifacts, lock, records):
         previous = {'version': pointer['version'], 'build_id': pointer['build_id'],
                     'commit': pointer['source_sha'],
                     'wolfi_version': old.get('source', {}).get('wolfi_version'),
-                    'source_commit': old.get('source', {}).get('source_commit')}
+                    'source_commit': old.get('source', {}).get('source_commit'),
+                    'source_version': old.get('source', {}).get('version', old.get('source', {}).get('wolfi_version'))}
     commits = []
     if previous is not None:
         found = lookup('repos/' + os.environ['GITHUB_REPOSITORY'] + '/compare/' + previous['commit'] +
@@ -304,7 +307,7 @@ def gather(pkg, artifacts, lock, records):
             [{'name': s['P'], 'version': s['V'], 'size': int(s['S'])} for s in stanzas(index)],
             key=lambda p: p['name'])}
     secdb = json.loads(download(generic_notes.SECDB))
-    stream = yaml.safe_load((pkg.inputs / 'upstream.yaml').read_text())['package']['name']
+    stream = releases.recipe(pkg, lock)['package']['name']
     return {'title': pkg.title, 'package': pkg.name, 'version': records[ARCHES[0]]['version'],
             'build_id': lock['build_id'], 'context_path': str(pkg.dir.relative_to(ROOT.parent)),
             'date': datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
@@ -312,13 +315,14 @@ def gather(pkg, artifacts, lock, records):
             'run': os.environ.get('GITHUB_SERVER_URL', 'https://github.com') + '/' +
                    os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
             'source': {'source_commit': lock['source_commit'], 'wolfi_commit': lock['wolfi_commit'],
+                       'version': source_version, 'release': lock.get('release'), 'kind': lock.get('source_kind', 'wolfi'),
                        'wolfi_version': wolfi, 'recipe': lock['recipe'], 'policy_revision': lock['revision'],
                        'upstream': pkg.hook('UPSTREAM')},
             'repository': {'stable': HARDENED, 'snapshot': pkg.public + 'builds/' + lock['build_id'],
                            'key_sha256': sha256(ROOT / 'release/packages.pub')},
             'patches': (pkg.dir / 'patches/series').read_text().split(), 'wolfi_inputs': lock['sha256'],
             'previous': previous, 'commits': commits,
-            'security': generic_notes.security(secdb, stream, previous['wolfi_version'] if previous else None, wolfi),
+            'security': generic_notes.security(secdb, stream, previous['source_version'] if previous else None, source_version),
             'architectures': architectures}
 
 def stage(pkg, artifacts, assets, lock, tag):

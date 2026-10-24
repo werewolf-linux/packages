@@ -18,7 +18,7 @@ class UpstreamDrift(unittest.TestCase):
         self.lock = {'recipe': 'imagemagick-7.yaml',
                      'source_commit': self.pkg.hooks.source_commit(self.config),
                      'version': str(self.config['package']['version']),
-                     'epoch': self.config['package']['epoch'], 'revision': 1}
+                     'epoch': self.config['package']['epoch'], 'revision': self.pkg.policy['revision']}
 
     def test_server_profile_keeps_document_and_image_consumers(self):
         result = self.pkg.hooks.derive(self.pkg, deepcopy(self.config), self.lock)
@@ -31,8 +31,8 @@ class UpstreamDrift(unittest.TestCase):
         probe = result['test']['pipeline'][-1]
         self.assertEqual(['ghostscript', 'ttf-dejavu'], probe['needs']['packages'])
         self.assertEqual((self.pkg.dir / 'tests/probe.sh').read_text(), probe['runs'])
-        self.assertEqual(1000, result['package']['epoch'])
-        self.assertEqual('7.1.2.34-r1000', self.pkg.hooks.full_version(self.lock))
+        self.assertEqual(self.lock['revision'] * 1000, result['package']['epoch'])
+        self.assertEqual(f"7.1.2.34-r{self.lock['revision'] * 1000}", self.pkg.hooks.full_version(self.lock))
         self.assertEqual({'imagemagick-7', 'imagemagick-7-doc', 'imagemagick-7-static', 'imagemagick-7-dev'},
                          packages.output_names(result))
 

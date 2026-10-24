@@ -1,7 +1,10 @@
 {
   "update": {
     "source": "wolfi",
-    "family": "openjdk-"
+    "family": "openjdk-",
+    "upstream": {
+      "source": "openjdk"
+    }
   },
   "hardening": {
     "minimized": true,

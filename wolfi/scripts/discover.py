@@ -70,7 +70,7 @@ def check(pkg, wolfi, github):
             return 'failed'
     lock = json.loads((pkg.inputs / 'upstream.lock.json').read_text())
     if github:
-        said = "Wolfi's {} {}-r{} builds with these protections again{}.".format(
+        said = "{} {}-r{} builds with these protections again{}.".format(
             pkg.title, lock['version'], lock['epoch'], ': ' + drift.run_url() if drift.run_url() else '')
         drift.resolve(pkg, False, said)
         if drift.fuzzy_patches(output):

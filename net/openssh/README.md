@@ -31,8 +31,16 @@ agent PKCS#11 support carried OpenSSH's own bugs.
 
 OpenSSL stays: P-256 security keys, including Apple's Secure Enclave keys, need its
 ECDSA. Wolfi already builds without Kerberos/GSSAPI, libsystemd and libfido2. The
-`openssh-pam-config` package is not published. There are no source patches:
-`patches/series` is empty.
+`openssh-pam-config` package is not published.
+
+Two patches. [0001](patches/0001-no-pty-reopen.patch): Werewolf runs sshd without
+`CAP_DAC_OVERRIDE`, so its root child cannot open a pty it has already given to the
+user. Where `TIOCSCTTY` made the pty the controlling tty, that reopen was redundant
+(the `/dev/tty` check follows), and is left out rather than logged as an error.
+[0002](patches/0002-no-default-listen-in-session.patch): sshd-session, which never
+listens, no longer resolves the default listen address for every connection when
+`ListenAddress` lines are queued; glibc's sort of that lookup asked netlink, which
+Werewolf refuses sshd, and each refusal was logged.
 
 ## Tests
 

@@ -71,13 +71,13 @@ def report(pkg, kind, log, lock, run):
     if kind == 'fuzz':
         fuzzy = fuzzy_patches(log)
         title = '{}: {} applies only with fuzz'.format(version, ', '.join(fuzzy) or 'a patch')
-        lead = ('Wolfi\'s {} builds, but {} applied only with fuzz: its context no longer matches the source '
+        lead = ('{} builds, but {} applied only with fuzz: its context no longer matches the source '
                 'exactly. Refresh it against this source before a later release moves it further. The '
                 'package\'s tests show the protection still holds.'.format(version, ', '.join(fuzzy) or 'a patch'))
     else:
         patch = failing_patch(log) if kind == 'patches' else None
         title = '{}: {}'.format(version, patch + ' no longer applies' if patch else BLOCKING[kind])
-        lead = ('Wolfi\'s {} no longer builds with Werewolf\'s protections: {}. Werewolf publishes no {} '
+        lead = ('{} no longer builds with Werewolf\'s protections: {}. Werewolf publishes no {} '
                 'build from this recipe until it is fixed.'.format(
                     version, patch + ' does not apply' if patch else BLOCKING[kind], pkg.title))
     body = '{}\n\n{}{}\n```\n{}\n```\n'.format(lead, facts, '- Run: ' + run + '\n' if run else '', quoted)

@@ -64,7 +64,7 @@ def probe(pkg):
 
 
 def derive(pkg, config, lock):
-    if config['package']['name'] != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if config['package']['name'] != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed FFmpeg identity')
     steps = config['pipeline']
     if [s.get('uses') for s in steps] != ['git-checkout', None, 'autoconf/make',
@@ -83,7 +83,7 @@ def derive(pkg, config, lock):
     config['test'] = retained_tests(config)
     config['test']['pipeline'].append(probe(pkg))
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
-    origin = 'wolfi-origin:' + config['package']['name'] + ':' + lock['version'] + '-r' + str(lock['epoch'])
+    origin = 'upstream-origin:' + config['package']['name'] + ':' + lock['version'] + '-r' + str(lock['epoch'])
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(origin)
     config['package']['dependencies']['provides'].append('ffmpeg-hardened=${{package.full-version}}')
@@ -100,6 +100,6 @@ def check(pkg, upstream, derived):
     assert derived['vars'] == upstream['vars'] and derived['data'] == upstream['data']
     subs = deepcopy(derived['subpackages'])
     for sub in subs:
-        sub['dependencies']['provides'] = [p for p in sub['dependencies']['provides'] if not p.startswith('wolfi-origin:')]
+        sub['dependencies']['provides'] = [p for p in sub['dependencies']['provides'] if not p.startswith('upstream-origin:')]
     assert subs == upstream['subpackages']
     assert derived['test']['pipeline'] == retained_tests(upstream)['pipeline'] + [probe(pkg)]

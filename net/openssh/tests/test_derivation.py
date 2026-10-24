@@ -7,6 +7,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3] / 'wolfi'
 sys.path.insert(0, str(ROOT / 'scripts'))
 import packages
+import patching
 import verify
 
 PKG = packages.Package('openssh')
@@ -44,12 +45,15 @@ class OpenSSH(unittest.TestCase):
         self.assertLessEqual({'openssh', 'openssh-server', 'openssh-client', 'openssh-keygen',
                               'openssh-sftp-server', 'openssh-server-config'}, names)
         for section in [result['package']] + result['subpackages']:
-            self.assertIn('wolfi-origin:openssh:10.6_p1-r0', section['dependencies']['provides'])
+            self.assertIn('upstream-origin:openssh:10.6_p1-r0', section['dependencies']['provides'])
         self.assertEqual(PKG.hooks.PROBED, result['test']['pipeline'][-1]['name'])
 
-    def test_wolfis_patch_and_tests_are_retained(self):
+    def test_wolfis_patch_and_tests_are_retained_and_ours_follow(self):
         upstream, result = self.derived()
         self.assertEqual(upstream['pipeline'][1], result['pipeline'][1])
+        self.assertEqual(patching.step(PKG.hooks.PATCHES), result['pipeline'][2])
+        self.assertEqual(['0001-no-pty-reopen.patch', '0002-no-default-listen-in-session.patch'],
+                         (PKG.dir / 'patches/series').read_text().split())
         self.assertEqual(upstream['test']['pipeline'], result['test']['pipeline'][:-1])
 
     def test_upstream_changes_stop_for_review(self):
@@ -68,7 +72,8 @@ class OpenSSH(unittest.TestCase):
     def test_relaxing_the_derived_build_is_rejected(self):
         upstream, result = self.derived()
         relaxations = (
-            lambda r: r['pipeline'][3]['with'].update(opts=r['pipeline'][3]['with']['opts'] + ' --with-pam'),
+            lambda r: r['pipeline'][4]['with'].update(opts=r['pipeline'][4]['with']['opts'] + ' --with-pam'),
+            lambda r: r['pipeline'].pop(2),
             lambda r: r['environment']['contents']['packages'].append('linux-pam-dev'),
             lambda r: r['test']['pipeline'].pop(),
             lambda r: r['subpackages'].append(next(

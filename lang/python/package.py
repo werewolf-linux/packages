@@ -149,7 +149,7 @@ def probe(pkg):
 
 def derive(pkg, config, lock):
     original = config['package']['name']
-    if original != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if original != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed upstream package identity before deriving')
     pipeline = config['pipeline']
     at = checkout(config)
@@ -195,7 +195,7 @@ def derive(pkg, config, lock):
     # CVE fixes against that (lib/prebuilt.zig), not against our epoch.
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(
-            'wolfi-origin:' + original + ':' + wolfi)
+            'upstream-origin:' + original + ':' + wolfi)
     config['test']['pipeline'].append({'name': 'Werewolf protections hold, and allowances take each back',
                                        'needs': {'packages': ['build-base']},
                                        'runs': probe(pkg)})
@@ -239,7 +239,7 @@ def check(pkg, upstream, derived):
     assert steps(upstream, (CLONE,)) == steps(derived, ours_only), 'an upstream build step changed'
     # Ours, apart from the wolfi-origin provides and the cleanup in -runtime.
     strip = lambda subs: [{**s, 'dependencies': {**s.get('dependencies', {}), 'provides': [
-        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]},
+        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('upstream-origin:')]},
         'pipeline': [x for x in s.get('pipeline', []) if x not in (prune(), omit_terminal_modules())]}
         for s in subs]
     assert strip(ours_for_c_ext(retained_subpackages(upstream))) == strip(derived['subpackages']), \

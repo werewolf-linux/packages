@@ -117,7 +117,7 @@ def derive(pkg, config, lock):
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
     config['package']['description'] += ' (Werewolf HTTP(S)-only policy)'
     for section in [config['package']] + config['subpackages']:
-        section.setdefault('dependencies', {}).setdefault('provides', []).append('wolfi-origin:curl:' + wolfi)
+        section.setdefault('dependencies', {}).setdefault('provides', []).append('upstream-origin:curl:' + wolfi)
     config['package']['dependencies']['provides'].append('curl-hardened=${{package.full-version}}')
     config['package']['dependencies']['runtime'].append('libcurl-hardened=${{package.full-version}}')
     lib = next(s for s in config['subpackages'] if s['name'] == 'libcurl-openssl4')
@@ -154,7 +154,7 @@ def check(pkg, upstream, derived):
             deps['runtime'] = [p for p in deps['runtime'] if p not in ('brotli-dev', 'nghttp2-dev')]
         cleaned = deepcopy(sub)
         provides = [p for p in cleaned['dependencies'].get('provides', [])
-                    if not p.startswith(('wolfi-origin:', 'libcurl-hardened='))]
+                    if not p.startswith(('upstream-origin:', 'libcurl-hardened='))]
         if provides:
             cleaned['dependencies']['provides'] = provides
         else:

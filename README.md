@@ -18,7 +18,9 @@ Every context has one [metadata.json](docs/metadata.md) describing its automatic
 update source, hardening evidence and divergence from Wolfi. CI rejects missing
 sources, unsupported handlers, unexplained divergences and invalid evidence.
 Applications track upstream releases; Wolfi overlays capture its exact recipes
-and apply small checked changes. Deliberately vulnerable demonstrations retain
+and independently advance to the latest upstream stable release with checked
+source and hardening changes. PostgreSQL follows the latest stable major through
+one unversioned context and package set. Deliberately vulnerable demonstrations retain
 real source metadata and an explicit update hold.
 
 ```sh

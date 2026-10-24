@@ -1,13 +1,15 @@
 """Wolfi's OpenSSH without PAM, SELinux, zlib or PKCS#11 support."""
 from pathlib import Path
+import shutil
 from derive import fetch
+import patching
 
 TITLE = 'OpenSSH'
 RECIPE = 'openssh'
 SOURCES = ('https://github.com/openssh/openssh-portable.git',)
 UPSTREAM = 'https://github.com/openssh/openssh-portable'
-# The policy is build options, not a patch: patches/series is empty.
-PATCHES = None
+# Build options, and two patches for sshd without CAP_DAC_OVERRIDE or netlink.
+PATCHES = 'patches'  # in the build context
 SUBPACKAGES = ('openssh-doc', 'openssh-keygen', 'openssh-keyscan', 'openssh-keysign',
                'openssh-sftp-server', 'openssh-pkcs11-helper', 'openssh-sk-helper',
                'openssh-server', 'openssh-client', 'openssh-service', 'openssh-server-config',
@@ -53,7 +55,7 @@ def full_version(lock):
 
 
 def context(pkg, destination):
-    """Nothing beside Wolfi's recipe files: the policy is in the recipe."""
+    shutil.copytree(pkg.dir / 'patches', destination / 'patches', dirs_exist_ok=True)
 
 
 def configure(options):
@@ -71,7 +73,7 @@ def probe(pkg):
 
 
 def derive(pkg, config, lock):
-    if (config['package']['name'] != Path(lock['recipe']).stem or
+    if (config['package']['name'] != Path(lock.get('effective_recipe', lock['recipe'])).stem or
             str(config['package']['version']) != lock['version']):
         raise ValueError('Review changed upstream OpenSSH identity')
     pipeline = config['pipeline']
@@ -91,6 +93,8 @@ def derive(pkg, config, lock):
         build.remove(name)
     pipeline[3]['with']['opts'] = configure(pipeline[3]['with']['opts'])
     pipeline[0] = fetch(lock['source_commit'], SOURCES)
+    # Ours after Wolfi's patch, before autoreconf.
+    pipeline.insert(2, patching.step(PATCHES))
     config['subpackages'] = [s for s in config['subpackages'] if s['name'] not in REMOVED]
     # Every package keeps its Wolfi name and outranks Wolfi's build of it.
     wolfi = lock['version'] + '-r' + str(lock['epoch'])
@@ -98,7 +102,7 @@ def derive(pkg, config, lock):
     config['package']['description'] += ' (Werewolf: no PAM, SELinux, zlib or PKCS#11)'
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(
-            'wolfi-origin:openssh:' + wolfi)
+            'upstream-origin:openssh:' + wolfi)
     config['test']['pipeline'].append(probe(pkg))
     config['update'] = {'enabled': False}
     return config
@@ -109,11 +113,13 @@ def check(pkg, upstream, derived):
         **upstream['environment']['contents'],
         'packages': [p for p in upstream['environment']['contents']['packages'] if p not in REMOVED_BUILD]}}
     assert derived['environment'] == environment, 'unreviewed build environment change'
-    assert derived['pipeline'][1:3] == upstream['pipeline'][1:3], "Wolfi's patch or autoreconf changed"
+    assert derived['pipeline'][1] == upstream['pipeline'][1], "Wolfi's patch changed"
+    assert derived['pipeline'][2] == patching.step(PATCHES), 'our patches apply after Wolfi\'s'
+    assert derived['pipeline'][3] == upstream['pipeline'][2], 'autoreconf changed'
     configure_step = {**upstream['pipeline'][3], 'with': {
         **upstream['pipeline'][3]['with'], 'opts': configure(upstream['pipeline'][3]['with']['opts'])}}
-    assert derived['pipeline'][3] == configure_step, 'the OpenSSH build options changed'
-    assert derived['pipeline'][4:] == upstream['pipeline'][4:], 'an upstream build step changed'
+    assert derived['pipeline'][4] == configure_step, 'the OpenSSH build options changed'
+    assert derived['pipeline'][5:] == upstream['pipeline'][4:], 'an upstream build step changed'
     assert derived['vars'] == upstream['vars'] and derived['var-transforms'] == upstream['var-transforms']
     assert derived['test']['pipeline'][:-1] == upstream['test']['pipeline'], 'upstream tests changed'
     assert derived['test']['pipeline'][-1] == probe(pkg), 'the OpenSSH policy probe changed'
@@ -122,7 +128,7 @@ def check(pkg, upstream, derived):
     for sub in derived['subpackages']:
         original = next(s for s in upstream['subpackages'] if s['name'] == sub['name'])
         cleaned = {**sub, 'dependencies': {**sub['dependencies']}}
-        provides = [p for p in cleaned['dependencies'].pop('provides') if not p.startswith('wolfi-origin:')]
+        provides = [p for p in cleaned['dependencies'].pop('provides') if not p.startswith('upstream-origin:')]
         if provides:
             cleaned['dependencies']['provides'] = provides
         if not cleaned['dependencies']:

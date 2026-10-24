@@ -1,0 +1,27 @@
+Subject: Do not reopen the pty by name where TIOCSCTTY made it the controlling tty
+Upstream-Status: Inappropriate [Werewolf runs sshd without CAP_DAC_OVERRIDE]
+Reference: werewolf docs/design/ssh-hardening.md
+
+pty_make_controlling_tty opens the pty by name and closes it again, as root,
+after pty_setowner gave it to the logged-in user. Where TIOCSCTTY exists, the
+ioctl has already made it the controlling tty, and the /dev/tty open that
+follows checks it. Without CAP_DAC_OVERRIDE the redundant open fails for every
+user but root and logs "/dev/pts/N: Permission denied" at error level.
+
+diff --git a/sshpty.c b/sshpty.c
+--- a/sshpty.c
++++ b/sshpty.c
+@@ -123,11 +123,13 @@
+ 	if (setpgrp(0,0) < 0)
+ 		error("SETPGRP %s",strerror(errno));
+ #endif /* NEED_SETPGRP */
++#ifndef TIOCSCTTY
+ 	fd = open(tty, O_RDWR);
+ 	if (fd == -1)
+ 		error("%.100s: %.100s", tty, strerror(errno));
+ 	else
+ 		close(fd);
++#endif /* !TIOCSCTTY */
+ 
+ 	/* Verify that we now have a controlling tty. */
+ 	fd = open(_PATH_TTY, O_WRONLY);

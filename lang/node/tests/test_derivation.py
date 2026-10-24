@@ -50,7 +50,7 @@ class NodeDerivation(unittest.TestCase):
         verify.check(PACKAGE, upstream, result)
         self.assertEqual({'nodejs-26'}, publish.package_names(result))
         self.assertEqual('26.12.1-r1000', PACKAGE.hooks.full_version(LOCK))
-        self.assertIn('wolfi-origin:nodejs-26:26.12.1-r0', result['package']['dependencies']['provides'])
+        self.assertIn('upstream-origin:nodejs-26:26.12.1-r0', result['package']['dependencies']['provides'])
         self.assertIn('nodejs-hardened=${{package.full-version}}', result['package']['dependencies']['provides'])
         self.assertEqual([], result['subpackages'])
         build = next(s['runs'] for s in result['pipeline'] if s.get('name') == PACKAGE.hooks.BUILD)

@@ -91,7 +91,7 @@ def probe(pkg):
 
 def derive(pkg, config, lock):
     original = config['package']['name']
-    if original != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if original != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed upstream package identity before deriving')
     pipeline = config['pipeline']
     index, source = checkout(config)
@@ -129,7 +129,7 @@ def derive(pkg, config, lock):
     # CVE fixes against that (lib/prebuilt.zig), not against our epoch.
     for section in [config['package']] + config['subpackages']:
         section.setdefault('dependencies', {}).setdefault('provides', []).append(
-            'wolfi-origin:' + original + ':' + wolfi)
+            'upstream-origin:' + original + ':' + wolfi)
     test = config['test']
     if 'openjdk-${{vars.java-version}}-default-jdk' not in test.get('environment', {}).get('contents', {}).get('packages', []):
         raise ValueError('Review changed upstream package test environment: the probe needs the JDK')
@@ -170,7 +170,7 @@ def check(pkg, upstream, derived):
         {'name': ALLOW_ROOT, 'runs': runtime.build_root()}], 'build-root marker missing or changed'
     assert derived['vars'] == {k: v for k, v in upstream['vars'].items() if k != 'cacert-entrypoint-hash'}, 'upstream variables changed'
     strip = lambda subs: [{**s, 'dependencies': {**s.get('dependencies', {}), 'provides': [
-        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('wolfi-origin:')]}}
+        p for p in s.get('dependencies', {}).get('provides', []) if not p.startswith('upstream-origin:')]}}
         for s in subs]
     expected_subpackages = deepcopy(retained_subpackages(upstream))
     if 'libfontconfig1' not in expected_subpackages[0]['dependencies']['runtime']:

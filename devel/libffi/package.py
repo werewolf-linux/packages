@@ -61,7 +61,7 @@ def probe(pkg):
 
 def derive(pkg, config, lock):
     original = config['package']['name']
-    if original != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if original != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed upstream package identity')
     pipeline = config['pipeline']
     if [i for i, s in enumerate(pipeline) if s.get('uses') == 'git-checkout'] != [0]:
@@ -83,7 +83,7 @@ def derive(pkg, config, lock):
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
     config['package']['description'] += ' (Werewolf static trampolines)'
     config['package'].setdefault('dependencies', {}).setdefault('provides', []).append(
-        'wolfi-origin:' + original + ':' + wolfi)
+        'upstream-origin:' + original + ':' + wolfi)
     config['test']['pipeline'].append(probe(pkg))
     config['update'] = {'enabled': False}
     return config

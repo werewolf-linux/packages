@@ -13,6 +13,31 @@ updater validates their options, named compatibility streams and lock handlers.
 One source owns version selection; bundled components may have their own sources
 under `components`.
 
+Wolfi derivations also require an `upstream` release source. The Wolfi recipe is
+the packaging baseline; upstream selects the latest stable version independently,
+including new major releases. For example:
+
+```json
+{"source": "wolfi", "family": "python-", "upstream": {
+  "source": "github-tags", "repo": "python/cpython", "prefix": "v"
+}}
+```
+
+Release sources support `github`, `github-tags` and `openjdk` (the newest released
+feature's GA update tags). `prefix`, `suffix`, `separator`, `version-pattern` and
+`version-replace` normalize upstream tag formats. Replacements use Go's `${1}`
+capture syntax. Preview tags and glibc development tags are excluded explicitly.
+Wolfi derivations cannot pin a release series or recipe stream. A missing adapter,
+failed patch or failed native test reports an update blocker while retaining the
+last publication.
+
+Captured `upstream.yaml` stays unchanged. The lock records the Wolfi version,
+epoch and source under `wolfi`, and the independently resolved tag, repository,
+commit and timestamp under `release`. A newer release replaces the effective
+version and source pin. Same-release Wolfi maintenance commits and backports are
+retained. A branch snapshot such as Python's `_git` version is replaced by the
+latest official stable release. Build identities include the release selection.
+
 Only `*-vuln-demo` contexts may set `update.hold`, with a nonempty explanation.
 They retain their real upstream source and are skipped before network access.
 Production packages cannot opt out. Plex follows the signed public APT repository;

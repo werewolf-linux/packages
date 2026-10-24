@@ -10,6 +10,7 @@ from derive import derive
 from inputs import verify
 import packages
 import patching
+import releases
 
 HEADERS = ('Subject:', 'Upstream-Status:', 'Reference:')
 
@@ -46,7 +47,7 @@ def main():
     lock = verify(pkg)
     assert re.fullmatch('[0-9a-f]{40}', lock['wolfi_commit'])
     assert re.fullmatch('[0-9a-f]{40}', lock['source_commit'])
-    check(pkg, yaml.safe_load((pkg.inputs / 'upstream.yaml').read_text()), derive(pkg))
+    check(pkg, releases.recipe(pkg, lock), derive(pkg))
     print('PASS: ' + pkg.name + ': input hashes, upstream hardening and steps, patch series')
 
 if __name__ == '__main__':

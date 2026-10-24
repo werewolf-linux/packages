@@ -1,7 +1,13 @@
 {
   "update": {
     "source": "wolfi",
-    "recipe": "imagemagick-7"
+    "recipe": "imagemagick-7",
+    "upstream": {
+      "source": "github",
+      "repo": "ImageMagick/ImageMagick",
+      "version-pattern": "^([0-9]+\\.[0-9]+\\.[0-9]+)-([0-9]+)$",
+      "version-replace": "${1}.${2}"
+    }
   },
   "hardening": {
     "minimized": true,

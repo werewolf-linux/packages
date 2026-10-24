@@ -83,7 +83,10 @@ class Package:
     def sources(self, lock):
         """Where the locked source commit can be fetched, first choice first."""
         found = self.hook('sources')
-        return tuple(found(lock)) if found else self.hooks.SOURCES
+        sources = tuple(found(lock)) if found else self.hooks.SOURCES
+        if lock.get('release'):
+            sources = ('https://github.com/' + lock['release']['repository'] + '.git',) + sources
+        return tuple(dict.fromkeys(sources))
 
     def tag(self, build_id):
         return self.name + '/build-' + build_id

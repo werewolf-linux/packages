@@ -17,29 +17,34 @@ import (
 )
 
 type Policy struct {
-	Source    string `json:"source"`
-	Separator string `json:"separator,omitempty"`
-	Repo      string `json:"repo,omitempty"`
-	Project   string `json:"project,omitempty"`
-	Prefix    string `json:"prefix,omitempty"`
-	Pattern   string `json:"pattern,omitempty"`
-	Series    string `json:"series,omitempty"`
-	Branch    string `json:"branch,omitempty"`
-	Lock      string `json:"lock,omitempty"`
-	Reason    string `json:"reason,omitempty"`
-	Hold      string `json:"hold,omitempty"`
+	Source         string `json:"source"`
+	Separator      string `json:"separator,omitempty"`
+	Repo           string `json:"repo,omitempty"`
+	Project        string `json:"project,omitempty"`
+	Prefix         string `json:"prefix,omitempty"`
+	Pattern        string `json:"pattern,omitempty"`
+	Suffix         string `json:"suffix,omitempty"`
+	VersionPattern string `json:"version-pattern,omitempty"`
+	VersionReplace string `json:"version-replace,omitempty"`
+	Series         string `json:"series,omitempty"`
+	Branch         string `json:"branch,omitempty"`
+	Lock           string `json:"lock,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	Hold           string `json:"hold,omitempty"`
 	// Components are keyed by the recipe variable holding their version.
 	Components map[string]Policy `json:"components,omitempty"`
 	CommitVar  string            `json:"commit-var,omitempty"`
 }
 
 type Release struct {
-	Version string `json:"version"`
-	Tag     string `json:"tag,omitempty"`
-	Commit  string `json:"commit,omitempty"`
-	Build   string `json:"build,omitempty"`
-	URL     string `json:"url,omitempty"`
-	SHA256  string `json:"sha256,omitempty"`
+	Version    string `json:"version"`
+	Tag        string `json:"tag,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Build      string `json:"build,omitempty"`
+	URL        string `json:"url,omitempty"`
+	SHA256     string `json:"sha256,omitempty"`
+	Repository string `json:"repository,omitempty"`
+	Timestamp  int64  `json:"timestamp,omitempty"`
 }
 
 // Client only sends the GitHub token to api.github.com. Downloads, redirects,
@@ -122,14 +127,14 @@ func (c *Client) Download(ctx context.Context, address string, out io.Writer) (s
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-var stable = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)*(?:\+[0-9]+)?$`)
+var stable = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)*(?:\+[0-9]+|_p[0-9]+)?$`)
 var commitID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // Compare compares numeric release components, so 1.10 is newer than 1.9.
 // Missing patch components compare as zero. Prereleases never reach this path.
 func Compare(a, b string) int {
 	parts := func(v string) []string {
-		return strings.FieldsFunc(v, func(r rune) bool { return r == '.' || r == '+' })
+		return strings.FieldsFunc(v, func(r rune) bool { return r == '.' || r == '+' || r == '_' || r == 'p' })
 	}
 	aa, bb := parts(a), parts(b)
 	for i := 0; i < len(aa) || i < len(bb); i++ {
@@ -160,10 +165,20 @@ func Compare(a, b string) int {
 }
 
 func candidate(tag string, p Policy) (Release, bool) {
-	if !strings.HasPrefix(tag, p.Prefix) {
+	if !strings.HasPrefix(tag, p.Prefix) || !strings.HasSuffix(tag, p.Suffix) {
 		return Release{}, false
 	}
 	v := strings.TrimPrefix(tag, p.Prefix)
+	if p.Suffix != "" {
+		v = strings.TrimSuffix(v, p.Suffix)
+	}
+	if p.VersionPattern != "" {
+		re, err := regexp.Compile(p.VersionPattern)
+		if err != nil || re.FindString(v) != v {
+			return Release{}, false
+		}
+		v = re.ReplaceAllString(v, p.VersionReplace)
+	}
 	if p.Separator != "" {
 		v = strings.ReplaceAll(v, p.Separator, ".")
 	}
@@ -183,6 +198,23 @@ func candidate(tag string, p Policy) (Release, bool) {
 
 func (c *Client) Discover(ctx context.Context, p Policy, current string) (Release, error) {
 	switch p.Source {
+	case "openjdk":
+		// Only GA tags identify released feature versions; +build tags include EA builds.
+		feature, err := c.Discover(ctx, Policy{Source: "github-tags", Repo: "openjdk/jdk", Prefix: "jdk-", Suffix: "-ga"}, current)
+		if err != nil {
+			return Release{}, err
+		}
+		major := strings.Split(feature.Version, ".")[0]
+		repo := "openjdk/jdk" + major + "u"
+		latest, err := c.Discover(ctx, Policy{Source: "github-tags", Repo: repo, Prefix: "jdk-", Suffix: "-ga"}, current)
+		if err != nil {
+			return Release{}, err
+		}
+		if !strings.Contains(latest.Version, ".") {
+			latest.Version += ".0.0"
+		}
+		latest.Repository = repo
+		return latest, nil
 	case "plex":
 		response, err := c.get(ctx, "https://repo.plex.tv/deb/dists/public/main/binary-amd64/Packages")
 		if err != nil {

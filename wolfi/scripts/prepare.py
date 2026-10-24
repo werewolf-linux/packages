@@ -13,6 +13,7 @@ import yaml
 import patching
 from source import checkout
 import packages
+import releases
 
 def upstream_patches(config):
     """Wolfi's patches, in the order its recipe applies them."""
@@ -39,11 +40,11 @@ def prepare(pkg, destination, sources=None):
     if destination.exists():
         raise ValueError('Use a new destination; never reset an existing checkout')
     lock = json.loads((pkg.inputs / 'upstream.lock.json').read_text())
-    print('prepare: {} {}-r{} from Wolfi {}, source {}'.format(
-        pkg.name, lock['version'], lock['epoch'], lock['wolfi_commit'], lock['source_commit']), flush=True)
+    print('prepare: {} {}, Wolfi baseline {} at {}, source {}'.format(
+        pkg.name, lock['version'], releases.baseline_version(lock), lock['wolfi_commit'], lock['source_commit']), flush=True)
     checkout(destination, lock['source_commit'], sources or pkg.sources(lock))
-    config = yaml.safe_load((pkg.inputs / 'upstream.yaml').read_text())
-    for name in upstream_patches(config):
+    config = releases.recipe(pkg, lock)
+    for name in pkg.hook('upstream_patches', upstream_patches)(config):
         apply(destination, pkg.inputs / 'upstream' / name, "Wolfi's " + name, ours=False)
     for name in (pkg.dir / 'patches/series').read_text().split():
         apply(destination, pkg.dir / 'patches' / name, 'patches/' + name)

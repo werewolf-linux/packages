@@ -110,7 +110,7 @@ def wolfi_patches(pipeline):
 
 def derive(pkg, config, lock):
     original = config['package']['name']
-    if original != Path(lock['recipe']).stem or str(config['package']['version']) != lock['version']:
+    if original != Path(lock.get('effective_recipe', lock['recipe'])).stem or str(config['package']['version']) != lock['version']:
         raise ValueError('Review changed upstream package identity')
     pipeline = config['pipeline']
     checkouts = [i for i, s in enumerate(pipeline) if s.get('uses') == 'git-checkout']
@@ -147,7 +147,7 @@ def derive(pkg, config, lock):
     config['package']['epoch'] = epoch(lock['epoch'], lock['revision'])
     config['package']['description'] += ' (Werewolf fixed hardening policy)'
     config['package'].setdefault('dependencies', {}).setdefault('provides', []).extend([
-        'wolfi-origin:' + original + ':' + wolfi,
+        'upstream-origin:' + original + ':' + wolfi,
         'nodejs-hardened=${{package.full-version}}'])
     config['test']['pipeline'].append({
         'name': 'Werewolf protections hold, and allowances take each back',

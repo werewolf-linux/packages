@@ -1,0 +1,25 @@
+Subject: Do not resolve the default listen address where ListenAddress lines wait
+Upstream-Status: Inappropriate [Werewolf refuses netlink to sshd's processes]
+Reference: werewolf docs/design/ssh-hardening.md
+
+sshd-session parses its configuration with reexec set, which leaves the
+ListenAddress lines queued and unresolved, and fill_default_server_options
+then resolves the default, every address of every family, for each
+connection. sshd-session never listens. glibc sorts that two-address result
+by asking netlink, which Werewolf's pledge for sshd refuses, so every
+connection logged a refused socket(AF_NETLINK). The listener resolves its
+queue before filling defaults, so it is unchanged.
+
+diff --git a/servconf.c b/servconf.c
+--- a/servconf.c
++++ b/servconf.c
+@@ -338,7 +338,8 @@
+ 	/* No certificates by default */
+ 	if (options->num_ports == 0)
+ 		options->ports[options->num_ports++] = SSH_DEFAULT_PORT;
+-	if (options->listen_addrs == NULL)
++	/* sshd-session keeps the ListenAddress lines it never binds queued */
++	if (options->listen_addrs == NULL && options->num_queued_listens == 0)
+ 		add_listen_addr(options, NULL, NULL, 0);
+ 	if (options->pid_file == NULL)
+ 		options->pid_file = xstrdup(_PATH_SSH_DAEMON_PID_FILE);
