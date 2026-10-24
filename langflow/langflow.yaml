@@ -1,7 +1,7 @@
 package:
   name: langflow
   version: "1.13.0"
-  epoch: 1
+  epoch: 2
   description: Langflow editor, API and local CPU inference on hardened Python
   copyright:
     - license: MIT
@@ -68,6 +68,9 @@ pipeline:
         --require-hashes --prefer-binary --only-binary=apsw,chromadb -r requirements.txt
       /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
         langflow-1.13.0-py3-none-any.whl langflow_base-1.13.0-py3-none-any.whl lfx-1.13.0-py3-none-any.whl
+      # APSW's wheel bundles non-PIE SQLite diagnostic executables. Langflow
+      # uses the binding, not those command-line tools.
+      rm -rf /usr/lib/langflow/lib/python3.15/site-packages/apsw/sqlite_extra_binaries
       /usr/lib/langflow/bin/python -P -c 'import fastuuid; value=fastuuid.uuid4(); assert fastuuid.UUID(str(value)) == value'
       /usr/lib/langflow/bin/python port-python.py /usr/lib/langflow/lib/python3.15/site-packages
       # Import the complete API during packaging, so missing runtime providers
