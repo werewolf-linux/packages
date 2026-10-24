@@ -176,6 +176,10 @@ def check(pkg, upstream, derived):
     if 'libfontconfig1' not in expected_subpackages[0]['dependencies']['runtime']:
         expected_subpackages[0]['dependencies']['runtime'].append('libfontconfig1')
     assert strip(expected_subpackages) == strip(derived['subpackages']), 'an upstream subpackage changed'
+    expected_runtime = list(upstream['package']['dependencies']['runtime'])
+    if 'libfontconfig1' not in expected_runtime:
+        expected_runtime.append('libfontconfig1')
+    assert derived['package']['dependencies']['runtime'] == expected_runtime, 'upstream runtime dependencies changed'
     for test in upstream['test']['pipeline']:
         assert test in derived['test']['pipeline'], "Wolfi's package test removed"
     assert upstream['test']['environment'] == derived['test']['environment'], 'upstream test environment changed'

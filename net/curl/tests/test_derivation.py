@@ -11,28 +11,31 @@ import verify
 
 PKG = packages.Package('curl')
 FIXTURE = yaml.safe_load((Path(__file__).parent / 'fixtures/curl.yaml').read_text())
-LOCK = dict(recipe='curl.yaml', version='8.23.0', epoch=1, revision=1,
+LOCK = dict(recipe='curl.yaml', version='8.23.0', epoch=2, revision=1,
             source_commit=PKG.hooks.source_commit(FIXTURE))
 
 
 class Curl(unittest.TestCase):
-    def test_upstream_suite_stays_in_the_build(self):
-        source = copy.deepcopy(FIXTURE)
-        suite = {'name': 'Run upstream test suite', 'runs': 'make test\n'}
-        source['pipeline'].insert(3, suite)
-        result = PKG.hooks.derive(PKG, copy.deepcopy(source), LOCK)
-        verify.check(PKG, source, result)
-        self.assertEqual(suite, result['pipeline'][3])
-
     def test_only_cli_headers_and_shared_library_are_published(self):
         result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
         verify.check(PKG, FIXTURE, result)
         self.assertEqual({'curl', 'curl-dev', 'libcurl-openssl4'}, packages.output_names(result))
-        self.assertEqual(1001, result['package']['epoch'])
+        self.assertEqual(1002, result['package']['epoch'])
         self.assertIn('curl-hardened=${{package.full-version}}', result['package']['dependencies']['provides'])
         self.assertIn('--without-brotli', result['pipeline'][1]['with']['opts'])
         self.assertNotIn('brotli-dev', result['environment']['contents']['packages'])
         self.assertTrue(any(s.get('uses') == 'test/git-https-auth' for s in result['test']['pipeline']))
+
+    def test_upstream_build_tests_are_retained_and_required(self):
+        result = PKG.hooks.derive(PKG, copy.deepcopy(FIXTURE), LOCK)
+        self.assertEqual(FIXTURE['pipeline'][3], result['pipeline'][3])
+        source = copy.deepcopy(FIXTURE)
+        source['pipeline'].pop(3)
+        with self.assertRaises(ValueError):
+            PKG.hooks.derive(PKG, source, LOCK)
+        result['pipeline'].pop(3)
+        with self.assertRaises(AssertionError):
+            verify.check(PKG, FIXTURE, result)
 
     def test_upstream_changes_cannot_silently_add_a_feature(self):
         for mutate in (
