@@ -36,7 +36,8 @@ class PostgreSQL(unittest.TestCase):
             if step.get('name') != PKG.hooks.KERBEROS:
                 self.assertIn(step, derived['test']['pipeline'])
         self.assertEqual(PKG.hooks.PROBED, derived['test']['pipeline'][-1]['name'])
-        self.assertEqual(['ssl-groups-fips-tolerant-default.patch'],PKG.hooks.upstream_patches(BASELINE))
+        self.assertEqual(['per-version-dirs.patch', 'ssl-groups-fips-tolerant-default.patch'],
+                         derived['pipeline'][1]['with']['patches'].split())
 
     def test_omits_optional_authentication_but_keeps_jit_icu_xml_and_compression(self):
         derived = self.derive()

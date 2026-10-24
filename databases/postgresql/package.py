@@ -39,7 +39,7 @@ def upstream_patches(config):
     patches = config['pipeline'][1]['with']['patches'].split()
     if patches != ['per-version-dirs.patch', 'ssl-groups-fips-tolerant-default.patch']:
         raise ValueError('Review changed PostgreSQL patches')
-    return ['ssl-groups-fips-tolerant-default.patch']
+    return patches
 
 
 def derive(pkg, config, lock):
@@ -68,8 +68,8 @@ def derive(pkg, config, lock):
     if steps[2]['with'] != {'opts':'$CONFIGURE_FLAGS --with-perl'}:
         raise ValueError('Review changed PostgreSQL configure step')
     steps[2]['with']['opts'] = '$CONFIGURE_FLAGS --without-perl --without-python --without-tcl'
-    # Only one major is shipped, so use PostgreSQL's standard extension and
-    # header directories; pg-gvm and PGXS then share the same installation.
+    # Keep Wolfi's PostgreSQL 18 extension directories: pgvector-18 and
+    # pg-gvm are built against its PGXS layout.
     steps[1]['with']['patches'] = '\n'.join(upstream_patches(config)) + '\n'
     steps[0] = fetch(lock['source_commit'], SOURCES)
     config['pipeline'] = [s for s in steps if s.get('name') != PLPERL]
