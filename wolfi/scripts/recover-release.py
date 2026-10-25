@@ -32,6 +32,23 @@ def checked_run(run, package, record, jobs):
     return record['head_sha'], int(record['run_number'])
 
 
+def verify_tag(tag, sha):
+    try:
+        ref = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/ref/tags/' + tag], text=True))
+    except subprocess.CalledProcessError as error:
+        if json.loads(error.stdout or '{}').get('status') != '404':
+            raise
+        # A failed first publication may have uploaded native artifacts without
+        # staging a release yet. The publisher creates this tag at the validated
+        # source commit, and checks an existing tag again before staging.
+        print(tag + ': absent; staging will create it at ' + sha)
+        return
+    if ref['object']['type'] != 'commit' or ref['object']['sha'] != sha:
+        raise ValueError(f"Release tag {tag} points to {ref['object']['type']} {ref['object']['sha']}; "
+                         f'expected validated build commit {sha}')
+    print(tag + ': verified at ' + sha)
+
+
 def main():
     if sys.argv[1] == '--verify-tag':
         package, sha = sys.argv[2:]
@@ -39,11 +56,7 @@ def main():
             raise ValueError('Invalid package or source commit')
         lock = json.loads((Path('build') / package / 'inputs/upstream.lock.json').read_text())
         tag = package + '/build-' + lock['build_id']
-        ref = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/ref/tags/' + tag], text=True))
-        if ref['object']['type'] != 'commit' or ref['object']['sha'] != sha:
-            raise ValueError(f"Release tag {tag} points to {ref['object']['type']} {ref['object']['sha']}; "
-                             f'expected validated build commit {sha}')
-        print(tag + ': verified at ' + sha)
+        verify_tag(tag, sha)
         return
     run, package = sys.argv[1:]
     if not re.fullmatch(r'[1-9][0-9]*', run):
