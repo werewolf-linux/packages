@@ -143,8 +143,9 @@ func check(name, arch string) (result error) {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"capabilities": map[string]any{"drop": []string{"ALL"}},
-			"environment": map[string]any{"paths": mutations, "contents": map[string]any{
+			// Only trusted fixture setup runs here; smokeCommand creates the
+			// non-root sandbox and drops all capabilities before package code.
+			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
