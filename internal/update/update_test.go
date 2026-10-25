@@ -492,3 +492,46 @@ func TestUnderscoreReleaseTagsKeepTheExactSourcePin(t *testing.T) {
 		t.Fatalf("%+v\n%s", r, data)
 	}
 }
+
+func TestGitBranchTracksNewCommitsWithinTheSameDay(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "postdoc-server", "postdoc.yaml")
+	original := "package:\n  name: postdoc\n  version: 0.2.0_git20261024\n  epoch: 3\npipeline:\n  - uses: git-checkout\n    with:\n      repository: https://github.com/a/b\n      branch: main\n      expected-commit: " + strings.Repeat("a", 40) + "\n"
+	mustWrite(t, path, original)
+	c := mockClient(t, map[string]string{
+		"https://api.github.com/repos/a/b/commits/main": `{"sha":"` + strings.Repeat("b", 40) + `","commit":{"committer":{"date":"2026-10-24T21:17:11Z"}}}`,
+	})
+	p := Policy{Source: "git", Repo: "a/b", Branch: "main"}
+	r := c.Update(context.Background(), root, "postdoc-server", p, false, noCommands)
+	data, _ := os.ReadFile(path)
+	if r.Status != "available" || r.Current != r.Latest || string(data) != original {
+		t.Fatalf("same-day commit discovery changed the recipe: %+v", r)
+	}
+	r = c.Update(context.Background(), root, "postdoc-server", p, true, noCommands)
+	recipe, err := readRecipe(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "updated" || value(field(recipe.root, "package"), "version") != "0.2.0_git20261024" || value(field(recipe.root, "package"), "epoch") != "4" {
+		t.Fatalf("same-day update must retain the date and advance the epoch: %+v", r)
+	}
+	data, _ = os.ReadFile(path)
+	if !strings.Contains(string(data), strings.Repeat("b", 40)) {
+		t.Fatal("new commit was not pinned")
+	}
+	if r := c.Update(context.Background(), root, "postdoc-server", p, true, noCommands); r.Status != "current" {
+		t.Fatalf("unchanged commit must not rebuild: %+v", r)
+	}
+	// A later day's commit changes the dated version and resets its epoch.
+	c = mockClient(t, map[string]string{
+		"https://api.github.com/repos/a/b/commits/main": `{"sha":"` + strings.Repeat("c", 40) + `","commit":{"committer":{"date":"2026-10-25T01:00:00Z"}}}`,
+	})
+	r = c.Update(context.Background(), root, "postdoc-server", p, true, noCommands)
+	recipe, err = readRecipe(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != "updated" || value(field(recipe.root, "package"), "version") != "0.2.0_git20261025" || value(field(recipe.root, "package"), "epoch") != "0" {
+		t.Fatalf("new-day commit was not promoted: %+v", r)
+	}
+}

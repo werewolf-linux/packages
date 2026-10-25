@@ -55,4 +55,4 @@ pipeline:
 
 update:
   enabled: false
-  exclude-reason: postdoc tags no releases; bump version and expected-commit by hand
+  exclude-reason: metadata.json's git source and the hourly updater track main and refresh the immutable commit pin
