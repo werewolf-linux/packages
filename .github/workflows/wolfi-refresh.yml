@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: Package name to recover with recover_run
+        description: One package to refresh or recover; empty refreshes all
         type: string
         default: ''
       recover_run:
@@ -60,7 +60,13 @@ jobs:
         id: discover
         env:
           GH_TOKEN: ${{ github.token }}
-        run: build/venv/bin/python scripts/discover.py
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ -n "$PACKAGE" ]; then
+            build/venv/bin/python scripts/discover.py -- "$PACKAGE"
+          else
+            build/venv/bin/python scripts/discover.py
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.discover.outputs.publish != '[]'
         with:
