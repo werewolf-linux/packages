@@ -261,3 +261,12 @@ edits:
         [ -e "/$path" ] || [ -L "/$path" ] || /usr/bin/busybox ln -s /usr/bin/busybox "/$path"
       done < "$manifest"
     done
+# The test harness needs /bin/sh; BusyBox no longer installs that link.
+- path: [test, environment, contents, packages]
+  append: [bash-binsh]
+# The test harness needs /bin/sh; BusyBox no longer installs that link.
+- path: [subpackages, name=busybox-full, test, environment, contents, packages]
+  append: [bash-binsh]
+# The test harness needs /bin/sh; BusyBox no longer installs that link.
+- path: [subpackages, name=busybox-static, test, environment, contents, packages]
+  append: [bash-binsh]

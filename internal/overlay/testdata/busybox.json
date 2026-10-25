@@ -222,7 +222,8 @@
               "binutils",
               "python3",
               "wolfi-base",
-              "ver-check"
+              "ver-check",
+              "bash-binsh"
             ]
           }
         },
@@ -300,7 +301,8 @@
           "contents": {
             "packages": [
               "binutils",
-              "ver-check"
+              "ver-check",
+              "bash-binsh"
             ]
           }
         },
@@ -356,7 +358,8 @@
       "contents": {
         "packages": [
           "binutils",
-          "ver-check"
+          "ver-check",
+          "bash-binsh"
         ]
       }
     },

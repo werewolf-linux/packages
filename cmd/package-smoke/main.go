@@ -136,6 +136,9 @@ func check(ctx context.Context, name, arch, runner string) error {
 		return err
 	}
 	packages := append([]string{"busybox", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
+	if runner == "qemu" {
+		packages = append(packages, "setpriv", "util-linux-misc", "mount", "iproute2")
+	}
 	mutations, err := runtimePaths(s)
 	if err != nil {
 		return err
@@ -204,18 +207,22 @@ awk '
   END { exit (count != 4 || bad) }
 ' /proc/self/status
 ` + runs
-	// QEMU runs through a chrooted SSH session, where Linux rejects creating
-	// a user namespace. The private VM already supplies that outer boundary.
-	userNamespace := "--unshare-user "
+	command := "/bin/sh -ec '" + strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
+	// QEMU runs through a chrooted SSH session, which prevents bubblewrap's
+	// user namespace and pivot_root. Bind mounts provide the read-only root
+	// inside the private VM, then setpriv drops all application privileges.
 	if runner == "qemu" {
-		userNamespace = ""
+		bootstrap := "chmod 755 /\n" +
+			"mount --make-rprivate /\nmount --bind / /\nmount -o remount,bind,ro /\n" +
+			"mount -t tmpfs tmpfs /tmp\nip link set lo up\n" +
+			"exec setpriv --reuid=1000 --regid=1000 --clear-groups --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs -- " + command
+		return "exec unshare --mount --net --fork /bin/sh -ec '" + strings.ReplaceAll(bootstrap, "'", "'\"'\"'") + "'"
 	}
 	// Make the root traversable before entering the runtime as UID 1000.
-	return "chmod 755 /\nexec bwrap " + userNamespace + "--unshare-pid --unshare-net --die-with-parent " +
+	return "chmod 755 /\nexec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
 		// Melange already supplies procfs in its isolated PID namespace.
 		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --ro-bind /proc /proc " +
-		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
-		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
+		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- " + command
 }
 
 // Allowances name both the runtime and the group, such as python:native.

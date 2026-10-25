@@ -541,13 +541,9 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 			return err
 		}
 	}
-	timestamp, err := output(ctx, pkg.Root, "git", "-c", "safe.directory="+pkg.Root, "log", "-1", "--format=%ct", "--", pkg.Path)
+	date, err := applicationTimestamp(ctx, pkg, commit)
 	if err != nil {
 		return err
-	}
-	date, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil || date <= 0 {
-		return fmt.Errorf("missing source timestamp")
 	}
 	out := filepath.Join(pkg.Root, "build/artifacts", pkg.Name)
 	if _, err := os.Lstat(filepath.Join(out, arch)); !os.IsNotExist(err) {
@@ -558,7 +554,7 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 		return err
 	}
 	args := []string{"build", recipe, "--runner", "bubblewrap", "--arch", arch, "--source-dir", directory, "--out-dir", out, "--cache-dir", filepath.Join(pkg.Root, "build/cache/melange"), "--apk-cache-dir", filepath.Join(pkg.Root, "build/cache/apk"), "--generate-index=false", "--namespace", "werewolf", "--git-commit", commit, "--cpu", env("MELANGE_CPU", strconv.Itoa(runtime.NumCPU())), "--memory", env("MELANGE_MEMORY", "8Gi"), "--timeout", "5h"}
-	if err := runBuild(ctx, pkg.Root, tool, buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": timestamp}), args); err != nil {
+	if err := runBuild(ctx, pkg.Root, tool, buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": strconv.FormatInt(date, 10)}), args); err != nil {
 		return err
 	}
 	hashes := map[string]string{}
@@ -582,6 +578,26 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 		hashes[filename] = sum
 	}
 	return writeJSON(filepath.Join(out, arch, "build.json"), AppBuild{AppMetadata: metadata, Format: "werewolf-package-build/1", Arch: arch, Commit: commit, RunID: os.Getenv("GITHUB_RUN_ID"), SourceDateEpoch: date, SHA256: hashes})
+}
+
+// New local contexts have no path history yet. Anchor those builds to the
+// recorded commit; never use the wall clock for reproducible package inputs.
+func applicationTimestamp(ctx context.Context, pkg Package, commit string) (int64, error) {
+	timestamp, err := output(ctx, pkg.Root, "git", "-c", "safe.directory="+pkg.Root, "log", "-1", "--format=%ct", commit, "--", pkg.Path)
+	if err != nil {
+		return 0, err
+	}
+	if timestamp == "" {
+		timestamp, err = output(ctx, pkg.Root, "git", "-c", "safe.directory="+pkg.Root, "show", "-s", "--format=%ct", commit)
+		if err != nil {
+			return 0, err
+		}
+	}
+	date, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil || date <= 0 {
+		return 0, fmt.Errorf("missing source timestamp for %s at %s", pkg.Name, commit)
+	}
+	return date, nil
 }
 
 // BuildLocalApplication uses the sibling Werewolf checkout's native build API.

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	htmltemplate "html/template"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +16,44 @@ import (
 	"github.com/werewolf-linux/packages/internal/overlay"
 	"github.com/werewolf-linux/packages/internal/update"
 )
+
+func TestApplicationTimestampUsesPathHistoryOrRecordedCommit(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "tracked-context"), []byte("recipe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		date string
+		args []string
+	}{
+		{"1000000000", []string{"init", "-b", "main"}},
+		{"1000000000", []string{"add", "tracked-context"}},
+		{"1000000000", []string{"commit", "--allow-empty", "-m", "initial"}},
+		{"1100000000", []string{"commit", "--allow-empty", "-m", "later"}},
+	} {
+		command := exec.Command("git", append([]string{"-c", "user.name=Test", "-c", "user.email=test@example.invalid"}, step.args...)...)
+		command.Dir = root
+		command.Env = append(os.Environ(), "GIT_AUTHOR_DATE=@"+step.date+" +0000", "GIT_COMMITTER_DATE=@"+step.date+" +0000")
+		if data, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", step.args, err, data)
+		}
+	}
+	pkg := Package{Root: root, Name: "example"}
+	for _, tc := range []struct {
+		path   string
+		commit string
+		want   int64
+	}{{"new-context", "HEAD", 1100000000}, {"new-context", "HEAD~1", 1000000000}, {"tracked-context", "HEAD", 1000000000}} {
+		pkg.Path = tc.path
+		got, err := applicationTimestamp(t.Context(), pkg, tc.commit)
+		if err != nil || got != tc.want {
+			t.Fatalf("%s at %s: timestamp = %d, %v; want %d", tc.path, tc.commit, got, err, tc.want)
+		}
+	}
+	if _, err := applicationTimestamp(t.Context(), pkg, "missing-commit"); err == nil {
+		t.Fatal("accepted missing source commit")
+	}
+}
 
 func testTarMember(t *testing.T, name string, data []byte) []byte {
 	t.Helper()
