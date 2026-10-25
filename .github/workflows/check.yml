@@ -7,6 +7,10 @@ on:
         description: Context to build and smoke-test on both native architectures
         type: string
         default: onnx-minilm
+      use_hosted:
+        description: Use native GitHub-hosted runners for this validation run
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -16,6 +20,7 @@ jobs:
   check:
     runs-on: >-
       ${{ fromJSON(github.repository == 'werewolf-linux/packages' &&
+          !inputs.use_hosted &&
           (github.event_name == 'workflow_dispatch' ||
            github.event.pull_request.head.repo.full_name == github.repository) &&
           vars.WEREWOLF_X86_64_BUILD_RUNNER || '["ubuntu-26.04"]') }}
@@ -73,6 +78,7 @@ jobs:
       package: ${{ inputs.package || 'onnx-minilm' }}
       arch: ${{ matrix.arch }}
       trusted: ${{ github.repository == 'werewolf-linux/packages' &&
+        !inputs.use_hosted &&
         (github.event_name == 'workflow_dispatch' ||
          github.event.pull_request.head.repo.full_name == github.repository) }}
 
@@ -87,5 +93,6 @@ jobs:
       package: wordpress-sqlite
       arch: ${{ matrix.arch }}
       trusted: ${{ github.repository == 'werewolf-linux/packages' &&
+        !inputs.use_hosted &&
         (github.event_name == 'workflow_dispatch' ||
          github.event.pull_request.head.repo.full_name == github.repository) }}
