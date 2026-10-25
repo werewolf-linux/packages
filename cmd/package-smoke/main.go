@@ -92,11 +92,6 @@ func check(name, arch string) error {
 	if err != nil {
 		return err
 	}
-	// Bubblewrap enters the installed test root as UID 1000. MkdirTemp's
-	// owner-only mode would prevent that user from traversing TMPDIR to it.
-	if err := os.Chmod(dir, 0o755); err != nil {
-		return err
-	}
 	// Test roots can be gigabytes. A runner's /tmp may be a small tmpfs.
 	if err := os.Setenv("TMPDIR", dir); err != nil {
 		return err
@@ -130,7 +125,9 @@ func check(name, arch string) error {
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
 			"capabilities": map[string]any{"drop": []string{"ALL"}},
-			"environment": map[string]any{"accounts": map[string]any{"run-as": "1000"}, "paths": mutations, "contents": map[string]any{
+			// Melange's private guest root belongs to namespace UID 0. Keep setup
+			// under that owner; smokeCommand drops to UID 1000 for the runtime.
+			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
