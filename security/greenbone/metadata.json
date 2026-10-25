@@ -25,7 +25,7 @@
     "recipes": [],
     "changes": [
       {
-        "what": "PostgreSQL's Greenbone extension, built for the same latest stable PostgreSQL as the form. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.",
+        "what": "PostgreSQL's Greenbone extension, built for PostgreSQL 18 as the form uses. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.",
         "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
         "evidence": [
           "pg-gvm.yaml"

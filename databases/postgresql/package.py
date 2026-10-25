@@ -39,7 +39,7 @@ def upstream_patches(config):
     patches = config['pipeline'][1]['with']['patches'].split()
     if patches != ['per-version-dirs.patch', 'ssl-groups-fips-tolerant-default.patch']:
         raise ValueError('Review changed PostgreSQL patches')
-    return ['ssl-groups-fips-tolerant-default.patch']
+    return patches
 
 
 def derive(pkg, config, lock):
@@ -68,8 +68,8 @@ def derive(pkg, config, lock):
     if steps[2]['with'] != {'opts':'$CONFIGURE_FLAGS --with-perl'}:
         raise ValueError('Review changed PostgreSQL configure step')
     steps[2]['with']['opts'] = '$CONFIGURE_FLAGS --without-perl --without-python --without-tcl'
-    # Only one major is shipped, so use PostgreSQL's standard extension and
-    # header directories; pg-gvm and PGXS then share the same installation.
+    # Keep Wolfi's PostgreSQL 18 extension directories: pgvector-18 and
+    # pg-gvm are built against its PGXS layout.
     steps[1]['with']['patches'] = '\n'.join(upstream_patches(config)) + '\n'
     steps[0] = fetch(lock['source_commit'], SOURCES)
     config['pipeline'] = [s for s in steps if s.get('name') != PLPERL]
@@ -100,13 +100,21 @@ def derive(pkg, config, lock):
         deps['provides'] = [p for p in deps.get('provides', []) if p != own + '=${{package.full-version}}']
         deps['provides'].append('upstream-origin:' + original + ':' + lock['version'] + '-r' + str(lock['epoch']))
         section['dependencies'] = deps
+        if own == 'postgresql-client':
+            # Wolfi tests that its virtual alias is absent. Here that name is
+            # the real package, so the assertion would reject a correct build.
+            expected = [{'uses':'test/virtualpackage', 'with':{
+                'virtual-pkg-name':'postgresql-client', 'real-pkg-name':'${{subpkg.name}}'}}]
+            if section.get('test', {}).get('pipeline') != expected:
+                raise ValueError('Review changed PostgreSQL client virtual-package test')
+            section.pop('test')
     config['test']['pipeline'] = [s for s in config['test']['pipeline'] if s.get('name') != KERBEROS]
     probe = (pkg.dir / 'tests/consumers.sh').read_text()
     marker = 'WEREWOLF_POSTGRESQL_CONSUMERS'
     if marker in probe or '${{' in probe:
         raise ValueError('PostgreSQL consumer probe cannot be embedded')
     config['test']['pipeline'].append({'name':PROBED,
-        'needs':{'packages':['postgresql-dev', 'postgresql-contrib', 'openssl', 'shadow']},
+        'needs':{'packages':['postgresql-dev', 'postgresql-contrib']},
         'runs':"cat > /tmp/postgresql-consumers.sh <<'" + marker + "'\n" + probe + marker + '\nsh /tmp/postgresql-consumers.sh\n'})
     config['update'] = {'enabled':False}
     return config
@@ -119,24 +127,18 @@ def check(pkg, upstream, derived):
 
 
 def test_recipe(config, repository):
-    # apko locks /etc/shadow with mode 000 and may omit /etc/gshadow. The
-    # capability-restricted test runner needs owner access for useradd.
-    config['test']['pipeline'].insert(0, {'name':'Initialize test account databases', 'runs':
-        'chmod 755 /\n'
-        'for file in /etc/shadow /etc/gshadow; do\n'
-        '  test -f "$file" || install -m600 /dev/null "$file"\n'
-        '  chmod 600 "$file"\n'
-        'done\n'})
-    # bubblewrap starts a fresh PID namespace for each step. Keep the server
-    # and every SQL assertion in one step so pg_ctl's child survives until the
-    # checks finish; retain all upstream assertions and our consumer probe.
+    # Melange maps only one UID. PostgreSQL refuses to start under root, and
+    # another UID cannot own files here. Server checks run in Werewolf's
+    # native form test, where the real service account exists.
     pipeline = config['test']['pipeline']
     start = next(i for i, step in enumerate(pipeline) if step.get('name') == 'Test database creation')
-    lifecycle = pipeline[start:]
-    if any(set(step) - {'name', 'runs', 'needs'} or 'runs' not in step for step in lifecycle):
+    expected = ['Test database creation', 'Test basic read/write operations',
+                'Test xml support', 'Test server can run and respond to requests',
+                'Test XML xpath support', 'Test ICU collation presence',
+                'Test JIT is enabled', 'Test toast compression set to lz4', PROBED]
+    if [step.get('name') for step in pipeline[start:]] != expected:
         raise ValueError('Review changed PostgreSQL database lifecycle tests')
-    needs = sorted({p for step in lifecycle for p in step.get('needs', {}).get('packages', [])})
-    cleanup = 'trap \'sudo -u "$PGUSER" pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true\' EXIT\n'
-    pipeline[start:] = [{'name':'Database lifecycle and consumer tests', 'needs':{'packages':needs},
-                         'runs':cleanup + '\n'.join('# ' + step['name'] + '\n' + step['runs'] for step in lifecycle)}]
+    pipeline[start:] = [pipeline[-1]]
+    packages = config['test']['environment']['contents']['packages']
+    config['test']['environment']['contents']['packages'] = [p for p in packages if p not in ('shadow', 'sudo-rs')]
     return config

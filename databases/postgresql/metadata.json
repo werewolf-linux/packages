@@ -34,8 +34,8 @@
         ]
       },
       {
-        "what": "Track only the latest stable PostgreSQL with unversioned package names and standard PostgreSQL extension/header directories.",
-        "why": "New stable major releases should update automatically without retaining older server streams.",
+        "what": "Track only the latest stable PostgreSQL with unversioned package names and Wolfi's versioned extension/header directories.",
+        "why": "New stable major releases should update automatically while packaged extensions remain compatible with their PostgreSQL major.",
         "evidence": [
           "package.py"
         ]
