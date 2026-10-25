@@ -60,6 +60,7 @@ func TestSmokeCommandRequiresNonRootAndPreservesShellLiterals(t *testing.T) {
 	for name, script := range map[string]string{
 		"bwrap": "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n",
 		"chmod": "#!/bin/sh\n[ \"$*\" = '755 / /home/build' ]\n",
+		"grep":  "#!/bin/sh\n[ \"$1\" = -Eq ] && { [ \"$3\" = /proc/self/status ] || [ \"$3\" = /proc/self/mountinfo ]; }\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)

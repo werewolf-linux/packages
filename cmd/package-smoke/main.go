@@ -179,7 +179,7 @@ spec = importlib.util.spec_from_file_location('smoke_runner', sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.ROOT = pathlib.Path(sys.argv[2])
-module.CAPABILITIES += ('sys_admin',)
+module.CAPABILITIES += ('sys_admin', 'net_admin', 'setpcap')
 module.main()
 `
 	tools := filepath.Join(directory, "build/tools")
@@ -210,7 +210,12 @@ module.main()
 // appliance. Melange's package-installation root is writable. A nested mount
 // namespace makes the runtime and fixtures read-only, with scratch in /tmp.
 func smokeCommand(runs string) string {
-	runs = "test \"$(id -u)\" -ne 0\n" + runs
+	runs = "test \"$(id -u)\" -ne 0\n" +
+		"for capability in CapInh CapPrm CapEff CapBnd CapAmb; do\n" +
+		"  grep -Eq \"^$capability:[[:space:]]*0+$\" /proc/self/status\n" +
+		"done\n" +
+		"grep -Eq '^[^ ]+ [^ ]+ [^ ]+ [^ ]+ / ro[, ]' /proc/self/mountinfo\n" +
+		"grep -Eq '^[^ ]+ [^ ]+ [^ ]+ [^ ]+ /home/build ro[, ]' /proc/self/mountinfo\n" + runs
 	// Melange's temporary guest and workspace start owner-only. Prepare them
 	// as their owner, then run every package command in the non-root sandbox.
 	return "chmod 755 / /home/build\n" +
