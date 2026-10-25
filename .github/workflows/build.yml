@@ -81,9 +81,6 @@ jobs:
           set -o pipefail
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" \
             build/tools/package-smoke --package "$PACKAGE" --arch "$ARCH" 2>&1 | tee -a build/build.log
-      - name: Report sandbox denials
-        if: failure() && runner.environment == 'github-hosted'
-        run: sudo -n journalctl -k --grep='apparmor.*DENIED' -n 30 --no-pager || true
       - name: Restore artifact ownership
         if: always()
         run: |

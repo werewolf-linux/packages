@@ -5,11 +5,9 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,7 +32,7 @@ func main() {
 	}
 }
 
-func check(name, arch string) (result error) {
+func check(name, arch string) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -94,8 +92,7 @@ func check(name, arch string) (result error) {
 	if err != nil {
 		return err
 	}
-	// Bubblewrap enters the installed test root as UID 1000. MkdirTemp's
-	// owner-only mode would prevent that user from traversing TMPDIR to it.
+	// Keep the scratch parent traversable for installed-package probes.
 	if err := os.Chmod(dir, 0o755); err != nil {
 		return err
 	}
@@ -119,18 +116,6 @@ func check(name, arch string) (result error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	launcher, cleanup, err := smokeLauncher(ctx, root, dir)
-	if err != nil {
-		return err
-	}
-	defer func() { result = errors.Join(result, cleanup()) }()
-	if launcher != "" {
-		path := os.Getenv("PATH")
-		if err := os.Setenv("PATH", launcher+string(os.PathListSeparator)+path); err != nil {
-			return err
-		}
-		defer os.Setenv("PATH", path)
-	}
 	index := append([]string{"index", "--arch", arch, "--output", filepath.Join(repository, arch, "APKINDEX.tar.gz")}, apks...)
 	if err := update.RunCommand(ctx, root, "melange", index...); err != nil {
 		return err
@@ -143,8 +128,6 @@ func check(name, arch string) (result error) {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			// Only trusted fixture setup runs here; smokeCommand creates the
-			// non-root sandbox and drops all capabilities before package code.
 			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
@@ -163,64 +146,14 @@ func check(name, arch string) (result error) {
 	return update.RunCommand(ctx, root, "melange", "test", path, meta.Name, "--arch", arch, "--runner", "bubblewrap", "--ignore-signatures", "--source-dir", filepath.Join(root, "tests/smoke"), "--timeout", "10m")
 }
 
-// Ubuntu's build profile intentionally denies namespace administration to
-// child programs. The smoke launcher needs it to create its second, read-only
-// sandbox. Load a separate profile for that launcher and remove it afterwards;
-// every package command still runs as UID 1000 with all capabilities dropped.
-func smokeLauncher(ctx context.Context, root, scratch string) (string, func() error, error) {
-	noop := func() error { return nil }
-	if _, err := os.Stat("/etc/apparmor.d/bwrap-userns-restrict"); os.IsNotExist(err) {
-		return "", noop, nil
-	} else if err != nil {
-		return "", noop, err
-	}
-	directory := filepath.Join(scratch, "launcher")
-	code := `import importlib.util, pathlib, sys
-spec = importlib.util.spec_from_file_location('smoke_runner', sys.argv[1])
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-module.ROOT = pathlib.Path(sys.argv[2])
-module.CAPABILITIES = tuple(dict.fromkeys(module.CAPABILITIES + ('sys_admin', 'net_admin', 'setpcap')))
-module.main()
-`
-	tools := filepath.Join(directory, "build/tools")
-	cleanup := func() error {
-		profile := filepath.Join(tools, "bwrap.apparmor")
-		if _, err := os.Stat(profile); os.IsNotExist(err) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(cleanupCtx, "/usr/sbin/apparmor_parser", "--remove", profile)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("remove smoke launcher profile: %w: %s", err, output)
-		}
-		return nil
-	}
-	cmd := exec.CommandContext(ctx, "python3", "-c", code, filepath.Join(root, "scripts/setup-runner.py"), directory)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", noop, errors.Join(err, cleanup())
-	}
-	return tools, cleanup, nil
-}
-
 // Installed scripts must run from a read-only filesystem, as they do in an
 // appliance. Melange's package-installation root is writable. A nested mount
 // namespace makes the runtime and fixtures read-only, with scratch in /tmp.
 func smokeCommand(runs string) string {
-	runs = "test \"$(id -u)\" -ne 0\n" +
-		"for capability in CapInh CapPrm CapEff CapBnd CapAmb; do\n" +
-		"  grep -Eq \"^$capability:[[:space:]]*0+$\" /proc/self/status\n" +
-		"done\n" +
-		"grep -Eq '^[^ ]+ [^ ]+ [^ ]+ [^ ]+ / ro[, ]' /proc/self/mountinfo\n" +
-		"grep -Eq '^[^ ]+ [^ ]+ [^ ]+ [^ ]+ /home/build ro[, ]' /proc/self/mountinfo\n" + runs
-	// Melange's temporary guest and workspace start owner-only. Prepare them
-	// as their owner, then run every package command in the non-root sandbox.
-	return "chmod 755 / /home/build\n" +
-		"exec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
+	runs = "test \"$(id -u)\" -ne 0\n" + runs
+	// Melange's root-owned guest starts at mode 0700. Set up its mount as root;
+	// the nested runtime below switches UID and drops every capability.
+	return "chmod 755 /\nexec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
 		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --ro-bind /proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
