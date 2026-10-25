@@ -1,0 +1,38 @@
+{
+  "update": {
+    "source": "wolfi",
+    "recipe": "samba",
+    "upstream": {
+      "source": "github-tags",
+      "repo": "samba-team/samba",
+      "prefix": "samba-"
+    }
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Build Samba without PAM: no pam_winbind module, and no Samba library depends on libpam.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; the Werewolf samba form confines smbd.",
+    "evidence": [
+      "overlay.yaml",
+      "tests/probe.sh"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "samba"
+    ],
+    "changes": [
+      {
+        "what": "Configure --without-pam, drop linux-pam-dev, and remove the samba-pam-winbind subpackage.",
+        "why": "libauth-samba, which the server needs, linked libpam, bringing pam_unix and its unix_chkpwd helper into the file server's image. Werewolf's Samba authenticates users against its own password database, never through PAM.",
+        "evidence": [
+          "overlay.yaml",
+          "tests/probe.sh"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi ships a Samba whose server and libraries do not depend on libpam; review before retiring this overlay."
+  }
+}

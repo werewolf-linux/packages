@@ -1,0 +1,410 @@
+{
+  "package": {
+    "name": "busybox",
+    "version": "1.38.0",
+    "epoch": 1003,
+    "description": "swiss-army knife for embedded systems (Werewolf: applets exec applets by path)",
+    "copyright": [
+      {
+        "license": "GPL-2.0-only"
+      }
+    ],
+    "dependencies": {
+      "provider-priority": 10,
+      "runtime": [
+        "merged-bin",
+        "merged-sbin",
+        "merged-usrsbin",
+        "wolfi-baselayout"
+      ],
+      "provides": [
+        "upstream-origin:busybox:1.38.0-r3"
+      ]
+    },
+    "scriptlets": {
+      "trigger": {
+        "paths": [
+          "/bin",
+          "/sbin",
+          "/usr/bin",
+          "/usr/sbin"
+        ],
+        "script": "#!/usr/bin/busybox sh\nfor manifest in /etc/busybox-paths.d/*; do\n  [ -f \"$manifest\" ] || continue\n  while IFS= read -r path; do\n    case \"$path\" in bin/sh|usr/bin/sh) continue ;; esac\n    [ -e \"/$path\" ] || [ -L \"/$path\" ] || /usr/bin/busybox ln -s /usr/bin/busybox \"/$path\"\n  done < \"$manifest\"\ndone\n"
+      }
+    },
+    "resources": {
+      "cpu": "2",
+      "memory": "4Gi"
+    }
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.version}}",
+      "match": "\\.",
+      "replace": "_",
+      "to": "mangled-package-version"
+    }
+  ],
+  "environment": {
+    "contents": {
+      "packages": [
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "glibc-2.44-dev",
+        "perl"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/vda-linux/busybox_mirror.git https://git.busybox.net/busybox.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" fc71374dfccd46448c62947269a35f1420d7ee28; then\n      test \"$(git rev-parse FETCH_HEAD)\" = fc71374dfccd46448c62947269a35f1420d7ee28\n      git -c core.hooksPath=/dev/null checkout -q --detach fc71374dfccd46448c62947269a35f1420d7ee28\n      exit 0\n    fi\n  done\ndone\necho \"fc71374dfccd46448c62947269a35f1420d7ee28: every source failed, three times\" >&2\nexit 1\n",
+      "working-directory": "build"
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2022-28391-1.patch ../CVE-2022-28391-2.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../0001-tar-fix-TOCTOU-symlink-race-condition.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../0037-awk.c-fix-CVE-2023-42366-bug-15874.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2024-58251-2.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2025-46394.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2025-60876.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../archival-disallow-path-traversals-CVE-2023-39810.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../0001-tar-strip-unsafe-hardlink-components-GNU-tar-does-th.patch\n../0002-tar-only-strip-unsafe-components-from-hardlinks-not-.patch\n"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2026-38753.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2026-38752.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2026-38754.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "working-directory": "build",
+      "with": {
+        "patches": "../CVE-2026-38755.patch"
+      }
+    },
+    {
+      "name": "Configure",
+      "working-directory": "build",
+      "runs": "cp ../busyboxconfig .config\n# Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH\n# search, which Werewolf's glibc refuses (devel/busybox/README.md).\nsed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config\ngrep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config\ngrep -qx 'CONFIG_BUSYBOX_EXEC_PATH=\"/usr/bin/busybox\"' .config\n"
+    },
+    {
+      "working-directory": "build",
+      "runs": "make CC=\"${{host.triplet.gnu}}-gcc\" V=1 -j$(nproc)\n"
+    },
+    {
+      "name": "Install",
+      "working-directory": "build",
+      "runs": "mkdir -p \"${{targets.destdir}}\"/usr/bin\nmkdir -p \"${{targets.destdir}}\"/etc/busybox-paths.d\ninstall -m755 busybox \"${{targets.destdir}}\"/usr/bin/busybox\ninstall -m644 ../securetty \"${{targets.destdir}}\"/etc/securetty\n./busybox --list-path > \"${{targets.destdir}}\"/etc/busybox-paths.d/busybox\n# /bin/sh belongs to mksh, including developer images.\nsed -i '\\|^bin/sh$|d;\\|^usr/bin/sh$|d' \"${{targets.destdir}}\"/etc/busybox-paths.d/busybox\n\n# sbin merge\nsed 's|^sbin|usr/bin|' -i \"${{targets.destdir}}\"/etc/busybox-paths.d/busybox\n# bin merge\nsed 's|^bin|usr/bin|' -i \"${{targets.destdir}}\"/etc/busybox-paths.d/busybox\n# usrsbin merge\nsed 's|^usr/sbin|usr/bin|' -i \"${{targets.destdir}}\"/etc/busybox-paths.d/busybox\n"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "busybox-full",
+      "dependencies": {
+        "provides": [
+          "busybox=${{package.full-version}}",
+          "upstream-origin:busybox:1.38.0-r3"
+        ],
+        "provider-priority": 5,
+        "runtime": [
+          "merged-bin",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "options": {
+        "no-commands": true
+      },
+      "pipeline": [
+        {
+          "name": "Configure",
+          "working-directory": "build",
+          "runs": "cp ../busyboxconfig-full .config\n# Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH\n# search, which Werewolf's glibc refuses (devel/busybox/README.md).\nsed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config\ngrep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config\ngrep -qx 'CONFIG_BUSYBOX_EXEC_PATH=\"/usr/bin/busybox\"' .config\n"
+        },
+        {
+          "working-directory": "build",
+          "runs": "make CC=\"${{host.triplet.gnu}}-gcc\" V=1 -j$(nproc)\n"
+        },
+        {
+          "name": "Install",
+          "working-directory": "build",
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmkdir -p \"${{targets.subpkgdir}}\"/etc/busybox-paths.d\ninstall -m755 busybox \"${{targets.subpkgdir}}\"/usr/bin/busybox\ninstall -m644 ../securetty \"${{targets.subpkgdir}}\"/etc/securetty\n./busybox --list-path > \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-full\n# /bin/sh belongs to mksh, including developer images.\nsed -i '\\|^bin/sh$|d;\\|^usr/bin/sh$|d' \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-full\n\n# sbin merge\nsed 's|^sbin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-full\n# bin merge\nsed 's|^bin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-full\n# usrsbin merge\nsed 's|^usr/sbin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-full\n"
+        }
+      ],
+      "scriptlets": {
+        "trigger": {
+          "paths": [
+            "/bin",
+            "/sbin",
+            "/usr/bin",
+            "/usr/sbin"
+          ],
+          "script": "#!/usr/bin/busybox sh\nfor manifest in /etc/busybox-paths.d/*; do\n  [ -f \"$manifest\" ] || continue\n  while IFS= read -r path; do\n    case \"$path\" in bin/sh|usr/bin/sh) continue ;; esac\n    [ -e \"/$path\" ] || [ -L \"/$path\" ] || /usr/bin/busybox ln -s /usr/bin/busybox \"/$path\"\n  done < \"$manifest\"\ndone\n"
+        }
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "binutils",
+              "python3",
+              "wolfi-base",
+              "ver-check"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "test that the busybox binary is dynamically linked",
+            "runs": "if ! readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then\n  echo \"FAIL: check to ensure busybox is dynamically linked failed\"\n  echo \"The DYNAMIC field should exist in the ELF program header, output follows\"\n  readelf -Wl /usr/bin/busybox\n  exit 1\nfi\necho \"PASS: busybox is dynamically linked\"\n"
+          },
+          {
+            "name": "Verify network utilities are present",
+            "runs": "busybox --help\nbusybox --list-full >full.txt\n# These programs are expected to be present\nfor p in nc netcat wget nslookup; do\n    if ! grep \"usr/bin/$p\" full.txt; then\n        echo \"$p is not present in busybox --list-full output\"\n        exit 1\n    fi\n    \"$p\" --help ||\n      { echo \"$p --help exited $?. expected pass\"; exit 1; }\ndone\n"
+          },
+          {
+            "name": "Test wget can download a file",
+            "runs": "# Create test content for HTTP server\nmkdir -p /tmp/www\necho \"wget test content\" > /tmp/www/test.txt\n\n# Start Python HTTP server\ncd /tmp/www\npython3 -m http.server 8888 > /tmp/httpd.log 2>&1 &\nSERVER_PID=$!\n\n# Wait for server to be ready\nsleep 2\n\n# Test wget download\nwget -O /tmp/downloaded.txt http://127.0.0.1:8888/test.txt\n\n# Verify downloaded content\nif ! grep -F \"wget test content\" /tmp/downloaded.txt; then\n  echo \"FAIL: wget did not download expected content\"\n  cat /tmp/downloaded.txt\n  kill \"$SERVER_PID\"\n  exit 1\nfi\n\necho \"PASS: wget successfully downloaded file\"\n\n# Cleanup\nkill \"$SERVER_PID\"\n"
+          },
+          {
+            "name": "Test nc can make network connections",
+            "runs": "# Start nc listening in background, will send test data to first connection\necho \"nc test data\" | nc -l -p 9999 &\nLISTEN_PID=$!\n\n# Wait for listener to be ready\nsleep 1\n\n# Connect to the listening nc and capture data\nresult=$(nc 127.0.0.1 9999)\n\n# Wait for listener to finish\nwait \"$LISTEN_PID\"\n\n# Verify data was transferred\nif [ \"$result\" = \"nc test data\" ]; then\n  echo \"PASS: nc network connection works\"\nelse\n  echo \"FAIL: nc did not receive expected data\"\n  echo \"Expected: nc test data\"\n  echo \"Got: $result\"\n  exit 1\nfi\n"
+          },
+          {
+            "name": "Tools run applets by name without searching PATH",
+            "runs": "cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'\n# Each tool that runs a command runs an applet named bare from busybox itself:\n# with PATH naming nothing, the PATH search a plain execvp would need finds no\n# program, as Werewolf's glibc searches none.\nset -eu\nfor tool in env 'timeout 5' nohup nice setsid flock\\ /tmp/busybox-probe.lock; do\n\t# shellcheck disable=SC2086 # the tool's words split on purpose\n\tPATH=/nonexistent /usr/bin/busybox $tool true\ndone\necho x | PATH=/nonexistent /usr/bin/busybox xargs true\nPATH=/nonexistent /usr/bin/busybox time true 2> /dev/null\nrm -f /tmp/busybox-probe.lock\n\n# All variants leave /bin/sh to the standalone shell package.\nfor manifest in /etc/busybox-paths.d/*; do\n    [ -f \"$manifest\" ] || continue\n    if /usr/bin/busybox grep -Eq '^(usr/)?bin/sh$' \"$manifest\"; then\n        echo \"BusyBox claims /bin/sh: $manifest\" >&2\n        exit 1\n    fi\ndone\nWEREWOLF_BUSYBOX_PROBE\n/usr/bin/busybox sh /tmp/busybox-probe.sh\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "busybox-static",
+      "dependencies": {
+        "provides": [
+          "busybox=${{package.full-version}}",
+          "upstream-origin:busybox:1.38.0-r3"
+        ],
+        "provider-priority": 5,
+        "runtime": [
+          "merged-bin",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "options": {
+        "no-commands": true
+      },
+      "pipeline": [
+        {
+          "name": "Configure",
+          "working-directory": "build",
+          "runs": "sed -e 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' \\\n    -e 's/^# CONFIG_STATIC_LIBGCC is not set/CONFIG_STATIC_LIBGCC=y/' \\\n    -e 's/^# CONFIG_USE_BB_PWD_GRP is not set/CONFIG_USE_BB_PWD_GRP=y/' \\\n    -e 's/^# CONFIG_USE_BB_SHADOW is not set/CONFIG_USE_BB_SHADOW=y/' \\\n    -e 's/^# CONFIG_USE_BB_CRYPT is not set/CONFIG_USE_BB_CRYPT=y/' \\\n    -e 's/^# CONFIG_USE_BB_CRYPT_SHA is not set/CONFIG_USE_BB_CRYPT_SHA=y/' \\\n    ../busyboxconfig > .config\n# yescrypt (USE_BB_CRYPT_YES, new in 1.38.0) is a sub-option of\n# USE_BB_CRYPT, which is disabled in the base config, so there is no\n# line to substitute above; append it\necho \"CONFIG_USE_BB_CRYPT_YES=y\" >> .config\n# emit diff for verification, diff returns 1 on differences,\n# ensure there actually is a difference\nrc=0\ndiff -u ../busyboxconfig .config || rc=\"$?\"\nif [ \"$rc\" -ne 1 ]; then\n   echo \"ERROR: expected the generated static config to differ from the default config\" >&2\n   exit 1\nfi\n# Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH\n# search, which Werewolf's glibc refuses (devel/busybox/README.md).\nsed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config\ngrep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config\ngrep -qx 'CONFIG_BUSYBOX_EXEC_PATH=\"/usr/bin/busybox\"' .config\n"
+        },
+        {
+          "working-directory": "build",
+          "runs": "make CC=\"${{host.triplet.gnu}}-gcc\" V=1 -j$(nproc)\n"
+        },
+        {
+          "name": "Install",
+          "working-directory": "build",
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmkdir -p \"${{targets.subpkgdir}}\"/etc/busybox-paths.d\ninstall -m755 busybox \"${{targets.subpkgdir}}\"/usr/bin/busybox\ninstall -m644 ../securetty \"${{targets.subpkgdir}}\"/etc/securetty\n./busybox --list-path > \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-static\n# /bin/sh belongs to mksh, including developer images.\nsed -i '\\|^bin/sh$|d;\\|^usr/bin/sh$|d' \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-static\n\n# sbin merge\nsed 's|^sbin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-static\n# bin merge\nsed 's|^bin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-static\n# usrsbin merge\nsed 's|^usr/sbin|usr/bin|' -i \"${{targets.subpkgdir}}\"/etc/busybox-paths.d/busybox-static\n"
+        }
+      ],
+      "scriptlets": {
+        "trigger": {
+          "paths": [
+            "/bin",
+            "/sbin",
+            "/usr/bin",
+            "/usr/sbin"
+          ],
+          "script": "#!/usr/bin/busybox sh\nfor manifest in /etc/busybox-paths.d/*; do\n  [ -f \"$manifest\" ] || continue\n  while IFS= read -r path; do\n    case \"$path\" in bin/sh|usr/bin/sh) continue ;; esac\n    [ -e \"/$path\" ] || [ -L \"/$path\" ] || /usr/bin/busybox ln -s /usr/bin/busybox \"/$path\"\n  done < \"$manifest\"\ndone\n"
+        }
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "binutils",
+              "ver-check"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "test that the busybox binary is statically linked",
+            "runs": "if readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then\n  echo \"FAIL: check to ensure busybox is statically linked failed\"\n  echo \"No DYNAMIC field should exist in the ELF program header, output follows\"\n  readelf -Wl /usr/bin/busybox\n  exit 1\nfi\necho \"PASS: busybox is statically linked\"\n"
+          },
+          {
+            "uses": "test/hardening-check",
+            "with": {
+              "args": "--nocfprotection --nopie --nobindnow"
+            }
+          },
+          {
+            "name": "Test echo and grep utilities via pipe",
+            "runs": "if ! echo \"hello world\" | grep -F \"hello\"; then\n  echo \"FAIL: echo | grep pipe test failed\"\n  exit 1\nfi\necho \"PASS: echo | grep pipe works\"\n"
+          },
+          {
+            "name": "Test file I/O with echo and cat",
+            "runs": "echo \"test content\" > /tmp/testfile.txt\nif ! cat /tmp/testfile.txt | grep -F \"test content\"; then\n  echo \"FAIL: cat file test failed\"\n  exit 1\nfi\necho \"PASS: file I/O with echo and cat works\"\n"
+          },
+          {
+            "name": "Test ls and grep to find busybox",
+            "runs": "if ! ls /usr/bin | grep -F \"busybox\"; then\n  echo \"FAIL: busybox not found in /usr/bin\"\n  exit 1\nfi\necho \"PASS: ls | grep finds busybox\"\n"
+          },
+          {
+            "name": "Test shell script execution",
+            "runs": "tee /tmp/test-script.sh <<'EOF'\n#!/usr/bin/busybox sh\necho \"script executed successfully\"\nEOF\nchmod +x /tmp/test-script.sh\noutput=$(/tmp/test-script.sh)\nif [ \"$output\" != \"script executed successfully\" ]; then\n  echo \"FAIL: Shell script execution failed\"\n  echo \"Expected: script executed successfully\"\n  echo \"Got: $output\"\n  exit 1\nfi\necho \"PASS: Shell script execution works\"\n"
+          },
+          {
+            "name": "Verify network utilities are not present",
+            "runs": "busybox --help\nbusybox --list-full >full.txt\n\n# These programs have been intentionally removed from default busybox\nfor p in nc netcat wget; do\n    if grep \"usr/bin/$p\" full.txt; then\n        echo \"Found '$p' in list-full output\"\n        exit 1\n    fi\n    command -v \"$p\" &&\n      { echo \"command '$p' is present. It should not be.\"; exit 1; }\ndone\n"
+          },
+          {
+            "name": "awk = and ?: precedence",
+            "runs": "found=$(awk 'BEGIN { a=0?\"bug\":\"ok\"; print a}')\n[ \"$found\" = \"ok\" ] &&\n  echo \"PASS: ternary precedence\" ||\n  { echo \"FAIL: ternary precedence\" ; exit 1; }\n"
+          },
+          {
+            "name": "test that busybox is built not to use nsswitch.conf functionality",
+            "runs": "# if busybox is statically linked against glibc and is not\n# built to use its own passwd/shadow reading functions,\n# functions will fail if /etc/nsswitch.conf is present but\n# the libnsswitch_* libraries are not; e.g.:\n#   $ whoami\n#   whoami: unknown uid 65532\n# Confirm this by setting up a chroot with the necessary\n# files and nsswitch.conf and that whoami still works as\n# expected.\nmkdir -p /tmp/whoami/bin\ncp /usr/bin/busybox /tmp/whoami/bin/whoami\nmkdir -p /tmp/whoami/etc\ncp /etc/passwd /etc/shadow /etc/group /etc/nsswitch.conf /tmp/whoami/etc\nchroot /tmp/whoami/ /bin/whoami | grep '^root$' &&\n  echo \"PASS: whoami works in presence of nsswitch.conf\" ||\n  { echo \"FAIL: whoami failed to lookup username with nsswitch.conf\" ;\n    echo \"This likely means busybox is using glibc's libnss\" ;\n    echo \"Verify busybox is built with CONFIG_USE_BB_PWD_GRP\" ;\n    exit 1;\n  }\n"
+          },
+          {
+            "name": "Tools run applets by name without searching PATH",
+            "runs": "cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'\n# Each tool that runs a command runs an applet named bare from busybox itself:\n# with PATH naming nothing, the PATH search a plain execvp would need finds no\n# program, as Werewolf's glibc searches none.\nset -eu\nfor tool in env 'timeout 5' nohup nice setsid flock\\ /tmp/busybox-probe.lock; do\n\t# shellcheck disable=SC2086 # the tool's words split on purpose\n\tPATH=/nonexistent /usr/bin/busybox $tool true\ndone\necho x | PATH=/nonexistent /usr/bin/busybox xargs true\nPATH=/nonexistent /usr/bin/busybox time true 2> /dev/null\nrm -f /tmp/busybox-probe.lock\n\n# All variants leave /bin/sh to the standalone shell package.\nfor manifest in /etc/busybox-paths.d/*; do\n    [ -f \"$manifest\" ] || continue\n    if /usr/bin/busybox grep -Eq '^(usr/)?bin/sh$' \"$manifest\"; then\n        echo \"BusyBox claims /bin/sh: $manifest\" >&2\n        exit 1\n    fi\ndone\nWEREWOLF_BUSYBOX_PROBE\n/usr/bin/busybox sh /tmp/busybox-probe.sh\n"
+          }
+        ]
+      }
+    }
+  ],
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "binutils",
+          "ver-check"
+        ]
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "name": "test that the busybox binary is dynamically linked",
+        "runs": "if ! readelf -Wl /usr/bin/busybox | grep -E '^ *DYNAMIC +' ; then\n  echo \"FAIL: check to ensure busybox is dynamically linked failed\"\n  echo \"The DYNAMIC field should exist in the ELF program header, output follows\"\n  readelf -Wl /usr/bin/busybox\n  exit 1\nfi\necho \"PASS: busybox is dynamically linked\"\n"
+      },
+      {
+        "uses": "test/hardening-check",
+        "with": {
+          "args": "--nocfprotection"
+        }
+      },
+      {
+        "name": "Test echo and grep utilities via pipe",
+        "runs": "if ! echo \"hello world\" | grep -F \"hello\"; then\n  echo \"FAIL: echo | grep pipe test failed\"\n  exit 1\nfi\necho \"PASS: echo | grep pipe works\"\n"
+      },
+      {
+        "name": "Test file I/O with echo and cat",
+        "runs": "echo \"test content\" > /tmp/testfile.txt\nif ! cat /tmp/testfile.txt | grep -F \"test content\"; then\n  echo \"FAIL: cat file test failed\"\n  exit 1\nfi\necho \"PASS: file I/O with echo and cat works\"\n"
+      },
+      {
+        "name": "Test ls and grep to find busybox",
+        "runs": "if ! ls /usr/bin | grep -F \"busybox\"; then\n  echo \"FAIL: busybox not found in /usr/bin\"\n  exit 1\nfi\necho \"PASS: ls | grep finds busybox\"\n"
+      },
+      {
+        "name": "Test shell script execution",
+        "runs": "tee /tmp/test-script.sh <<'EOF'\n#!/usr/bin/busybox sh\necho \"script executed successfully\"\nEOF\nchmod +x /tmp/test-script.sh\noutput=$(/tmp/test-script.sh)\nif [ \"$output\" != \"script executed successfully\" ]; then\n  echo \"FAIL: Shell script execution failed\"\n  echo \"Expected: script executed successfully\"\n  echo \"Got: $output\"\n  exit 1\nfi\necho \"PASS: Shell script execution works\"\n"
+      },
+      {
+        "name": "Verify network utilities are not present",
+        "runs": "busybox --help\nbusybox --list-full >full.txt\n\n# These programs have been intentionally removed from default busybox\nfor p in nc netcat wget; do\n    if grep \"usr/bin/$p\" full.txt; then\n        echo \"Found '$p' in list-full output\"\n        exit 1\n    fi\n    command -v \"$p\" &&\n      { echo \"command '$p' is present. It should not be.\"; exit 1; }\ndone\n"
+      },
+      {
+        "name": "awk = and ?: precedence",
+        "runs": "found=$(awk 'BEGIN { a=0?\"bug\":\"ok\"; print a}')\n[ \"$found\" = \"ok\" ] &&\n  echo \"PASS: ternary precedence\" ||\n  { echo \"FAIL: ternary precedence\" ; exit 1; }\n"
+      },
+      {
+        "name": "Tools run applets by name without searching PATH",
+        "runs": "cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'\n# Each tool that runs a command runs an applet named bare from busybox itself:\n# with PATH naming nothing, the PATH search a plain execvp would need finds no\n# program, as Werewolf's glibc searches none.\nset -eu\nfor tool in env 'timeout 5' nohup nice setsid flock\\ /tmp/busybox-probe.lock; do\n\t# shellcheck disable=SC2086 # the tool's words split on purpose\n\tPATH=/nonexistent /usr/bin/busybox $tool true\ndone\necho x | PATH=/nonexistent /usr/bin/busybox xargs true\nPATH=/nonexistent /usr/bin/busybox time true 2> /dev/null\nrm -f /tmp/busybox-probe.lock\n\n# All variants leave /bin/sh to the standalone shell package.\nfor manifest in /etc/busybox-paths.d/*; do\n    [ -f \"$manifest\" ] || continue\n    if /usr/bin/busybox grep -Eq '^(usr/)?bin/sh$' \"$manifest\"; then\n        echo \"BusyBox claims /bin/sh: $manifest\" >&2\n        exit 1\n    fi\ndone\nWEREWOLF_BUSYBOX_PROBE\n/usr/bin/busybox sh /tmp/busybox-probe.sh\n"
+      }
+    ]
+  },
+  "update": {
+    "enabled": false
+  }
+}

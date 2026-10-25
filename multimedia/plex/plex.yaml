@@ -4,7 +4,7 @@
 package:
   name: plexmediaserver
   version: 1.43.5.11029
-  epoch: 4
+  epoch: 5
   description: Plex Media Server with build-time codec dependencies
   # The vendor tree carries its private musl ABI and Python Script Host.
   # Resource-script shebangs must not pull an unrelated system Python 2.
@@ -142,13 +142,21 @@ pipeline:
       chmod -R go-w "$home"
       install -Dm644 sources.json "${{targets.destdir}}/usr/share/plexmediaserver/sources.json"
 
-# Plex's signed APT metadata and codec manifests are captured by verify.py.
+# Plex's signed APT metadata and codec manifests are checked by package plex-verify.
 # Refresh the version and every dependent codec pin together; never select
 # a new binary or download native code inside a running guest.
 update:
   enabled: false
 
 test:
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
   pipeline:
     - runs: |
         /usr/lib/plexmediaserver/"Plex Media Server" --version | grep -Fx 'v1.43.5.11029-6bf8af3f0'

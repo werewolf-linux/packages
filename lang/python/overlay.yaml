@@ -1,0 +1,195 @@
+# Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+title: Python
+stream-parts: 2
+sources:
+- https://github.com/python/cpython.git
+description-suffix: ' (Werewolf fixed hardening policy)'
+patches: werewolf/patches
+context:
+  patches: werewolf/patches
+checks:
+- path: [pipeline, uses=git-checkout]
+  expect:
+    uses: git-checkout
+    with:
+      branch: ${{vars.pyversion}}
+      expected-commit: ${lock.source_commit}
+      repository: https://github.com/python/cpython
+- path: [pipeline]
+  shape:
+  - uses=git-checkout
+  - name=Drop the branch development marker from the version string
+  - name=Support OpenSSL 4 ABI
+  - name=Force use of system libraries
+  - name=Block blake and hmac usage in FIPS mode
+  - name=Clone patched source for no-GIL and JIT builds
+- path: [subpackages]
+  shape:
+  - name=${{package.name}}${{range.key}}-runtime
+  - name=${{package.name}}t
+  - name=${{package.name}}t-dev
+  - name=${{package.name}}-jit
+  - name=${{package.name}}${{range.key}}-base
+  - name=${{package.name}}-privileged-netbindservice
+  - name=${{package.name}}${{range.key}}-tk
+  - name=${{package.name}}${{range.key}}-doc
+  - name=${{package.name}}${{range.key}}-dev
+  - name=${{package.name}}${{range.key}}-base-dev
+- path: [vars, config-opts-common]
+  expect: |
+    --host=__host_triplet_gnu__ \
+    --build=__host_triplet_gnu__ \
+    --target=__host_triplet_gnu__ \
+    --prefix=/usr \
+    --enable-ipv6 \
+    --enable-loadable-sqlite-extensions \
+    --enable-shared \
+    --with-lto \
+    --with-computed-gotos \
+    --with-dbmliborder=gdbm:ndbm \
+    --with-system-expat \
+    --with-system-libmpdec \
+    --without-ensurepip \
+    --with-builtin-hashlib-hashes=blake2 \
+    --with-wheel-pkg-dir=/usr/share/python-wheels
+- path: [pipeline, '2']
+  expect:
+    name: Support OpenSSL 4 ABI
+    uses: patch
+    with:
+      patches: |
+        0006-Allow-HelloRetryRequest-in-test_ssl-servername-callb.patch
+        0007-Always-provide-PROTOCOL_TLSv1-and-fix-HAS_TLSv1_2-wi.patch
+- path: [pipeline, '4']
+  expect:
+    name: Block blake and hmac usage in FIPS mode
+    uses: patch
+    with:
+      patches: |
+        gh-127301.patch
+        0010-hashlib-do-not-fail-import-without-EVP_MAC-HMAC.patch
+- path: [data]
+  expect:
+  - name: variants
+    items:
+      ? ''
+      : ${{vars.config-opts-gil}}
+edits:
+- path: [vars, config-opts-common]
+  replace:
+  - old: |
+      --enable-loadable-sqlite-extensions \
+    new: ''
+- path: [pipeline, name=Clone patched source for no-GIL and JIT builds]
+  delete: true
+- path: [pipeline]
+  append:
+  - name: Allow every runtime-hardening group in the build guest only
+    runs: |
+      mkdir -p /etc/runtime-hardening
+      : > /etc/runtime-hardening/build-root
+      chmod 600 /etc/runtime-hardening/build-root
+      mkdir -p /etc/runtime-hardening/allow/all/python
+      for f in native deserialize inline writable-source environment; do
+        : > /etc/runtime-hardening/allow/all/python/$f
+      done
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-base-dev', test, pipeline, uses=test/python/interpreter/c-ext]
+  delete: true
+  expect:
+    uses: test/python/interpreter/c-ext
+    with:
+      python: ${{vars.python}}
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-base-dev', test, pipeline]
+  append:
+  - name: Build and import a C extension from its directory
+    runs: |
+      python="${{vars.python}}"
+      d=$(mktemp -d)
+      cat > "$d/c_ext_check.c" <<'EOF'
+      #include <Python.h>
+      static PyObject *answer(PyObject *self, PyObject *args) { return PyLong_FromLong(42); }
+      static PyMethodDef methods[] = {{"answer", answer, METH_NOARGS, NULL}, {NULL, NULL, 0, NULL}};
+      static struct PyModuleDef module = {PyModuleDef_HEAD_INIT, "c_ext_check", NULL, 0, methods};
+      PyMODINIT_FUNC PyInit_c_ext_check(void) { return PyModuleDef_Init(&module); }
+      EOF
+      include=$("$python" -c 'import sysconfig; print(sysconfig.get_path("include"))')
+      ext=$("$python" -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')
+      cc -shared -fPIC -I"$include" "$d/c_ext_check.c" -o "$d/c_ext_check$ext"
+      "$python" -c "import sys; sys.path.insert(0, sys.argv[1]); import c_ext_check; assert c_ext_check.answer() == 42; print('c_ext_check: built and imported')" "$d"
+      rm -rf "$d"
+    needs:
+      packages:
+      - build-base
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-dev', test, pipeline, uses=test/python/interpreter/c-ext]
+  delete: true
+  expect:
+    uses: test/python/interpreter/c-ext
+    with:
+      python: ${{vars.python}}
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-dev', test, pipeline]
+  append:
+  - name: Build and import a C extension from its directory
+    runs: |
+      python="${{vars.python}}"
+      d=$(mktemp -d)
+      cat > "$d/c_ext_check.c" <<'EOF'
+      #include <Python.h>
+      static PyObject *answer(PyObject *self, PyObject *args) { return PyLong_FromLong(42); }
+      static PyMethodDef methods[] = {{"answer", answer, METH_NOARGS, NULL}, {NULL, NULL, 0, NULL}};
+      static struct PyModuleDef module = {PyModuleDef_HEAD_INIT, "c_ext_check", NULL, 0, methods};
+      PyMODINIT_FUNC PyInit_c_ext_check(void) { return PyModuleDef_Init(&module); }
+      EOF
+      include=$("$python" -c 'import sysconfig; print(sysconfig.get_path("include"))')
+      ext=$("$python" -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')
+      cc -shared -fPIC -I"$include" "$d/c_ext_check.c" -o "$d/c_ext_check$ext"
+      "$python" -c "import sys; sys.path.insert(0, sys.argv[1]); import c_ext_check; assert c_ext_check.answer() == 42; print('c_ext_check: built and imported')" "$d"
+      rm -rf "$d"
+    needs:
+      packages:
+      - build-base
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-doc']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-tk']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-privileged-netbindservice']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-jit']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}t-dev']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}t']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-runtime', pipeline]
+  append:
+  - name: Remove GUI and documentation files before splitting packages
+    runs: |
+      rm -R "${{targets.contextdir}}/usr/lib/${{vars.python}}/tkinter"
+      rm "${{targets.contextdir}}/usr/lib/${{vars.python}}/lib-dynload"/_tkinter.*.so
+      rm -R "${{targets.contextdir}}/usr/share/man"
+- path: [subpackages, 'name=${{package.name}}${{range.key}}-runtime', pipeline]
+  append:
+  - name: Omit interactive terminal extensions
+    runs: |
+      test ! -e Modules/Setup.local
+      printf '*disabled*\nreadline\n_curses\n_curses_panel\n' > Modules/Setup.local
+  before: '0'
+- path: [test, pipeline]
+  append:
+  - name: Werewolf protections hold, and allowances take each back
+    needs:
+      packages:
+      - build-base
+    runs: |
+      ${shared:root-probe-python}mkdir -p /tmp/probe
+      cat > /tmp/probe/probe.py <<'WEREWOLF_PROBE_PY'
+      ${file:tests/probe.py}WEREWOLF_PROBE_PY
+      cat > /tmp/probe/probe.sh <<'WEREWOLF_PROBE_SH'
+      ${file:tests/probe.sh}WEREWOLF_PROBE_SH
+      sh /tmp/probe/probe.sh /tmp/probe/probe.py
+suite-setup:
+  name: Grant every group for the suite (the probe clears them)
+  runs: ${file:tests/build-grants.sh}
+release-edits:
+- path: [var-transforms, to=upstreamversion, match]
+  expect: (.*)_git.*
+  set: ^([0-9]+\.[0-9]+\.[0-9]+)(?:_git[0-9]+)?$

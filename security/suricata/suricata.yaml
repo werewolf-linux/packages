@@ -12,7 +12,7 @@
 package:
   name: suricata
   version: "8.0.7"
-  epoch: 2
+  epoch: 3
   description: Network IDS, IPS and security monitoring engine
   copyright:
     - license: GPL-2.0-only

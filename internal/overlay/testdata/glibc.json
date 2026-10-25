@@ -1,0 +1,1060 @@
+{
+  "package": {
+    "name": "glibc-neutered-2.44",
+    "version": "2.44",
+    "epoch": 27,
+    "description": "the GNU C library (Werewolf fixed hardening policy)",
+    "copyright": [
+      {
+        "license": "LGPL-2.1-or-later"
+      }
+    ],
+    "cpe": {
+      "vendor": "gnu",
+      "product": "glibc"
+    },
+    "resources": {
+      "cpu": "10",
+      "memory": "11Gi"
+    },
+    "dependencies": {
+      "provider-priority": "${{vars.neutered-priority}}",
+      "provides": [
+        "glibc=${{package.full-version}}",
+        "glibc-2.44=${{package.full-version}}",
+        "glibc-neutered=${{package.full-version}}",
+        "upstream-origin:glibc-2.44:2.44-r8"
+      ],
+      "runtime": [
+        "!musl",
+        "${{package.name}}-locale-posix",
+        "ld-linux-neutered-${{package.version}}=${{package.full-version}}",
+        "libgcc",
+        "merged-lib",
+        "merged-sbin",
+        "merged-usrsbin",
+        "wolfi-baselayout",
+        "${{package.name}}-nss-config=${{package.full-version}}"
+      ],
+      "replaces": [
+        "glibc-2.44"
+      ]
+    },
+    "test-resources": {
+      "cpu": "2",
+      "memory": "4Gi"
+    },
+    "annotations": {
+      "toolchain-stream": true,
+      "toolchain-stream-pkgs": "${{package.name}}-dev"
+    }
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "abi-compliance-checker",
+        "abi-dumper",
+        "bash",
+        "bison",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "coreutils",
+        "flex",
+        "gawk",
+        "glibc-2.44",
+        "glibc-abi-report<${{package.full-version}}",
+        "grep",
+        "openssf-compiler-options",
+        "py3-supported-beautifulsoup4",
+        "python3",
+        "rdfind",
+        "texinfo",
+        "wolfi-baselayout",
+        "zlib"
+      ]
+    },
+    "environment": {
+      "CPPFLAGS": ""
+    }
+  },
+  "vars": {
+    "charsets-to-remove": "IBM1390 IBM1399",
+    "glibc-expected-commit": "34106fee698c83eb0af71d4d0381e66b399be746",
+    "neutered-test-repository": ""
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.version}}",
+      "match": "([0-9])[.]([0-9]+)",
+      "replace": "$1$2",
+      "to": "provider-priority"
+    },
+    {
+      "from": "${{package.version}}",
+      "match": "([0-9])[.]([0-9]+)",
+      "replace": "10$1$2",
+      "to": "neutered-priority"
+    }
+  ],
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/kraj/glibc.git https://sourceware.org/git/glibc.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 34106fee698c83eb0af71d4d0381e66b399be746; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 34106fee698c83eb0af71d4d0381e66b399be746\n      git -c core.hooksPath=/dev/null checkout -q --detach 34106fee698c83eb0af71d4d0381e66b399be746\n      exit 0\n    fi\n  done\ndone\necho \"34106fee698c83eb0af71d4d0381e66b399be746: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "0001-Link-startup-files-without-package-metadata.patch\nfdo.patch\nfix-allowed-failures-escaping.patch\n"
+      }
+    },
+    {
+      "name": "Apply Werewolf policy patches",
+      "needs": {
+        "packages": [
+          "patch"
+        ]
+      },
+      "runs": "while IFS= read -r name; do\n  patch -p1 --forward --batch --fuzz=2 --no-backup-if-mismatch -i \"patches/$name\" || exit 1\ndone < patches/series\n"
+    },
+    {
+      "name": "Set up build directory",
+      "runs": "mkdir build\n"
+    },
+    {
+      "name": "Configure glibc",
+      "runs": "cd build\necho \"user-defined-trusted-dirs=/usr/local/lib:/usr/local/lib64:/usr/lib:/usr/lib64:/lib:/lib64\" >> configparms.base\necho \"slibdir=/usr/lib\" >> configparms.base\necho \"libdir=/usr/lib\" >> configparms.base\necho \"rootsbindir=/usr/bin\" >> configparms.base\necho \"build-programs=no\" > configparms\n# If x86_64, set to /lib64, /lib for aarch64\nif [ ${{build.arch}} == \"x86_64\" ]; then\n  echo \"rtlddir=/lib64\" >> configparms.base\nelse\n  echo \"rtlddir=/lib\" >> configparms.base\nfi\ncat configparms.base >> configparms\n\n../configure \\\n  --prefix=/usr \\\n  --libdir=/usr/lib \\\n  --datadir=/usr/share \\\n  --includedir=/usr/include \\\n  --sbindir=/usr/bin \\\n  --host=${{host.triplet.gnu}} \\\n  --build=${{host.triplet.gnu}} \\\n  --enable-bind-now \\\n  --enable-fortify-source \\\n  --enable-stackguard-randomization \\\n  --enable-stack-protector=strong \\\n  --enable-cet \\\n  --with-pkgversion=\"glibc-${{package.full-version}}\" \\\n  --disable-build-nscd \\\n        --disable-nscd \\\n        --enable-hardcoded-path-in-tests \\\n        --disable-werror \\\n  --disable-crypt \\\n  --enable-kernel=6.18\n\necho 'override rtld-prefix =' >> configparms.base\necho 'override rtld-prefix =' >> configparms\necho 'include $(common-objpfx)../tests/harness.mk' >> configparms.base\necho 'include $(common-objpfx)../tests/harness.mk' >> configparms\necho 'CFLAGS += -fstrict-flex-arrays=3' >> configparms.base\necho 'CFLAGS += -fstrict-flex-arrays=3' >> configparms\necho 'LDFLAGS.so += -Wl,-z,separate-code' >> configparms.base\necho 'LDFLAGS.so += -Wl,-z,separate-code' >> configparms\necho 'LDFLAGS-rtld += -Wl,-z,separate-code' >> configparms.base\necho 'LDFLAGS-rtld += -Wl,-z,separate-code' >> configparms\n"
+    },
+    {
+      "runs": "make -C build -j$(nproc)\n"
+    },
+    {
+      "runs": "# Build the programs with fortify\necho \"build-programs=yes\" > build/configparms\ncat build/configparms.base >> build/configparms\nmake -C build -j$(nproc)\n"
+    },
+    {
+      "runs": "make -C build -j$(nproc) install DESTDIR=\"${{targets.destdir}}\"\n"
+    },
+    {
+      "name": "Configure built-in NSS providers for validation",
+      "runs": "cp profile/nsswitch.conf /etc/nsswitch.conf\n"
+    },
+    {
+      "name": "Install explicit locale test fixtures",
+      "runs": "werewolf-tools/package-helper --action locales\n"
+    },
+    {
+      "uses": "test/compiler/hardening-check",
+      "with": {
+        "cc": "gcc"
+      }
+    },
+    {
+      "name": "Verify fixed hardening policy",
+      "runs": "werewolf-tools/package-helper --action policy\n"
+    },
+    {
+      "name": "Run the glibc testsuite",
+      "runs": "if [ -d /usr/lib/oldglibc ]; then\n  echo \"oldglibc detected: skipping the glibc testsuite (glibc-2.44 is dev-headers-only in this environment)\"\n  exit 0\nfi\n\n# The glibc test suite runs in two phases (upstream Makerules\n# check-twopass), which we gate differently:\n#\n#   Phase 1 (run-built-tests=no): builds every test program and runs the\n#   \"special\" tests -- header/conformance/ABI checks that do not execute a\n#   compiled binary (conform/*, check-installed-headers, check-abi-*, ...).\n#   This phase is REQUIRED to pass. Known pre-existing special-test failures\n#   are allow-listed in allowed-failures.txt (consumed by upstream's\n#   summarize-tests); any new special-test failure fails the build.\n#\n#   Phase 2 (run-built-tests=yes): runs the compiled test binaries. Many of\n#   these are timing-sensitive or depend on privileges/features unavailable\n#   in the sandboxed build (e.g. setuid, aarch64 BTI), so they are flaky or\n#   expected to fail here. We do NOT hard-gate this phase; instead the\n#   glibc-testresults subpackage enforces a pass/fail ratio over the full\n#   result set.\n#\n# We invoke the phases explicitly (instead of `make check`) so phase 2's\n# failures do not fail the build while phase 1 stays required.\nmake -C build -j$(nproc) run-built-tests=no tests\nmake -C build -j$(nproc) run-built-tests=yes tests || true\n"
+    },
+    {
+      "name": "Set up ldconfig",
+      "runs": "mkdir -p \"${{targets.destdir}}\"/etc\ncp vendor/ld.so.conf \"${{targets.destdir}}\"/etc\nmkdir -p \"${{targets.destdir}}\"/etc/ld.so.conf.d\ncp vendor/ld.so.conf.d/*.conf \"${{targets.destdir}}\"/etc/ld.so.conf.d\nmkdir -p ${{targets.destdir}}/etc/apk/commit_hooks.d\ncp ldconfig-commit.sh -p ${{targets.destdir}}/etc/apk/commit_hooks.d/\n"
+    },
+    {
+      "name": "Clean up /etc/ld.so.cache",
+      "runs": "# Having a package own a file that will be different in most\n# every image poisons our layering mechanism\nrm ${{targets.destdir}}/etc/ld.so.cache\n"
+    },
+    {
+      "name": "Clean up documentation",
+      "runs": "rm -rf ${{targets.destdir}}/usr/share/info\n"
+    },
+    {
+      "name": "Generate and install locale data",
+      "runs": "make -C build -j$(nproc) localedata/install-locale-files DESTDIR=\"${{targets.destdir}}\"\n"
+    },
+    {
+      "name": "Usrmerge /usr/sbin",
+      "runs": "mkdir -p \"${{targets.destdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/sbin/* \"${{targets.destdir}}\"/usr/bin\nrmdir \"${{targets.destdir}}\"/usr/sbin\n"
+    },
+    {
+      "name": "Generate public ABI report",
+      "runs": "# Snapshot the public ABI of the core glibc libraries with abi-dumper.\n# This must run before the strip step, while the libraries still carry\n# DWARF debug info. -public-headers restricts the detailed symbol info\n# to interfaces declared in glibc's installed public headers, filtering\n# out private/internal symbols.\nreport_dir=\"${{targets.destdir}}/usr/share/abi-reports/${{package.name}}-${{package.version}}\"\nmkdir -p \"$report_dir\"\nfor so in \"${{targets.destdir}}\"/usr/lib/lib*.so.*; do\n  # Only dump real shared objects, not the symlinks pointing at them.\n  [ -L \"$so\" ] && continue\n  lib=$(basename \"$so\")\n  # These are built with incompatible options and can't be dumped.\n  # We should try to investigate at point, but dumping libc is\n  # more important so just ignore these for now.\n  [ \"$lib\" = \"libnss_dns.so.2\" ] && continue\n  [ \"$lib\" = \"libnss_files.so.2\" ] && continue\n  abi-dumper \"$so\" \\\n    -o \"$report_dir/${lib%.so.*}.dump\" \\\n    -lver \"${{package.version}}\" \\\n    -public-headers \"${{targets.destdir}}/usr/include\"\ndone\n"
+    },
+    {
+      "name": "Check libc public ABI against the previous report",
+      "runs": "# Compare the freshly generated libc ABI dump against the previously\n# published one (installed via the glibc-abi-report build dependency) so\n# we can catch ABI regressions at build time.\nold_dump=\"$(find /usr/share/abi-reports/ -name libc.dump -print -quit)\"\nnew_dump=\"${{targets.destdir}}/usr/share/abi-reports/${{package.name}}-${{package.version}}/libc.dump\"\nif [ ! -f \"$old_dump\" ]; then\n  echo \"No baseline ABI report at $old_dump! Nothing to compare to.\"\n  exit 1\nelse\n  report_path=\"${{targets.destdir}}/usr/share/abi-reports/${{package.name}}-${{package.version}}/update-report.html\"\n  # abi-compliance-checker exits non-zero on any incompatibility. Don't\n  # block the build on that here, we grade compatibility ourselves below.\n  abi-compliance-checker -l libc -old \"$old_dump\" -new \"$new_dump\" \\\n    -report-path \"$report_path\" || true\n  # make sure we actually generate the report, since we're masking the exit code from generating it.\n  test -f \"$report_path\"\n  # Fail the build if binary ABI compatibility drops below the threshold.\n  ./compatibility-gate --kind binary --threshold 98.0 \"$report_path\"\nfi\n"
+    },
+    {
+      "name": "Remove unsupported runtime facilities",
+      "runs": "rm -rf \"${{targets.destdir}}/usr/lib/gconv\"\nrm -f \"${{targets.destdir}}/usr/bin/iconvconfig\" \"${{targets.destdir}}/usr/bin/sotruss\" \"${{targets.destdir}}/usr/bin/pcprofiledump\"\nrm -f \"${{targets.destdir}}\"/usr/lib/libnss_db.so* \"${{targets.destdir}}\"/usr/lib/libnss_hesiod.so* \"${{targets.destdir}}\"/usr/lib/libpcprofile.so* \"${{targets.destdir}}\"/usr/lib/libmemusage.so* \"${{targets.destdir}}\"/usr/lib/libsotruss.so* \"${{targets.destdir}}\"/usr/lib/libc_malloc_debug.so*\nrm -rf \"${{targets.destdir}}\"/usr/bin/sotruss\nrm -rf \"${{targets.destdir}}\"/usr/lib/audit/*\nrm -rf \"${{targets.destdir}}\"/usr/bin/nscd\nrm -rf \"${{targets.destdir}}\"/usr/bin/makedb\nrm -rf \"${{targets.destdir}}\"/usr/lib/libnss_db.so.2\nrm -rf \"${{targets.destdir}}\"/var/db\nrm -rf \"${{targets.destdir}}\"/usr/lib/libnss_hesiod.so.2\nrm -rf \"${{targets.destdir}}\"/usr/lib/libpcprofile.so\nrm -rf \"${{targets.destdir}}\"/usr/bin/pcprofiledump\nrm -rf \"${{targets.destdir}}\"/usr/bin/mtrace\nrm -rf \"${{targets.destdir}}\"/usr/bin/xtrace\nrm -rf \"${{targets.destdir}}\"/usr/bin/sprof\n"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "data": [
+    {
+      "name": "locales-main",
+      "items": {
+        "ca": "Catalan",
+        "de": "German",
+        "en": "English",
+        "es": "Spanish",
+        "fr": "French"
+      }
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "${{package.name}}-testresults",
+      "description": "Test results and logs from the current GLIBC build - for Wolfi development only",
+      "pipeline": [
+        {
+          "runs": "resultdir=\"${{targets.subpkgdir}}\"/usr/share/glibc-testresults\nmkdir -p $resultdir\nif [ -d /usr/lib/oldglibc ]; then\n  echo \"glibc testsuite was skipped in this environment (oldglibc detected)\" > $resultdir/tests.sum\n  exit 0\nfi\ncd build/\n# Move all the test results and log files\nfind . \\( -name \"*.test-result\" -o -name \"*.out\" \\) \\\n  -exec sh -c 'dir=$(dirname $1); mkdir -p $2/$dir; cp $1 $2/$dir' _ {} $resultdir \\;\ncp tests.sum $resultdir\n"
+        },
+        {
+          "runs": "cp build/policy-report.json \"${{targets.subpkgdir}}/usr/share/glibc-testresults/policy-report.json\"\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-testresults=${{package.full-version}}",
+          "glibc-2.44-testresults=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-testresults"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/contains-files",
+            "with": {
+              "files": "/usr/share/glibc-testresults/tests.sum\n"
+            }
+          },
+          {
+            "name": "Verify PASS/FAIL ratio in test result files is within acceptable threshold",
+            "runs": "set -euo pipefail\nif [ -d /usr/lib/oldglibc ]; then\n  echo \"glibc testsuite was skipped in this environment (oldglibc detected); nothing to verify\"\n  exit 0\nfi\nMAX_FAIL_RATIO=0.055\nfail_count=$(find /usr/share/glibc-testresults -type f -name \"*.test-result\" -exec /usr/bin/grep \"^FAIL:\" '{}' ';' 2> /dev/null | wc -l)\npass_count=$(find /usr/share/glibc-testresults -type f -name \"*.test-result\" -exec /usr/bin/grep \"^PASS:\" '{}' ';' 2> /dev/null | wc -l)\ntotal=$((pass_count + fail_count))\necho \"PASS: $pass_count, FAIL: $fail_count, TOTAL: $total\"\n[ \"$total\" -gt 0 ]\nfail_ratio=$(awk \"BEGIN { printf \\\"%.4f\\\", $fail_count / $total }\")\necho \"Fail ratio: $fail_ratio (max allowed: $MAX_FAIL_RATIO)\"\nawk \"BEGIN { exit ($fail_ratio > $MAX_FAIL_RATIO) ? 1 : 0 }\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-abi-report",
+      "description": "Public ABI report of the core GLIBC libraries, generated by abi-dumper",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/share/abi-reports\nmv \"${{targets.destdir}}\"/usr/share/abi-reports/${{package.name}}-${{package.version}} \\\n  \"${{targets.subpkgdir}}\"/usr/share/abi-reports/\nrmdir \"${{targets.destdir}}\"/usr/share/abi-reports/\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-abi-report=${{package.full-version}}",
+          "glibc-2.44-abi-report=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-abi-report"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/contains-files",
+            "with": {
+              "files": "/usr/share/abi-reports/${{package.name}}-${{package.version}}/libc.dump\n"
+            }
+          },
+          {
+            "name": "Verify the report captures the public ABI",
+            "runs": "report=\"/usr/share/abi-reports/${{package.name}}-${{package.version}}/libc.dump\"\ncheck() {\n  grep -q \"$1\" \"$report\" || { echo \"expected $report to contain $1\"; exit 1; }\n}\n# Marked as a public-interface dump ...\ncheck \"'PublicABI' => '1'\"\n# ... carrying detailed symbol info ...\ncheck \"'SymbolInfo'\"\n# ... including well-known public interfaces exported by libc.\ncheck \"'ShortName' => 'malloc'\"\ncheck \"'ShortName' => 'free'\"\ncheck \"'ShortName' => 'strlen'\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ld-linux-neutered-${{package.version}}",
+      "description": "the GLIBC ELF interpreter",
+      "pipeline": [
+        {
+          "assertions": {
+            "required-steps": 1
+          },
+          "pipeline": [
+            {
+              "if": "${{build.arch}} == 'aarch64'",
+              "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/lib/ld-linux-aarch64.so.1 \"${{targets.subpkgdir}}\"/usr/lib/\nrmdir \"${{targets.destdir}}\"/lib\n"
+            },
+            {
+              "if": "${{build.arch}} == 'x86_64'",
+              "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/lib64/ld-linux-x86-64.so.2 \"${{targets.subpkgdir}}\"/usr/lib/\nrmdir \"${{targets.destdir}}\"/lib64\n"
+            }
+          ]
+        },
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/etc\nmv \"${{targets.destdir}}\"/etc/ld.so.* \"${{targets.subpkgdir}}\"/etc/\n"
+        }
+      ],
+      "dependencies": {
+        "provider-priority": "${{vars.neutered-priority}}",
+        "provides": [
+          "ld-linux=${{package.full-version}}",
+          "ld-linux-${{package.version}}=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "ld-linux-${{package.version}}"
+        ]
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "gcc",
+              "${{package.name}}-dev"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "name": "Check lib64 and apk audit locations of ld-linux",
+            "runs": "set -euo pipefail\nld_linux_found=false\nfor f in /lib64/ld-linux-*; do\n  [ -e \"$f\" ] && ld_linux_found=true\ndone\n[ \"$ld_linux_found\" = \"true\" ]\n[ -z \"$(apk audit --full | grep ld-linux)\" ]\n"
+          },
+          {
+            "name": "Test usage of /etc/ld.so.conf.d/ snippets",
+            "runs": "tmpdir=\"$(mktemp -d)\"\ntmplibdir=\"$(mktemp -d)\"\nldcfg=\"/etc/ld.so.conf.d/test-snippet.conf\"\ncleanup() {\n  rm -f \"$ldcfg\"\n  rm -rf \"$tmpdir\" \"$tmplibdir\"\n}\ntrap cleanup EXIT\ncat > \"$tmpdir/ldsoconfdotd.c\" << EOF\n#include <stdio.h>\n\nvoid ldsoconfdotd_test(void) {\n  printf(\"Calling %s\\n\", __func__);\n}\nEOF\ncat > \"$tmpdir/test.c\" << EOF\nvoid ldsoconfdotd_test(void);\nint main(void) {\n  ldsoconfdotd_test();\n}\nEOF\ngcc -c -fpic \"$tmpdir/ldsoconfdotd.c\" -o \"$tmpdir/ldsoconfdotd.o\"\ngcc -shared -o \"$tmplibdir/libldsoconfdotd.so\" \\\n  \"$tmpdir/ldsoconfdotd.o\"\necho \"$tmplibdir\" > \"$ldcfg\"\nldconfig\nLIBRARY_PATH=\"$tmplibdir\" \\\n  gcc \"$tmpdir/test.c\" -o \"$tmpdir/test\" -lldsoconfdotd\n\"$tmpdir\"/test\n"
+          },
+          {
+            "name": "Confirm that we do not ship/own /etc/ld.so.cache",
+            "runs": "set -euo pipefail\nif apk info -L \"${{context.name}}\" | grep '^etc/ld\\.so\\.cache$'; then\n  exit 1\nfi\nexit 0\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-dev",
+      "description": "GLIBC development headers",
+      "options": {
+        "no-provides": true
+      },
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        },
+        {
+          "name": "Move libc.so/libm.so linker scripts into -dev",
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib\n[ -f \"${{targets.destdir}}\"/usr/lib/libc.so ] && mv \"${{targets.destdir}}\"/usr/lib/libc.so \"${{targets.subpkgdir}}\"/usr/lib/\n[ -f \"${{targets.destdir}}\"/usr/lib/libm.so ] && mv \"${{targets.destdir}}\"/usr/lib/libm.so \"${{targets.subpkgdir}}\"/usr/lib/\n"
+        },
+        {
+          "name": "Pin link-time shared objects to this glibc version",
+          "runs": "ver=\"${{package.version}}\"\ndst=\"${{targets.subpkgdir}}/usr/lib\"\nsrc=\"${{targets.destdir}}/usr/lib\"\n\n# 1. Replace the .so symlinks with real copies of this build's libraries.\n#    We want builds against these to target the version of glibc associated with this\n#    package, not whatever the current glibc runtime is.\n#    glibc runtime owns libfoo.so.1, glibc-dev owns libfoo.so -> libfoo.so.1 symlink\n#    we are replacing.\nfor so in libanl.so libBrokenLocale.so libc_malloc_debug.so \\\n          libmvec.so libnss_compat.so libnss_db.so \\\n          libnss_hesiod.so libresolv.so libthread_db.so; do\n  [ -L \"$dst/$so\" ] || continue\n  target=\"$(readlink \"$dst/$so\")\" # e.g. libresolv.so.2\n  rm \"$dst/$so\"\n  cp \"$src/$target\" \"$dst/$so\"\ndone\n\n# 2. Pin the libc/libm linker scripts to this version stream.\n#    Copy runtime-owned shared objects mentioned by linker scripts into a\n#    version-streamed location, modify linker scripts to reference version-streamed\n#    copies.\ncp \"$src/libc.so.6\" \"$dst/libc.so-$ver\"\ncp \"$src/libm.so.6\" \"$dst/libm.so-$ver\"\n"
+        },
+        {
+          "name": "Pin libc.so GROUP to this build's libc.so.6",
+          "uses": "sed",
+          "with": {
+            "path": "${{targets.subpkgdir}}/usr/lib/libc.so",
+            "pattern": "/usr/lib/libc\\.so\\.6",
+            "replacement": "/usr/lib/libc.so-${{package.version}}"
+          }
+        },
+        {
+          "name": "Pin libm.so GROUP to this build's libm.so.6",
+          "uses": "sed",
+          "with": {
+            "path": "${{targets.subpkgdir}}/usr/lib/libm.so",
+            "pattern": "/usr/lib/libm\\.so\\.6",
+            "replacement": "/usr/lib/libm.so-${{package.version}}"
+          }
+        },
+        {
+          "name": "Point libm.so AS_NEEDED at our pinned libmvec copy",
+          "uses": "sed",
+          "with": {
+            "path": "${{targets.subpkgdir}}/usr/lib/libm.so",
+            "pattern": "/usr/lib/libmvec\\.so\\.1",
+            "replacement": "/usr/lib/libmvec.so"
+          }
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-dev=${{package.full-version}}",
+          "glibc-2.44-dev=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "libxcrypt-dev",
+          "linux-headers",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-dev"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "binutils",
+              "gcc"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "name": "libc.so/libm.so are pinned to this version, interp left on runtime",
+            "runs": "ver=\"${{package.version}}\"\ngrep -qF \"/usr/lib/libc.so-$ver\" /usr/lib/libc.so || { cat /usr/lib/libc.so; echo \"FAIL: libc.so not pinned\"; exit 1; }\ngrep -qF \"/usr/lib/libm.so-$ver\" /usr/lib/libm.so || { cat /usr/lib/libm.so; echo \"FAIL: libm.so not pinned\"; exit 1; }\ngrep -q \"ld-linux\" /usr/lib/libc.so || { echo \"FAIL: libc.so lost AS_NEEDED(ld-linux)\"; exit 1; }\ntest -f \"/usr/lib/libc.so-$ver\" && test -f \"/usr/lib/libm.so-$ver\"\n# Every file the linker scripts reference must exist. The pinned\n# entries must be real files, not symlinks back into the runtime.\npaths=\"$(cat /usr/lib/libc.so /usr/lib/libm.so | tr '()' '  ' | tr ' ' '\\n' | grep '^/[a-z]' | sort -u)\"\nfor f in $paths; do\n  test -e \"$f\" || { echo \"FAIL: linker script references missing $f\"; exit 1; }\n  case \"$f\" in\n    */ld-linux*) : ;;\n    *) test ! -L \"$f\" || { echo \"FAIL: $f is a symlink, expected a pinned real file\"; exit 1; }\n       owned_by=$(apk info -qW \"$f\")\n       [ \"$owned_by\" = \"${{package.name}}-dev\" ] || { echo \"FAIL: $f is owned by $owned_by instead of the dev package\"; exit 1;}\n       ;;\n  esac\ndone\necho \"PASS: linker scripts pinned to $ver\"\n"
+          },
+          {
+            "name": "No pinned library references a GLIBC newer than this version",
+            "runs": "ver=\"${{package.version}}\"; fail=0\nfor f in /usr/lib/libc.so-$ver /usr/lib/libm.so-$ver \\\n         /usr/lib/libresolv.so /usr/lib/libanl.so; do\n  hi=\"$(readelf -V \"$f\" 2>/dev/null | grep -oE 'GLIBC_[0-9]+\\.[0-9]+' \\\n        | sed 's/GLIBC_//' | sort -V | tail -1)\"\n  [ -z \"$hi\" ] && continue\n  if [ \"$(printf '%s\\n%s\\n' \"$hi\" \"$ver\" | sort -V | tail -1)\" != \"$ver\" ]; then\n    echo \"FAIL: $f references GLIBC_$hi > GLIBC_$ver\"; fail=1\n  fi\ndone\n[ \"$fail\" -eq 0 ] && echo \"PASS: nothing exceeds GLIBC_$ver\"; exit $fail\n"
+          },
+          {
+            "name": "Confirm that we're still compatible with current gcc",
+            "runs": "set -euo pipefail\n# This was a problem due to some legacy fix-includes in gcc that interfered\n# with new glibc private symbols.  Let's make sure that doesn't break again\ncat <<EOF >gcc_test.cc\n#include <thread>\n#include <future>\nint main(void)\n{\n  return 0;\n}\nEOF\ng++ -o test_build gcc_test.cc\n# Test that glibc startup files do not leak into the binary\nif [ -n \"$(readelf --notes test_build | grep -F '\"name\":\"glibc\"')\" ]; then\n  readelf --notes test_build\n  echo glibc package note detected in a shared linked binary\n  exit 1\nfi\n"
+          },
+          {
+            "name": "Verify that frame unwinding doesn't crash (when glibc is compiled with hardening)",
+            "runs": "# This is the minimal reproducer of the glibc breakage we\n# experienced when hardening was enabled.  See\n# https://github.com/wolfi-dev/os/pull/53351#issuecomment-2946134881\n# for more details.\ncat > glibc-hardening-test.c << _EOF_\n#include <execinfo.h>\n\nint\nmain(int argc, char *argv[])\n{\n  void *a[4096];\n  backtrace (a, 100);\n  return 0;\n}\n_EOF_\ngcc glibc-hardening-test.c -o glibc-hardening-test\n# Run the program 1000 times to make sure that unwinding works without problems.\nfor i in $(seq 1000); do ./glibc-hardening-test; done\n"
+          },
+          {
+            "name": "A built binary's GLIBC floor is <= this dev version, and it runs without requiring the dev package at runtime",
+            "runs": "ver=\"${{package.version}}\"\ncat > t.c <<'EOF'\n#include <stdio.h>\n#include <stdlib.h>\n#include <math.h>\nstatic void bye(void){}\nint main(void){ atexit(bye); printf(\"%f\\n\", sqrt(2.0)); return 0; }\nEOF\n# -fstack-protector-all forces __stack_chk_fail_local, proving the\n# libc.so GROUP still pulls in libc_nonshared.a.\ngcc -fstack-protector-all t.c -o t -lm\napk del ${{package.name}}-dev gcc\n./t\nhi=\"$(readelf -V ./t 2>/dev/null | grep -oE 'GLIBC_[0-9]+\\.[0-9]+' \\\n      | sed 's/GLIBC_//' | sort -V | tail -1)\"\necho \"binary floor: ${hi:-none}, dev version: $ver\"\nif [ -n \"$hi\" ] && [ \"$(printf '%s\\n%s\\n' \"$hi\" \"$ver\" | sort -V | tail -1)\" != \"$ver\" ]; then\n  echo \"FAIL: binary requires GLIBC_$hi > $ver\"; exit 1\nfi\necho \"PASS: floor <= $ver and binary runs\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-iconv",
+      "description": "Built-in iconv command; external converters disabled",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}/usr/bin\"\nmv \"${{targets.destdir}}/usr/bin/iconv\" \"${{targets.subpkgdir}}/usr/bin/\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "iconv\n"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "iconv\n",
+              "version": "${{package.version}}"
+            }
+          },
+          {
+            "name": "Check if unnecessary charsets are not being shipped",
+            "runs": "set -euo pipefail\nfor ch in ${{vars.charsets-to-remove}}; do\n  if iconv -f \"${ch}\" -t UTF-8 /dev/null ; then\n    echo \"Charset $ch is available while it shouldn't be.\"\n    exit 1\n  fi\ndone\n"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "glibc-iconv=${{package.full-version}}",
+          "glibc-2.44-iconv=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-iconv"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      }
+    },
+    {
+      "name": "${{package.name}}-locales",
+      "description": "GLIBC locale data",
+      "pipeline": [
+        {
+          "uses": "split/locales"
+        },
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/share\nmv \"${{targets.destdir}}\"/usr/share/i18n \"${{targets.subpkgdir}}\"/usr/share/i18n\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-locales=${{package.full-version}}",
+          "glibc-2.44-locales=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-locales"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/contains-files",
+            "with": {
+              "files": "/usr/share/locale/"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "tzutils-${{package.version}}",
+      "description": "Timezone utilities",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/tzselect \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/zdump \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/zic \"${{targets.subpkgdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "tzselect\nzdump\nzic\n"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "tzselect\nzdump\nzic\n",
+              "version": "${{package.version}}"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "tzutils=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      }
+    },
+    {
+      "name": "posix-libc-utils-${{package.version}}",
+      "description": "POSIX XCU utilities included with the C library",
+      "dependencies": {
+        "provides": [
+          "posix-libc-utils=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "bash",
+          "${{package.name}}=${{package.full-version}}",
+          "posix-libc-utils-bin=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/ldd \"${{targets.subpkgdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "ldd"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "ldd"
+            }
+          },
+          {
+            "name": "ldd lists dependencies without executing target code",
+            "runs": "cat > ldd-probe.c <<'NEUTERED_LDD'\n#include <fcntl.h>\n#include <unistd.h>\nstatic void mark(void) { int fd = open(\"ldd-executed\", O_WRONLY|O_CREAT, 0600); if (fd >= 0) close(fd); }\n__attribute__((constructor)) static void init(void) { mark(); }\nint main(void) { mark(); return 0; }\nNEUTERED_LDD\ngcc ldd-probe.c -o ldd-probe\n./ldd-probe\ntest -f ldd-executed\nrm ldd-executed\nldd ./ldd-probe > ldd-list\ngrep \"libc.so.6\" ldd-list\ntest ! -e ldd-executed\nfor option in -d -r -u -v; do\n  if ldd \"$option\" ./ldd-probe; then exit 1; fi\n  test ! -e ldd-executed\ndone\n"
+          }
+        ],
+        "environment": {
+          "contents": {
+            "packages": [
+              "build-base",
+              "${{package.name}}-dev"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "posix-libc-utils-bin-${{package.version}}",
+      "description": "POSIX XCU utilities included with the C library (excluding ldd)",
+      "dependencies": {
+        "provides": [
+          "posix-libc-utils-bin=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/gencat \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/getconf \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/getent \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/locale \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/pldd \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/libexec \"${{targets.subpkgdir}}\"/usr\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "gencat\ngetconf\ngetent\nlocale\npldd\n"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "gencat\ngetconf\ngetent\nlocale\npldd\n"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "localedef-${{package.version}}",
+      "description": "Tool for defining GLIBC locales",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/localedef \"${{targets.subpkgdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "localedef"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "localedef",
+              "version": "${{package.version}}"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "localedef=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      }
+    },
+    {
+      "name": "sln-${{package.version}}",
+      "description": "Staticly-linked symbolic link tool",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/sln \"${{targets.subpkgdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "sln"
+            }
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "sln",
+              "version": "${{package.version}}"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "sln=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      }
+    },
+    {
+      "name": "libcrypt1-${{package.version}}",
+      "description": "Password hashing library included with glibc",
+      "dependencies": {
+        "provider-priority": "${{vars.provider-priority}}",
+        "provides": [
+          "libcrypt1=${{package.full-version}}",
+          "so:libcrypt.so.1=1",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}",
+          "libxcrypt",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/emptypackage"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-locale-posix",
+      "description": "POSIX locale data for glibc",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib/locale\nmv \"${{targets.destdir}}\"/usr/lib/locale/C.utf8 \"${{targets.subpkgdir}}\"/usr/lib/locale/\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-locale-posix=${{package.full-version}}",
+          "glibc-2.44-locale-posix=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-locale-posix"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/tw/contains-files",
+            "with": {
+              "files": "/usr/lib/locale/C.utf8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "range": "locales-main",
+      "name": "${{package.name}}-locale-${{range.key}}",
+      "description": "${{range.value}} locale data for glibc",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib/locale\n[ -d \"${{targets.destdir}}\"/usr/lib/locale/${{range.key}} ] \\\n  || mv \"${{targets.destdir}}\"/usr/lib/locale/${{range.key}}_* \"${{targets.subpkgdir}}\"/usr/lib/locale/\n[ -d \"${{targets.destdir}}\"/usr/lib/locale/${{range.key}} ] \\\n  && mv \"${{targets.destdir}}\"/usr/lib/locale/${{range.key}} \"${{targets.subpkgdir}}\"/usr/lib/locale/\n\n# Some locale can be ~18x as big as it should be due to duplicate files.\n# rdfind replaces redundant files with hardlinks.\nrdfind -makehardlinks true \"${{targets.subpkgdir}}\"/usr/lib/locale/\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-locale-${{range.key}}=${{package.full-version}}",
+          "glibc-2.44-locale-${{range.key}}=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-locale-${{range.key}}"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "posix-libc-utils-${{package.version}}"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "runs": "set -euo pipefail\npkg=glibc-locale-${{range.key}}\nout=$(locale --all-locales) || {\n  echo \"FAIL: locale --all-locales failed for $pkg\"\n  exit 1\n}\nmatches=$(echo \"$out\" | grep \"^${{range.key}}\") || {\n  echo \"FAIL: $pkg did not install any locales per 'locale --all-locales'\"\n  echo \"$ locale --all-locales\"\n  echo \"$out\"\n  exit 1\n}\necho \"PASS: $pkg shipped\" $matches\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-locale-extra",
+      "description": "All other extra locale data for glibc",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib/locale\nmv \"${{targets.destdir}}\"/usr/lib/locale/* \"${{targets.subpkgdir}}\"/usr/lib/locale/\n\n# Some locale can be ~18x as big as it should be due to duplicate files.\n# rdfind replaces redundant files with hardlinks.\nrdfind -makehardlinks true \"${{targets.subpkgdir}}\"/usr/lib/locale/\n"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "glibc-locale-extra=${{package.full-version}}",
+          "glibc-2.44-locale-extra=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "merged-sbin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "replaces": [
+          "glibc-2.44-locale-extra"
+        ],
+        "provider-priority": "${{vars.neutered-priority}}"
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "posix-libc-utils-${{package.version}}"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "runs": "set -euo pipefail\npkg=glibc-locale-extra\nout=$(locale --all-locales) || {\n  echo \"FAIL: locale --all-locales failed for $pkg\"\n  exit 1\n}\n# NOTE: the list of locales to check here needs to be kept in sync\n# with the locales-main range\nfor lang in ca de en es fr; do\n  matches=$(echo \"$out\" | grep \"^$lang\") && {\n    echo \"FAIL: $pkg installs one of the stand-alone-package locales\"\n    echo \"$ locale --all-locales\"\n    echo \"$out\"\n    exit 1\n  }\ndone\necho \"PASS: $pkg correctly does not ship main locales\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libc-bin-${{package.version}}",
+      "description": "GNU C Library: Binaries",
+      "dependencies": {
+        "provides": [
+          "libc-bin=${{package.full-version}}",
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ],
+        "runtime": [
+          "localedef-${{package.version}}",
+          "merged-lib",
+          "merged-sbin",
+          "merged-usrsbin",
+          "posix-libc-utils-${{package.version}}",
+          "tzutils-${{package.version}}",
+          "wolfi-baselayout"
+        ]
+      },
+      "checks": {
+        "disabled": [
+          "empty"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "uses": "test/emptypackage"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-nss-config",
+      "description": "Fixed files/DNS account and host configuration",
+      "dependencies": {
+        "replaces": [
+          "wolfi-baselayout"
+        ],
+        "runtime": [
+          "${{package.name}}=${{package.full-version}}"
+        ],
+        "provides": [
+          "upstream-origin:glibc-2.44:2.44-r8"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "install -Dm644 profile/nsswitch.conf \"${{targets.subpkgdir}}/etc/nsswitch.conf\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Adapt apk test tooling to strict option ordering",
+            "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+          },
+          {
+            "runs": "cmp /etc/nsswitch.conf - <<'NEUTERED_NSS'\npasswd:    files\ngroup:     files\nshadow:    files\ngshadow:   files\nhosts:     files dns\nnetworks:  files\nethers:    files\nprotocols: files\nrpc:       files\nservices:  files\naliases:   files\nnetgroup:  files\nNEUTERED_NSS\n"
+          }
+        ]
+      }
+    }
+  ],
+  "test": {
+    "pipeline": [
+      {
+        "name": "Adapt apk test tooling to strict option ordering",
+        "runs": "mv /usr/bin/apk /usr/bin/apk.real\nfor app in info add del version update; do ln -s apk.real \"/usr/bin/apk_$app\"; done\ncat > /usr/bin/apk <<'NEUTERED_APK'\n#!/bin/sh\ncase \"$1\" in\n  info|add|del|version|update) app=$1; shift; exec \"/usr/bin/apk_$app\" \"$@\" ;;\n  *) exec /usr/bin/apk.real \"$@\" ;;\nesac\nNEUTERED_APK\nchmod 755 /usr/bin/apk\ntest \"$(apk version -t 0-r0 1-r0)\" = '<'\nif test -n '${{vars.neutered-test-repository}}'; then\n  printf '%s\\n' '${{vars.neutered-test-repository}}' 'https://packages.wolfi.dev/os' > /etc/apk/repositories\n  apk update\nfi\n"
+      },
+      {
+        "runs": "set -euo pipefail\n# Ensure locales are excluded from glibc\ncd /usr/lib/locale\nlocales=$(ls | grep -v C.utf8) || locales=\"\"\n\nif [[ -n \"${locales}\" ]]; then\n  for locale in ${locales}; do\n    echo \"Error: locale $locale found in main glibc package\"\n  done\n  exit 1\nfi\n"
+      },
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "uses": "test/tw/help-check",
+        "with": {
+          "bins": "ldconfig\nld.so\n"
+        }
+      },
+      {
+        "uses": "test/tw/ver-check",
+        "with": {
+          "bins": "ldconfig\nld.so\n",
+          "version": "${{package.version}}"
+        }
+      },
+      {
+        "name": "Verify apk bootstrap works",
+        "runs": "set -euo pipefail\ncheck_bootstrap_log() {\n  local log=\"$1\"\n  cat \"$log\"\n  # Filter out known-ok \"updating directory permissions\" errors,\n  # then fail if any real ERROR: lines remain.\n  if grep -e \"ERROR:\" \"$log\" | grep -v \"updating directory permissions\" > errors.log; then\n    echo \"Unexpected errors found in bootstrap log:\"\n    cat errors.log\n    exit 1\n  fi\n}\n\n# Verify that glibc + bash-binsh bootstrap works\nmkdir -p /tmp/glibc-bash/etc/apk\ncp -r /etc/apk/repositories /etc/apk/keys /tmp/glibc-bash/etc/apk\napk add --initdb --root /tmp/glibc-bash glibc bash-binsh &> bootstrap.log || :\ncheck_bootstrap_log bootstrap.log\n\n# Verify that glibc + busybox bootstrap works\nmkdir -p /tmp/glibc-busybox/etc/apk\ncp -r /etc/apk/repositories /etc/apk/keys /tmp/glibc-busybox/etc/apk\napk add --initdb --root /tmp/glibc-busybox glibc busybox &> bootstrap.log || :\ncheck_bootstrap_log bootstrap.log\n"
+      },
+      {
+        "name": "Verify version-streamed virtuals do not resolve to an older package",
+        "runs": "# Now that glibc is version-streamed, every package it produces is named\n# with a version-stream suffix/prefix (e.g. ld-linux-2.43) and provides the\n# bare, un-versioned name as a virtual (e.g. ld-linux). Older, non-\n# version-streamed packages of those same bare names still exist in the\n# index and will remain until they are garbage collected. If one of them\n# is still solveable alongside the current glibc, `apk add`-ing the bare\n# virtual name could quietly resolve to that stale package instead of the\n# one we just built (see the ld-linux case in the commit that added this\n# test).\n#\n# For each virtual, install it in a fresh root alongside glibc\n# and confirm the resolved package is not older than what\n# we just built. We compare with >= rather than == so that rebuilding\n# this version still passes after a newer glibc has been published.\nexpected=\"${{package.full-version}}\"\n\nvirtuals=\"\n  glibc\n  glibc-abi-report\n  glibc-dev\n  glibc-iconv\n  glibc-locale-ca\n  glibc-locale-de\n  glibc-locale-en\n  glibc-locale-es\n  glibc-locale-extra\n  glibc-locale-fr\n  glibc-locale-posix\n  glibc-locales\n  glibc-testresults\n  ld-linux\n  libc-bin\n  libcrypt1\n  localedef\n  posix-libc-utils\n  posix-libc-utils-bin\n  sln\n  tzutils\n\"\n\n# Print the version of the installed package that satisfies $1 (matching\n# either the package name or one of its provides) in the root at $2.\ninstalled_version() {\n  awk -v want=\"$1\" '\n    BEGIN { RS = \"\" }\n    {\n      pkg = \"\"; ver = \"\"; prov = \"\"\n      n = split($0, lines, \"\\n\")\n      for (i = 1; i <= n; i++) {\n        if (lines[i] ~ /^P:/)      pkg  = substr(lines[i], 3)\n        else if (lines[i] ~ /^V:/) ver  = substr(lines[i], 3)\n        else if (lines[i] ~ /^p:/) prov = substr(lines[i], 3)\n      }\n      matched = (pkg == want)\n      if (!matched) {\n        m = split(prov, provs, \" \")\n        for (j = 1; j <= m; j++) {\n          name = provs[j]; sub(/=.*/, \"\", name)\n          if (name == want) { matched = 1; break }\n        }\n      }\n      if (matched) { print ver; exit }\n    }\n  ' \"$2/lib/apk/db/installed\"\n}\n\nrc=0\nfor v in $virtuals; do\n  root=\"$(mktemp -d)\"\n  mkdir -p \"$root/etc/apk\"\n  cp -r /etc/apk/repositories /etc/apk/keys \"$root/etc/apk/\"\n  if ! apk add --initdb --root \"$root\" glibc \"$v\" > \"$root/add.log\" 2>&1; then\n    echo \"FAIL: apk add glibc-${{package.version}} $v failed to solve\"\n    cat \"$root/add.log\"\n    rc=1\n    rm -rf \"$root\"\n    continue\n  fi\n  got=\"$(installed_version \"$v\" \"$root\")\"\n  if [ -z \"$got\" ]; then\n    echo \"FAIL: apk add glibc-${{package.version}} $v installed nothing satisfying $v\"\n    rc=1\n    rm -rf \"$root\"\n    continue\n  fi\n  rel=\"$(apk version -t \"$got\" \"$expected\" || true)\"\n  if [ \"$rel\" = \"<\" ]; then\n    echo \"FAIL: apk add glibc-${{package.version}} $v resolved $v to $got, expected >= $expected\"\n    rc=1\n  else\n    echo \"PASS: $v resolved to $got (>= $expected)\"\n  fi\n  rm -rf \"$root\"\ndone\nexit $rc\n"
+      }
+    ]
+  },
+  "update": {
+    "enabled": false
+  }
+}

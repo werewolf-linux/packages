@@ -1,0 +1,55 @@
+# Wolfi does not package mksh. Keep a standalone /bin/sh, without BusyBox's
+# shell or its unrelated applets. Retire this recipe when Wolfi ships mksh.
+package:
+  name: mksh
+  version: 59c
+  epoch: 0
+  description: MirBSD Korn Shell
+  copyright:
+    - license: MirOS AND Unicode-DFS-2016
+  dependencies:
+    provides:
+      - cmd:sh=${{package.full-version}}
+
+environment:
+  contents:
+    repositories:
+      - https://packages.wolfi.dev/os
+    keyring:
+      - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    packages:
+      - busybox
+      - build-base
+      - ca-certificates-bundle
+      - git
+      - perl
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/MirBSD/mksh
+      tag: mksh-R${{package.version}}
+      expected-commit: 8b6f1b53521283f667b0b7644899feaddaf08d71
+  - runs: |
+      export CFLAGS="$CFLAGS -O2 -fPIE -fstack-protector-strong -D_FORTIFY_SOURCE=3"
+      export LDFLAGS="$LDFLAGS -pie -Wl,-z,relro,-z,now,-z,noexecstack"
+      sh Build.sh -r
+      # Builders may have a controlling tty; skip only that environment check.
+      sed -i '/^name: selftest-tty-absent$/,/^---$/d' check.t
+      ./test.sh -v -f -C regress:no-ctty
+      install -Dm755 mksh ${{targets.destdir}}/usr/bin/mksh
+      ln -s mksh ${{targets.destdir}}/usr/bin/sh
+  - uses: strip
+
+test:
+  pipeline:
+    - runs: |
+        /bin/sh -c 'test -n "$KSH_VERSION"; test "$((6 * 7))" = 42'
+        /usr/bin/mksh -c 'set -- alpha "two words"; test "$#" = 2; test "$2" = "two words"'
+
+update:
+  enabled: true
+  github:
+    identifier: MirBSD/mksh
+    strip-prefix: mksh-R
+    use-tag: true

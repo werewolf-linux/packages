@@ -15,8 +15,7 @@
     "minimized_reason": "Build HTTP(S)-only curl/libcurl with TLS, cookies and gzip/deflate; omit other protocols, proxying, HTTP/2, HTTP/3 and unused authentication backends.",
     "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py"
+      "overlay.yaml"
     ]
   },
   "wolfi": {
@@ -29,16 +28,14 @@
         "what": "Build HTTP(S)-only curl/libcurl with TLS, cookies and gzip/deflate; omit other protocols, proxying, HTTP/2, HTTP/3 and unused authentication backends.",
         "why": "Limit the client to the features required by Werewolf consumers; retained library ABI does not imply all Wolfi features remain available.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Remove static, documentation and OCI-entrypoint packages and the wcurl shell wrapper.",
         "why": "Avoid shipping unused artifacts or an implicit shell dependency.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       }
     ],

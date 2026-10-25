@@ -1,6 +1,6 @@
 name: check Wolfi overlays
 # Every pull request: the unit tests, then each package captured from Wolfi's
-# newest stable recipe, verified, derived and patched (scripts/discover.py).
+# newest stable recipe, verified, derived and patched by the common Go command.
 # Nothing is built or published, and GitHub is told nothing; build.yml builds
 # one package by hand.
 on:
@@ -21,22 +21,15 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
-      - name: Build upstream release discovery
-        run: |
-          mkdir -p build/tools
-          go build -C .. -o "$PWD/build/tools/package-update" ./cmd/package-update
-          echo "UPSTREAM_DISCOVERER=$PWD/build/tools/package-update" >> "$GITHUB_ENV"
+      - run: make -C .. tools
       - name: Install tools and run the unit tests
         run: |
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y patch
-          python3 -m venv build/venv
-          build/venv/bin/pip install -r requirements.txt
-          make PYTHON=build/venv/bin/python test
+          make test lint
       - name: Capture, verify, derive and patch every package
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
-          build/venv/bin/python scripts/discover.py --local | tee build/discover.log
-          tail -1 build/discover.log | build/venv/bin/python -c 'import json, sys; failed = json.load(sys.stdin)["failed"]; sys.exit("stopped: " + ", ".join(failed) if failed else 0)'
+          ../build/tools/package discover | tee build/discover.log

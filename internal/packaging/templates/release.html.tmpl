@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}} {{.Version}}</title>
+<style>body{font:16px system-ui;max-width:75rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}th,td{padding:.5rem;text-align:left;border-bottom:1px solid #bbb}code{overflow-wrap:anywhere}</style>
+<h1>{{.Title}} {{.Version}}</h1>
+<p><a href="release-notes.md">Release notes</a> · <a href="release-notes.json">Full evidence as JSON</a> · <a href="SHA256SUMS">Archive checksums</a></p>
+<p>Wolfi baseline {{.Source.WolfiVersion}}, effective source <code>{{.Source.SourceCommit}}</code>, policy revision {{.Source.PolicyRevision}}.</p>
+<h2>Security</h2>
+<p>{{.Security.Cumulative}} advisories fixed through {{.Security.Current}}. {{.Security.NotAffected}} listed as not affecting {{.Security.Stream}}.</p>
+{{if .Security.Previous}}<ul>{{range .Security.Fixed}}<li>{{.Version}}: {{range .IDs}}{{.}} {{end}}</li>{{else}}<li>No new advisories listed since {{$.Security.Previous}}.</li>{{end}}</ul>{{else}}<p>Previous source version unknown; no advisory comparison is claimed.</p>{{end}}
+<h2>Packages and tests</h2>
+{{range $arch, $native := .Architectures}}<h3>{{$arch}}</h3>
+<table><tr><th>Package<th>Version<th>Bytes{{range .Packages}}<tr><td>{{.Name}}<td>{{.Version}}<td>{{.Size}}{{end}}</table>
+{{if .TestStatuses}}<p>Raw test statuses: {{range $status, $count := .Counts}}{{$status}}={{$count}} {{end}}. Failure ceiling {{.Ceiling}} per mille.</p>
+{{if .Compared}}<p>New failures: {{range .NewFailures}}<code>{{.}}</code> {{else}}none{{end}}. Fixed: {{range .Fixed}}<code>{{.}}</code> {{else}}none{{end}}.</p>{{else}}<p>Previous statuses unavailable; no test comparison is claimed.</p>{{end}}{{end}}{{end}}
+<h2>Install and verify</h2>
+<p>Stable repository: <code>{{.Repository.Stable}}</code>. Snapshot: <code>{{.Repository.Snapshot}}</code>.</p>
+<p>Signing key SHA256: <code>{{.Repository.KeySHA256}}</code>.</p>
+<h2>Provenance</h2>
+<p>Build <code>{{.BuildID}}</code>, downstream commit <code>{{.Commit}}</code>, {{.Date}}. <a href="{{.Run}}">Build run</a>.</p>
+</html>

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}} releases</title>
+<style>body{font:16px system-ui;max-width:80rem;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.6rem;border-bottom:1px solid #bbb}a{color:#1265ac}</style>
+<h1>{{.Title}} releases</h1>
+<p>Each release links its notes and immutable snapshot. <a href="releases.json">JSON</a>.</p>
+<table>
+<thead><tr><th>Release</th><th>Date</th><th>Wolfi version</th><th>Advisories fixed</th><th>New test failures</th></tr></thead>
+<tbody>
+{{range .Entries}}<tr><td><a href="{{.Notes}}">{{.Version}}</a></td><td>{{.Date}}</td><td>{{.WolfiVersion}}</td><td>{{.AdvisoriesFixed}}</td><td>{{if .NewFailures}}{{.NewFailures}}{{else}}not compared{{end}}</td></tr>
+{{end}}</tbody></table>
+</html>

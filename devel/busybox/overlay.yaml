@@ -1,0 +1,263 @@
+# Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+title: busybox
+upstream-patch-prefix: ../
+patch-working-directory: build
+sources:
+- https://github.com/vda-linux/busybox_mirror.git
+- https://git.busybox.net/busybox.git
+description-suffix: ' (Werewolf: applets exec applets by path)'
+test-unpinned:
+- busybox
+- busybox-full
+- busybox-static
+checks:
+- path: [pipeline, uses=git-checkout]
+  expect:
+    uses: git-checkout
+    working-directory: build
+    with:
+      expected-commit: ${lock.source_commit}
+      repository: https://github.com/vda-linux/busybox_mirror
+      tag: ${{vars.mangled-package-version}}
+- path: [pipeline]
+  shape:
+  - uses=git-checkout
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - uses=patch
+  - name=Configure
+  - runs
+  - name=Install
+  - uses=strip
+- path: [subpackages]
+  shape:
+  - name=busybox-full
+  - name=busybox-static
+- path: [pipeline, name=Configure, runs]
+  expect: |
+    cp ../busyboxconfig .config
+- path: [subpackages, name=busybox-static, pipeline, name=Configure, runs]
+  expect: |
+    sed -e 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' \
+        -e 's/^# CONFIG_STATIC_LIBGCC is not set/CONFIG_STATIC_LIBGCC=y/' \
+        -e 's/^# CONFIG_USE_BB_PWD_GRP is not set/CONFIG_USE_BB_PWD_GRP=y/' \
+        -e 's/^# CONFIG_USE_BB_SHADOW is not set/CONFIG_USE_BB_SHADOW=y/' \
+        -e 's/^# CONFIG_USE_BB_CRYPT is not set/CONFIG_USE_BB_CRYPT=y/' \
+        -e 's/^# CONFIG_USE_BB_CRYPT_SHA is not set/CONFIG_USE_BB_CRYPT_SHA=y/' \
+        ../busyboxconfig > .config
+    # yescrypt (USE_BB_CRYPT_YES, new in 1.38.0) is a sub-option of
+    # USE_BB_CRYPT, which is disabled in the base config, so there is no
+    # line to substitute above; append it
+    echo "CONFIG_USE_BB_CRYPT_YES=y" >> .config
+    # emit diff for verification, diff returns 1 on differences,
+    # ensure there actually is a difference
+    rc=0
+    diff -u ../busyboxconfig .config || rc="$?"
+    if [ "$rc" -ne 1 ]; then
+       echo "ERROR: expected the generated static config to differ from the default config" >&2
+       exit 1
+    fi
+- path: [subpackages, name=busybox-full, pipeline, name=Configure, runs]
+  expect: |
+    cp ../busyboxconfig-full .config
+- path: [pipeline, '1']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2022-28391-1.patch ../CVE-2022-28391-2.patch
+- path: [pipeline, '2']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../0001-tar-fix-TOCTOU-symlink-race-condition.patch
+- path: [pipeline, '3']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../0037-awk.c-fix-CVE-2023-42366-bug-15874.patch
+- path: [pipeline, '4']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2024-58251-2.patch
+- path: [pipeline, '5']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2025-46394.patch
+- path: [pipeline, '6']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2025-60876.patch
+- path: [pipeline, '7']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../archival-disallow-path-traversals-CVE-2023-39810.patch
+- path: [pipeline, '8']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: |
+        ../0001-tar-strip-unsafe-hardlink-components-GNU-tar-does-th.patch
+        ../0002-tar-only-strip-unsafe-components-from-hardlinks-not-.patch
+- path: [pipeline, '9']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38753.patch
+- path: [pipeline, '10']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38752.patch
+- path: [pipeline, '11']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38754.patch
+- path: [pipeline, '12']
+  expect:
+    uses: patch
+    working-directory: build
+    with:
+      patches: ../CVE-2026-38755.patch
+edits:
+- path: [pipeline, name=Configure, runs]
+  replace:
+  - old: |
+      cp ../busyboxconfig .config
+    new: |
+      cp ../busyboxconfig .config
+      # Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH
+      # search, which Werewolf's glibc refuses (devel/busybox/README.md).
+      sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
+      grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
+      grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+- path: [subpackages, name=busybox-static, pipeline, name=Configure, runs]
+  replace:
+  - old: |
+      fi
+    new: |
+      fi
+      # Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH
+      # search, which Werewolf's glibc refuses (devel/busybox/README.md).
+      sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
+      grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
+      grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+- path: [subpackages, name=busybox-static, test, pipeline]
+  append:
+  - name: Tools run applets by name without searching PATH
+    runs: |
+      cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'
+      ${file:tests/probe.sh}WEREWOLF_BUSYBOX_PROBE
+      /usr/bin/busybox sh /tmp/busybox-probe.sh
+- path: [subpackages, name=busybox-full, pipeline, name=Configure, runs]
+  replace:
+  - old: |
+      cp ../busyboxconfig-full .config
+    new: |
+      cp ../busyboxconfig-full .config
+      # Werewolf: an applet run by name runs from /usr/bin/busybox, with no PATH
+      # search, which Werewolf's glibc refuses (devel/busybox/README.md).
+      sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
+      grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
+      grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+- path: [subpackages, name=busybox-full, test, pipeline]
+  append:
+  - name: Tools run applets by name without searching PATH
+    runs: |
+      cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'
+      ${file:tests/probe.sh}WEREWOLF_BUSYBOX_PROBE
+      /usr/bin/busybox sh /tmp/busybox-probe.sh
+- path: [test, pipeline]
+  append:
+  - name: Tools run applets by name without searching PATH
+    runs: |
+      cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'
+      ${file:tests/probe.sh}WEREWOLF_BUSYBOX_PROBE
+      /usr/bin/busybox sh /tmp/busybox-probe.sh
+- path: [pipeline, name=Install, runs]
+  replace:
+  - old: |
+      ./busybox --list-path > "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+    new: |
+      ./busybox --list-path > "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+      # /bin/sh belongs to mksh, including developer images.
+      sed -i '\|^bin/sh$|d;\|^usr/bin/sh$|d' "${{targets.destdir}}"/etc/busybox-paths.d/busybox
+- path: [package, scriptlets, trigger, script]
+  expect: |
+    #!/usr/bin/busybox sh
+    /usr/bin/busybox --install -s
+  set: |
+    #!/usr/bin/busybox sh
+    for manifest in /etc/busybox-paths.d/*; do
+      [ -f "$manifest" ] || continue
+      while IFS= read -r path; do
+        case "$path" in bin/sh|usr/bin/sh) continue ;; esac
+        [ -e "/$path" ] || [ -L "/$path" ] || /usr/bin/busybox ln -s /usr/bin/busybox "/$path"
+      done < "$manifest"
+    done
+- path: [subpackages, name=busybox-full, pipeline, name=Install, runs]
+  replace:
+  - old: |
+      ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+    new: |
+      ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+      # /bin/sh belongs to mksh, including developer images.
+      sed -i '\|^bin/sh$|d;\|^usr/bin/sh$|d' "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-full
+- path: [subpackages, name=busybox-full, scriptlets, trigger, script]
+  expect: |
+    #!/usr/bin/busybox sh
+    /usr/bin/busybox --install -s
+  set: |
+    #!/usr/bin/busybox sh
+    for manifest in /etc/busybox-paths.d/*; do
+      [ -f "$manifest" ] || continue
+      while IFS= read -r path; do
+        case "$path" in bin/sh|usr/bin/sh) continue ;; esac
+        [ -e "/$path" ] || [ -L "/$path" ] || /usr/bin/busybox ln -s /usr/bin/busybox "/$path"
+      done < "$manifest"
+    done
+- path: [subpackages, name=busybox-static, pipeline, name=Install, runs]
+  replace:
+  - old: |
+      ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+    new: |
+      ./busybox --list-path > "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+      # /bin/sh belongs to mksh, including developer images.
+      sed -i '\|^bin/sh$|d;\|^usr/bin/sh$|d' "${{targets.subpkgdir}}"/etc/busybox-paths.d/busybox-static
+- path: [subpackages, name=busybox-static, scriptlets, trigger, script]
+  expect: |
+    #!/usr/bin/busybox sh
+    /usr/bin/busybox --install -s
+  set: |
+    #!/usr/bin/busybox sh
+    for manifest in /etc/busybox-paths.d/*; do
+      [ -f "$manifest" ] || continue
+      while IFS= read -r path; do
+        case "$path" in bin/sh|usr/bin/sh) continue ;; esac
+        [ -e "/$path" ] || [ -L "/$path" ] || /usr/bin/busybox ln -s /usr/bin/busybox "/$path"
+      done < "$manifest"
+    done

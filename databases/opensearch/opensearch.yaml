@@ -10,7 +10,7 @@
 package:
   name: opensearch
   version: 3.9.0
-  epoch: 1
+  epoch: 2
   description: Open source distributed and RESTful search engine, with its security plugin
   copyright:
     - license: Apache-2.0

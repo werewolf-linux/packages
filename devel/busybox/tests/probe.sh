@@ -9,3 +9,12 @@ done
 echo x | PATH=/nonexistent /usr/bin/busybox xargs true
 PATH=/nonexistent /usr/bin/busybox time true 2> /dev/null
 rm -f /tmp/busybox-probe.lock
+
+# All variants leave /bin/sh to the standalone shell package.
+for manifest in /etc/busybox-paths.d/*; do
+    [ -f "$manifest" ] || continue
+    if /usr/bin/busybox grep -Eq '^(usr/)?bin/sh$' "$manifest"; then
+        echo "BusyBox claims /bin/sh: $manifest" >&2
+        exit 1
+    fi
+done

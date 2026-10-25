@@ -1,0 +1,7 @@
+{
+  "recipe": "python-3.15.yaml",
+  "version": "3.15.0_git20261017",
+  "epoch": 3,
+  "revision": 9,
+  "source_commit": "a73827e5bc4bb993504d5384071a8c734b36e2ea"
+}

@@ -418,7 +418,7 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 func TestCategorizedUpdatesAndExplicitTrainingHold(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "wolfi", ".keep"), "")
-	mustWrite(t, filepath.Join(root, "www", "example", "metadata.json"), `{"update":{"source":"github","repo":"a/b","prefix":"v"}}`)
+	mustWrite(t, filepath.Join(root, "www", "example", "metadata.json"), `{"update":{"source":"github","repo":"a/b","prefix":"v"},"hardening":{"minimized":false,"pledge":false,"minimized_reason":"Fixture","pledge_reason":"Fixture","evidence":["recipe.yaml"]},"wolfi":{"relationship":"independent","recipes":[],"changes":[{"what":"Fixture","why":"Exercise updates","evidence":["recipe.yaml"]}],"removal_condition":"Fixture"}}`)
 	path := filepath.Join(root, "www", "example", "recipe.yaml")
 	mustWrite(t, path, fetchRecipe)
 	c := mockClient(t, map[string]string{
@@ -458,7 +458,7 @@ func TestPlexUsesTransactionalVendorPreparation(t *testing.T) {
 		calls := 0
 		run := func(_ context.Context, dir, name string, _ ...string) error {
 			calls++
-			if name == "python3" {
+			if name == "go" {
 				mustWrite(t, filepath.Join(dir, "plex.yaml"), strings.Replace(original, "1.0.0", "1.1.0", 1))
 				if failure {
 					return errors.New("codec ABI changed")

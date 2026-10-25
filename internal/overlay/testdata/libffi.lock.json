@@ -1,0 +1,7 @@
+{
+  "recipe": "libffi.yaml",
+  "version": "3.8.0",
+  "epoch": 2,
+  "revision": 4,
+  "source_commit": "12ffd1f9dc56fcea79d2f742f424301ae668d663"
+}

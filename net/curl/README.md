@@ -20,7 +20,7 @@ not a new authorization boundary.
 libpsl remains because accepting public-suffix cookies is unsafe. Its own Unicode
 dependencies remain. OpenSSL and zlib remain for HTTPS and gzip/deflate.
 
-`tests/probe.py` exercises local HTTP/HTTPS, rejected encodings/protocols, uploads,
+The shared Go curl probe, selected in `packaging/changes.yaml`, exercises local HTTP/HTTPS, rejected encodings/protocols, uploads,
 authentication, cookies, ETags and certificate failures in the APK test guest.
 Wolfi's Git HTTPS authentication, linkage, CLI and development-package tests remain.
 The local nginx test runs its worker as root inside Melange's disposable test

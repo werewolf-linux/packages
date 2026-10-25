@@ -147,7 +147,7 @@ No signing or R2 keys are needed by the builder accounts.
 
 ```sh
 make test check
-python3 scripts/plan.py --offline
+go run ./cmd/package plan --offline
 # Rebuild/publish only one context, or retry its staged snapshot:
 gh workflow run publish.yml -f package=onnx-minilm
 # Exercise a context on both hosted architectures without publication:

@@ -1,0 +1,7 @@
+{
+  "recipe": "openjdk-27.yaml",
+  "version": "27.0.1.0.2",
+  "epoch": 2,
+  "revision": 9,
+  "source_commit": "360190464fafe7f6dc53b87304aef715b8d96920"
+}

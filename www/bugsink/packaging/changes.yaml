@@ -1,0 +1,38 @@
+actions:
+  inotify:
+    files:
+    - path: inotify_simple.py
+      replace:
+      - old: from ctypes import CDLL, get_errno, c_int
+        new: from _werewolf_inotify import ffi, lib as _libc
+      - old: |
+          from ctypes.util import find_library
+        new: ''
+      - old: |
+          _libc = None
+        new: ''
+      - old: errno = get_errno()
+        new: errno = ffi.errno
+      - old: |2
+                  global _libc; _libc = _libc or CDLL(find_library('c'), use_errno=True)
+        new: ''
+      - old: bytes_avail = c_int()
+        new: bytes_avail = ffi.new("int *")
+      - old: ioctl(self, FIONREAD, bytes_avail)
+        new: ioctl(self, FIONREAD, ffi.buffer(bytes_avail))
+      - old: 'if not bytes_avail.value:'
+        new: 'if not bytes_avail[0]:'
+      - old: os.read(self.fileno(), bytes_avail.value)
+        new: os.read(self.fileno(), bytes_avail[0])
+  metadata:
+    wheels:
+    - distribution: bugsink
+      remove-requirements:
+      - brotli
+      - symbolic
+      record-files:
+      - bugsink/streams.py
+      - events/storage.py
+      - files/minidump.py
+      - sentry/minidump.py
+      - bugsink/conf_templates/docker.py.template

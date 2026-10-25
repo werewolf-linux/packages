@@ -1,0 +1,7 @@
+{
+  "recipe": "nodejs-26.yaml",
+  "version": "26.12.1",
+  "epoch": 2,
+  "revision": 7,
+  "source_commit": "bc2e01dcf6acd5cf7d169b5f26cf89abaaeb41f1"
+}

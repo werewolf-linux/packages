@@ -15,7 +15,7 @@
     "minimized_reason": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
     "pledge_reason": "Service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "package.py",
+      "overlay.yaml",
       "tests/consumers.sh"
     ]
   },
@@ -29,7 +29,7 @@
         "what": "Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.",
         "why": "Keep common SQL, backup and extension workflows without optional enterprise authentication libraries.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/consumers.sh"
         ]
       },
@@ -37,7 +37,7 @@
         "what": "Track only the latest stable PostgreSQL with unversioned package names and Wolfi's versioned extension/header directories.",
         "why": "New stable major releases should update automatically while packaged extensions remain compatible with their PostgreSQL major.",
         "evidence": [
-          "package.py"
+          "overlay.yaml"
         ]
       }
     ],

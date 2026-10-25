@@ -2,7 +2,7 @@
 package:
   name: onnx-minilm-l6-v2
   version: 1.0.0
-  epoch: 1
+  epoch: 2
   description: Verified all-MiniLM-L6-v2 ONNX embedding model and tokenizer
   copyright:
     - license: Apache-2.0

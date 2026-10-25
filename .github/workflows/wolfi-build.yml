@@ -64,8 +64,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version: '1.27.x'
+      - run: make -C .. tools
       - name: Name a package this repository builds
-        run: python3 ../scripts/catalog.py path "$PACKAGE" --engine wolfi >/dev/null
+        run: ../build/tools/package catalog --engine wolfi path "$PACKAGE" >/dev/null
       - name: Check native runner architecture and resources
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
@@ -81,38 +85,24 @@ jobs:
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
             sudo -n apt-get -o Acquire::Retries=3 update
-            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap python3-venv git make openssl patch
+            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make patch
           else
-            for tool in bwrap python3 git make openssl patch unshare newuidmap newgidmap; do
+            for tool in bwrap git make patch unshare newuidmap newgidmap; do
               command -v "$tool" >/dev/null || {
                 echo "Install $tool on the self-hosted runner before building" >&2
                 exit 1
               }
             done
           fi
-          python3 -m venv build/venv
-          build/venv/bin/pip install -r requirements.txt
-          python3 scripts/install-melange.py --dest build/tools/melange
-          scripts/ci-root python3 scripts/setup-runner.py
+          ../build/tools/package install-melange --dest ../build/tools/melange
+          scripts/ci-root "$PWD/../build/tools/package" setup-runner
       - name: Check sandbox chroot before building
         run: |
-          if ! scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
-              --cap-add CAP_SYS_CHROOT -- /usr/bin/python3 -c 'import os; os.chroot("/")'; then
-            exit 1
-          fi
-          if [ -f "$PWD/build/tools/bwrap.apparmor" ]; then
+          scripts/ci-root "$PWD/../build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
+            --cap-add CAP_SYS_CHROOT -- "$PWD/../build/tools/package" chroot-probe
+          if [ -f "$PWD/../build/tools/bwrap.apparmor" ]; then
             scripts/ci-root /usr/bin/bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid \
-              --cap-add CAP_SYS_CHROOT -- /usr/bin/python3 -c '
-          import errno, os
-          try:
-              os.chroot("/")
-          except PermissionError as error:
-              if error.errno != errno.EPERM:
-                  raise
-              print("runner: system bubblewrap still denies chroot")
-          else:
-              raise RuntimeError("system bubblewrap unexpectedly permits chroot")
-          '
+              --cap-add CAP_SYS_CHROOT -- "$PWD/../build/tools/package" chroot-probe --expect-denied
           fi
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: inputs.inputs_artifact != ''
@@ -122,39 +112,34 @@ jobs:
       - name: Restore captured inputs with their file modes
         if: inputs.inputs_artifact != ''
         run: |
-          mkdir -p "build/$PACKAGE/inputs"
-          tar -xzf "build/input-bundle/$PACKAGE.tar.gz" -C "build/$PACKAGE/inputs"
-      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
-        if: inputs.inputs_artifact == ''
-        with:
-          go-version: '1.27.x'
+          ../build/tools/package restore-inputs --package "$PACKAGE" --archive "build/input-bundle/$PACKAGE.tar.gz"
       - name: Capture the latest stable source and Wolfi recipe for a build by hand
         if: inputs.inputs_artifact == ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: build/venv/bin/python scripts/refresh.py "$PACKAGE"
+        run: ../build/tools/package refresh --package "$PACKAGE"
       - name: Verify provenance and derivation
-        run: make PYTHON=build/venv/bin/python PACKAGE="$PACKAGE" check derive
+        run: make PACKAGE="$PACKAGE" check derive
       - name: Apply every patch at the locked source
-        run: make PYTHON=build/venv/bin/python PACKAGE="$PACKAGE" prepare
+        run: make PACKAGE="$PACKAGE" prepare
       - name: Write production signing key
         if: inputs.production
         env:
           PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
         run: |
           test -n "$PACKAGES_APK_SIGNING_KEY"
-          build/venv/bin/python scripts/signing-key.py
+          ../build/tools/package signing-key --engine wolfi --production
       - name: Build and test signed packages
         run: |
           set -o pipefail
-          scripts/ci-root env PATH="$PWD/build/tools:$PATH" make PYTHON=build/venv/bin/python PACKAGE="$PACKAGE" \
+          scripts/ci-root env PATH="$PWD/../build/tools:$PATH" make PACKAGE="$PACKAGE" \
             ARCH=${{ matrix.arch }} build 2>&1 | tee build/build.log
       - name: Record successful native validation
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
             scripts/ci-root chown -R "$(id -u):$(id -g)" "build/$PACKAGE/packages"
           fi
-          build/venv/bin/python scripts/provenance.py "$PACKAGE" --arch ${{ matrix.arch }}
+          ../build/tools/package provenance --package "$PACKAGE" --arch ${{ matrix.arch }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

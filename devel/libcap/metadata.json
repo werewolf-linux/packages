@@ -1,0 +1,38 @@
+{
+  "update": {
+    "source": "wolfi",
+    "recipe": "libcap",
+    "upstream": {
+      "source": "git-tags",
+      "url": "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
+      "prefix": "v1."
+    }
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Build libcap without its PAM module, pam_cap, so the library and its utilities depend on no libpam.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; each Werewolf form confines the capabilities its services hold.",
+    "evidence": [
+      "overlay.yaml",
+      "tests/probe.sh"
+    ]
+  },
+  "wolfi": {
+    "relationship": "derived",
+    "recipes": [
+      "libcap"
+    ],
+    "changes": [
+      {
+        "what": "Build and install with PAM_CAP=no, and drop linux-pam-dev and the chmod of pam_cap.so.",
+        "why": "pam_cap.so made every libcap consumer, Squid and Samba among them, depend on libpam, which brought pam_unix and its unix_chkpwd helper into images that check no UNIX password. Werewolf has no PAM use.",
+        "evidence": [
+          "overlay.yaml",
+          "tests/probe.sh"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi moves pam_cap into a subpackage of its own, so libcap no longer depends on libpam; review before retiring this overlay."
+  }
+}

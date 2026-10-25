@@ -11,7 +11,7 @@
 package:
   name: caddy
   version: 2.11.7
-  epoch: 3
+  epoch: 4
   description: Fast, multi-platform web server with automatic HTTPS, position independent
   copyright:
     - license: Apache-2.0

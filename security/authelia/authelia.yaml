@@ -10,7 +10,7 @@
 package:
   name: authelia
   version: 4.39.28
-  epoch: 1
+  epoch: 2
   description: Single sign-on and two-factor authentication portal
   copyright:
     - license: Apache-2.0

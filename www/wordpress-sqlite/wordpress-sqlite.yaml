@@ -1,7 +1,7 @@
 package:
   name: wordpress-sqlite-integration
   version: "3.1.1"
-  epoch: 1
+  epoch: 2
   description: WordPress SQLite database integration and drop-in
   copyright:
     - license: GPL-2.0-or-later

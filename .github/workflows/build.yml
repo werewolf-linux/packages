@@ -45,24 +45,28 @@ jobs:
         with:
           go-version: '1.27.x'
       - name: Compile the native package smoke runner
-        run: go build -o build/tools/package-smoke ./cmd/package-smoke
+        run: |
+          make tools
+          go build -o build/tools/package-smoke ./cmd/package-smoke
       - name: Install the native builder
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
             sudo -n apt-get -o Acquire::Retries=3 update
-            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make openssl patch
+            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make patch
           else
-            for tool in bwrap python3 git make openssl patch unshare newuidmap newgidmap; do
+            for tool in bwrap git make patch unshare newuidmap newgidmap; do
               command -v "$tool" >/dev/null || { echo "Missing native builder: $tool" >&2; exit 1; }
             done
           fi
-          python3 scripts/install-melange.py --dest build/tools/melange
-          scripts/ci-root python3 scripts/setup-runner.py
+          build/tools/package install-melange --dest build/tools/melange
+          scripts/ci-root "$PWD/build/tools/package" setup-runner
           scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
-            --cap-add CAP_SYS_CHROOT -- /usr/bin/python3 -c 'import os; os.chroot("/")'
+            --cap-add CAP_SYS_CHROOT -- "$PWD/build/tools/package" chroot-probe
       - name: Resolve the package context
         id: context
-        run: echo "path=$(python3 scripts/catalog.py path "$PACKAGE" --engine upstream)" >>"$GITHUB_OUTPUT"
+        run: |
+          directory=$(build/tools/package catalog --engine upstream path "$PACKAGE")
+          printf 'path=%s\n' "$directory" >>"$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/cache
@@ -74,7 +78,7 @@ jobs:
           # Melange binds the compiler cache only if the directory exists.
           scripts/ci-root mkdir -p build/cache/melange
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
-            python3 scripts/build.py "$PACKAGE" --arch "$ARCH" \
+            build/tools/package build --package "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee build/build.log
       - name: Exercise installed packages before uploading artifacts
         run: |
@@ -89,15 +93,7 @@ jobs:
           fi
       - name: Verify native provenance as the workflow user
         run: |
-          PATH="$PWD/build/tools:$PATH" python3 - "$PACKAGE" "$ARCH" <<'PYVERIFY'
-          import os, sys
-          from pathlib import Path
-          sys.path.insert(0, 'scripts')
-          import common, publish
-          package, arch = sys.argv[1:]
-          publish.validate(Path('build/artifacts') / package / arch, common.metadata(package), arch,
-                           os.environ['GITHUB_SHA'], os.environ['GITHUB_RUN_ID'])
-          PYVERIFY
+          PATH="$PWD/build/tools:$PATH" build/tools/package artifact-verify --package "$PACKAGE" --arch "$ARCH"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.package }}-${{ inputs.arch }}

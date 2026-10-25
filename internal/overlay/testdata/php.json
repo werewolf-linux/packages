@@ -1,0 +1,404 @@
+{
+  "vars": {
+    "openssl-version": "4.0"
+  },
+  "package": {
+    "name": "php-8.5",
+    "version": "8.5.11",
+    "epoch": 13003,
+    "description": "the PHP programming language (Werewolf fixed hardening policy)",
+    "copyright": [
+      {
+        "license": "PHP-3.01"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "php=${{package.full-version}}",
+        "upstream-origin:php-8.5:8.5.11-r3"
+      ],
+      "runtime": [
+        "${{package.name}}-config",
+        "libxml2",
+        "merged-bin",
+        "merged-usrsbin",
+        "wolfi-baselayout"
+      ]
+    },
+    "resources": {
+      "cpu": "19",
+      "memory": "14Gi"
+    }
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.name}}",
+      "match": "^php-(\\d\\.\\d+)",
+      "replace": "$1",
+      "to": "phpMM"
+    }
+  ],
+  "environment": {
+    "contents": {
+      "packages": [
+        "aom-dev",
+        "apache2-dev",
+        "apache2-utils",
+        "autoconf",
+        "bison",
+        "build-base",
+        "busybox",
+        "bzip2-dev",
+        "ca-certificates-bundle",
+        "curl-dev",
+        "dav1d-dev",
+        "file",
+        "freetds",
+        "freetds-dev",
+        "freetype-dev",
+        "glibc-2.44-dev",
+        "gmp-dev",
+        "icu-dev",
+        "libavif-dev",
+        "libjpeg-turbo-dev",
+        "libpng-dev",
+        "libpsl-dev",
+        "libsodium-dev",
+        "libtool",
+        "libwebp-dev",
+        "libx11-dev",
+        "libxml2-dev",
+        "libxpm-dev",
+        "libxslt-dev",
+        "libzip-dev",
+        "nghttp2-dev",
+        "oniguruma-dev",
+        "openldap-dev",
+        "openssl-${{vars.openssl-version}}-dev",
+        "pcre2-dev",
+        "postgresql-dev",
+        "re2c",
+        "readline-dev",
+        "sqlite-dev",
+        "tidy-html5-dev",
+        "unixodbc-dev",
+        "wget"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/php/php-src.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 678778973bb4d4185c06ef1320de50f1a975d3c8; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 678778973bb4d4185c06ef1320de50f1a975d3c8\n      git -c core.hooksPath=/dev/null checkout -q --detach 678778973bb4d4185c06ef1320de50f1a975d3c8\n      exit 0\n    fi\n  done\ndone\necho \"678778973bb4d4185c06ef1320de50f1a975d3c8: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "install-pear.patch"
+      }
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "openssl-ssl-ctx-options-uint64.patch"
+      }
+    },
+    {
+      "name": "Apply Werewolf policy patches",
+      "needs": {
+        "packages": [
+          "patch"
+        ]
+      },
+      "runs": "while IFS= read -r name; do\n  patch -p1 --forward --batch --fuzz=2 --no-backup-if-mismatch -i \"werewolf/patches/$name\" || exit 1\ndone < werewolf/patches/series\n"
+    },
+    {
+      "name": "Allow every group in the build guest",
+      "runs": "mkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\nmkdir -p /etc/runtime-hardening/allow/all/php\nfor f in exec native deserialize inline writable-source upload upload-progress namespace process listen special-files debug; do\n  : > /etc/runtime-hardening/allow/all/php/$f\ndone\n"
+    },
+    {
+      "name": "Configure",
+      "runs": "./buildconf --force\nEXTENSION_DIR=/usr/lib/php/modules ./configure \\\n  --prefix=/usr \\\n  --libdir=/usr/lib/php \\\n  --sbindir=/usr/bin \\\n  --datadir=/usr/share/php \\\n  --sysconfdir=/etc/php \\\n  --localstatedir=/var \\\n  --with-layout=GNU \\\n  --with-pic \\\n  --with-config-file-path=/etc/php \\\n  --with-config-file-scan-dir=/etc/php/conf.d \\\n  --enable-cli \\\n  --disable-cgi \\\n  --enable-ctype=shared \\\n  --enable-bcmath=shared \\\n  --with-curl=shared \\\n  --enable-dom=shared \\\n  --enable-fileinfo=shared \\\n  --with-iconv=shared \\\n  --with-openssl=shared \\\n  --with-sodium=shared \\\n  --enable-fpm \\\n  --enable-gd=shared \\\n  --with-avif \\\n  --with-freetype \\\n  --with-jpeg \\\n  --with-webp \\\n  --disable-gd-jis-conv \\\n  --with-libxml \\\n  --disable-phar \\\n  --enable-mbstring=shared \\\n  --with-mysqli=shared \\\n  --with-mysql-sock=/run/mysqld/mysqld.sock \\\n  --enable-mysqlnd=shared \\\n  --enable-pdo=shared \\\n  --with-pdo-mysql=shared,mysqlnd \\\n  --with-pdo-sqlite=shared \\\n  --with-pdo-pgsql=shared \\\n  --enable-pcntl=shared \\\n  --enable-calendar=shared \\\n  --enable-exif=shared  \\\n  --with-gmp=shared  \\\n  --enable-intl=shared  \\\n  --with-ldap=shared  \\\n  --enable-soap=shared  \\\n  --with-zlib \\\n  --enable-xml=shared \\\n  --enable-simplexml=shared \\\n  --enable-xml=shared \\\n  --enable-xmlreader=shared \\\n  --enable-xmlwriter=shared \\\n  --enable-posix=shared \\\n  --with-pgsql=shared \\\n  --with-zip=shared \\\n  --enable-sysvsem=shared \\\n  --with-external-pcre\n"
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "name": "Make Install",
+      "runs": "INSTALL_ROOT=${{targets.destdir}} DESTDIR=${{targets.destdir}} make install\n"
+    },
+    {
+      "name": "Remove /var/run (only used by init scripts and services not shipped here)",
+      "runs": "rmdir ${{targets.destdir}}/var/run"
+    },
+    {
+      "uses": "strip"
+    },
+    {
+      "name": "Remove manpages before splitting packages",
+      "runs": "rm -R \"${{targets.destdir}}/usr/share/man\"\n"
+    }
+  ],
+  "data": [
+    {
+      "name": "extensions",
+      "items": {
+        "curl": "cURL",
+        "gd": "GD imaging",
+        "gmp": "GNU GMP support",
+        "ldap": "LDAP",
+        "mysqlnd": "MySQLnd",
+        "openssl": "OpenSSL",
+        "pdo_mysql": "MySQL driver for PDO",
+        "pdo_sqlite": "SQLite 3.x driver for PDO",
+        "pdo_pgsql": "PDO driver for pgsql",
+        "soap": "SOAP",
+        "sodium": "Sodium",
+        "calendar": "Calendar",
+        "exif": "EXIF",
+        "intl": "Internationalization",
+        "mbstring": "Multibyte String Functions",
+        "pcntl": "pcntl",
+        "pdo": "PHP Data Objects",
+        "bcmath": "BC Math",
+        "ctype": "ctype",
+        "iconv": "Iconv",
+        "dom": "DOM",
+        "pgsql": "PostgreSQL",
+        "posix": "Posix",
+        "simplexml": "SimpleXML",
+        "mysqli": "MySQLi",
+        "xml": "XML",
+        "xmlreader": "XMLReader",
+        "xmlwriter": "XMLWriter",
+        "fileinfo": "fileinfo",
+        "zip": "Zip",
+        "sysvsem": "System V Semaphores"
+      }
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "${{package.name}}-config",
+      "dependencies": {
+        "provides": [
+          "php-config=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ],
+        "runtime": [
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}/etc/php/conf.d\"\nmv php.ini-production ${{targets.subpkgdir}}/etc/php/php.ini\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/configpackage"
+          }
+        ]
+      }
+    },
+    {
+      "range": "extensions",
+      "name": "${{package.name}}-${{range.key}}",
+      "description": "The ${{range.value}} extension",
+      "dependencies": {
+        "runtime": [
+          "${{package.name}}-${{range.key}}-config",
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "php-${{range.key}}=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "export EXTENSIONS_DIR=usr/lib/php/modules\nmkdir -p \"${{targets.subpkgdir}}\"/$EXTENSIONS_DIR\nmv \"${{targets.destdir}}/$EXTENSIONS_DIR/${{range.key}}.so\" \\\n  \"${{targets.subpkgdir}}/$EXTENSIONS_DIR/${{range.key}}.so\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "range": "extensions",
+      "name": "${{package.name}}-${{range.key}}-config",
+      "description": "The ${{range.value}} extension configuration",
+      "dependencies": {
+        "provides": [
+          "php-${{range.key}}-config=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ],
+        "runtime": [
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "export CONF_DIR=\"${{targets.subpkgdir}}/etc/php/conf.d\"\nmkdir -p $CONF_DIR\norder=10\nprefix=\n# Determine load order based on number of dependencies found in config.w32\n[ -f \"ext/${{range.key}}/config.w32\" ] && \\\n  deps=`sed -En \"s/.*ADD_EXTENSION_DEP\\('${{range.key}}', ([^)]+)\\).*/\\1/p\" \"ext/${{range.key}}/config.w32\" \\\n      | tr -d \"',\" | tr ' ' '\\n' \\\n      | sort -u \\\n      | while read -r dep; do\n        [ \"$dep\" = \"true\" ] || echo $dep\n      done | wc -w`\necho \"${prefix}extension=${{range.key}}.so\" > $CONF_DIR/\"$((order+order*deps))-${{range.key}}.ini\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/configpackage"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-dev",
+      "description": "PHP ${{vars.phpMM}} development headers",
+      "dependencies": {
+        "provides": [
+          "php-dev=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ],
+        "runtime": [
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        },
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/bin\nmv ${{targets.destdir}}/usr/bin/phpize ${{targets.subpkgdir}}/usr/bin/\nmv ${{targets.destdir}}/usr/lib ${{targets.subpkgdir}}/usr\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "php-dev",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-fpm",
+      "description": "PHP ${{vars.phpMM}} FastCGI Process Manager (FPM)",
+      "dependencies": {
+        "runtime": [
+          "${{package.name}}-fpm-config",
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "php-fpm=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/bin\nmv ${{targets.destdir}}/usr/bin/php-fpm ${{targets.subpkgdir}}/usr/bin/\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "php-fpm",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-fpm-config",
+      "description": "PHP ${{vars.phpMM}} FastCGI Process Manager (FPM) configuration",
+      "dependencies": {
+        "provides": [
+          "php-fpm-config=${{package.full-version}}",
+          "upstream-origin:php-8.5:8.5.11-r3"
+        ],
+        "runtime": [
+          "merged-bin",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/etc/php/php-fpm.d\nmv ${{targets.destdir}}/etc/php/php-fpm.conf.default ${{targets.subpkgdir}}/etc/php/php-fpm.conf\nmv ${{targets.destdir}}/etc/php/php-fpm.d/www.conf.default ${{targets.subpkgdir}}/etc/php/php-fpm.d/www.conf \\\n&& { \\\n  echo '[global]'; \\\n  echo 'error_log = /proc/self/fd/2'; \\\n  echo 'daemonize = no'; \\\n  echo; \\\n  echo '[www]'; \\\n  echo 'listen = [::]:9000'; \\\n  echo 'access.log = /proc/self/fd/2'; \\\n  echo; \\\n  echo 'clear_env = no'; \\\n  echo; \\\n  echo 'catch_workers_output = yes'; \\\n  echo; \\\n  echo 'decorate_workers_output = no'; \\\n} | tee ${{targets.subpkgdir}}/etc/php/php-fpm.d/zz-apko.conf\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "php-fpm-config",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "${{package.name}}-pcntl",
+          "${{package.name}}-posix",
+          "${{package.name}}-pdo",
+          "${{package.name}}-pdo_sqlite",
+          "${{package.name}}-mbstring",
+          "curl"
+        ]
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "runs": "php --version\nphp --help\n"
+      },
+      {
+        "runs": "cat <<'EOF' >> /tmp/hello.php\n<?php\necho 'Hello, Wolfi!';\nEOF\n\nphp /tmp/hello.php\n"
+      },
+      {
+        "name": "Werewolf protections hold, and allowances take each back",
+        "needs": {
+          "packages": [
+            "build-base"
+          ]
+        },
+        "runs": "chmod 755 /\nroot_work=$(mktemp -d)\nchmod 755 \"$root_work\"\ncat > \"$root_work/identity.c\" <<'WEREWOLF_IDENTITY_C'\n#define _GNU_SOURCE\n#include <grp.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\nint main(int argc, char **argv) {\n    if (argc < 4) return 125;\n    uid_t real = (uid_t)strtoul(argv[1], NULL, 10);\n    uid_t effective = (uid_t)strtoul(argv[2], NULL, 10);\n    if (setgroups(0, NULL) || setresgid(65534, 65534, 65534) ||\n        setresuid(real, effective, effective)) {\n        perror(\"identity probe\");\n        return 125;\n    }\n    execvp(argv[3], argv + 3);\n    perror(\"identity exec\");\n    return 125;\n}\nWEREWOLF_IDENTITY_C\ncc -Wall -Werror -o \"$root_work/identity\" \"$root_work/identity.c\"\nrm -f /etc/runtime-hardening/build-root\nroot_refused() {\n    if \"$@\" >\"$root_work/out\" 2>\"$root_work/err\"; then\n        echo 'probe: FAIL: effective root ran' >&2; exit 1\n    fi\n    grep -F 'effective UID 0' \"$root_work/err\"\n    grep -F '\"event\":\"runtime-denial\"' \"$root_work/err\" | grep -F '\"group\":\"root\"'\n}\nroot_refused php -v\n\n# A real root UID does not prevent execution after effective privileges drop.\n\"$root_work/identity\" 0 65534 php -v\n# A non-root real UID must not disguise effective root.\nroot_refused \"$root_work/identity\" 65534 0 php -v\n: > \"$root_work/target\"\nln -s \"$root_work/target\" /etc/runtime-hardening/build-root\nroot_refused php -v\nrm /etc/runtime-hardening/build-root\nmkdir /etc/runtime-hardening/build-root\nroot_refused php -v\nrmdir /etc/runtime-hardening/build-root\nmkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\nphp -v\nrm -rf \"$root_work\"\necho \"probe: ok: php checks effective UID; only the build marker permits root\"\ncat > /tmp/probe.php <<'WEREWOLF_PROBE_PHP'\n<?php\n// What this PHP lets a program do, as one JSON line; tests/probe.sh compares it\n// with the protections in patches/series and the image's allowances.\n$result = [\n    'exec' => function_exists('system'),                               // php:exec\n    'native' => function_exists('dl'),                                 // php:native\n    'process' => function_exists('pcntl_fork'),                        // php:process\n    'listen' => function_exists('stream_socket_server'),               // php:listen\n    'special-files' => function_exists('posix_mkfifo'),                 // php:special-files\n    'debug' => function_exists('var_dump'),                           // php:debug\n    'deserialize' => unserialize('O:8:\"stdClass\":0:{}') instanceof stdClass,  // php:deserialize\n    'phar' => in_array('phar', stream_get_wrappers(), true),           // always absent\n    'phar_class' => class_exists('Phar', false),\n    'phar_extension' => extension_loaded('phar'),\n];\nksort($result);\necho json_encode($result), \"\\n\";\nWEREWOLF_PROBE_PHP\ncat > /tmp/probe.sh <<'WEREWOLF_PROBE_SH'\n#!/bin/sh\n# probe.sh PROBE: hold the installed php to the protections in patches/series,\n# then grant each capability group and see it return. The package test runs it\n# as root with /etc/runtime-hardening/allow free to use. PHP names another\n# binary and ALLOW another tree, for a dev build off the read-only root.\nset -eu\nprobe=$1\ncapabilities=$(dirname \"$probe\")/capabilities.php\nphp=${PHP:-php}\nallowdir=${ALLOW:-/etc/runtime-hardening/allow}\nbase=$allowdir/all/php\nwork=$(mktemp -d)\nwork=$(cd \"$work\" && pwd -P)\nserver_pid=\ncleanup() {\n    if [ -n \"$server_pid\" ]; then kill \"$server_pid\" 2>/dev/null || true; wait \"$server_pid\" 2>/dev/null || true; fi\n    rm -rf \"$work\" \"$allowdir\"\n}\ntrap cleanup EXIT\n\ngrant() { mkdir -p \"$base\"; : > \"$base/$1\"; }\nrevoke() { rm -f \"$base/$1\"; }\n\nexpect() {\n\tname=$1; want=$2; shift 2\n\tif got=$(\"$@\" 2>\"$work/err\") && [ \"$got\" = \"$want\" ]; then echo \"probe: ok: $name\"; return; fi\n\techo \"probe: FAIL: $name\" >&2\n\techo \"  want $want\" >&2\n\techo \"  got  $got\" >&2\n\tcat \"$work/err\" >&2\n\texit 1\n}\n\nrefuse() {\n\tname=$1; token=$2; shift 2\n\tif \"$@\" >/dev/null 2>\"$work/err\"; then\n\t\techo \"probe: FAIL: $name ran\" >&2\n\t\texit 1\n\tfi\n\tif ! grep -q \"$token\" \"$work/err\"; then\n\t\techo \"probe: FAIL: $name refusal does not name $token\" >&2\n\t\tcat \"$work/err\" >&2\n\t\texit 1\n\tfi\n\techo \"probe: ok: $name\"\n}\n\necho '<?php echo \"script ran\";' > \"$work/child.php\"\necho '<?php @eval('\"'\"'echo \"eval ran\";'\"'\"');' > \"$work/eval.php\"\n\ncat > \"$work/user-stream.php\" <<'SOURCE'\n<?php\nclass Source {\n    public $context;\n    function stream_open($p, $m, $o, &$opened) { return true; }\n    private $code = \"<?php echo 123;\";\n    function stream_read($n) { $code = $this->code; $this->code = \"\"; return $code; }\n    function stream_stat() { return []; }\n    function url_stat($p, $f) { return []; }\n    function stream_eof() { return $this->code === \"\"; }\n}\nstream_wrapper_register(\"unverified\", Source::class);\ninclude \"unverified://source\";\nSOURCE\nprintf '<?php include \"php://filter/resource=%s/child.php\";\\n' \"$work\" > \"$work/filter.php\"\n\nreport() { \"$php\" \"$probe\"; }\n\n# The probe is a script on a writable mount, so running it needs writable-source;\n# that is the harness enabler, tested on its own with a child below.\nrm -rf \"$allowdir\"\ngrant writable-source\n\nclosed='{\"debug\":false,\"deserialize\":false,\"exec\":false,\"listen\":false,\"native\":false,\"phar\":false,\"phar_class\":false,\"phar_extension\":false,\"process\":false,\"special-files\":false}'\nexpect 'closed: no exec, native, deserialize or phar' \"$closed\" report\ngrep -F '\"group\":\"deserialize\"' \"$work/err\" | grep -F '\"detail\":\"stdClass\"'\n\ncat > \"$work/caught.php\" <<'PHP'\n<?php\nini_set('display_errors', '0');\nini_set('log_errors', '0');\nforeach (['system', 'dl'] as $function) {\n    try { $function('denied-argument'); } catch (Throwable $e) { }\n}\ntry { system('denied-argument'); } catch (Throwable $e) { }\necho \"blocked\";\nPHP\nexpect 'caught function denials bypass PHP error settings' blocked \"$php\" \"$work/caught.php\"\ngrep -F '\"group\":\"exec\"' \"$work/err\" | grep -F '\"operation\":\"system\"'\ngrep -F '\"group\":\"native\"' \"$work/err\" | grep -F '\"operation\":\"dl\"'\ntest \"$(grep -c '\"operation\":\"system\"' \"$work/err\")\" = 2\n\n# inline: -r gives code, refused unless php:inline.\nrefuse '-r is refused' php:inline \"$php\" -r 'echo 1;'\ngrant inline\nexpect '-r returns once inline is allowed' '1' \"$php\" -r 'echo 1;'\nrevoke inline\nrefuse 'eval, even suppressed, needs inline' php:inline \"$php\" \"$work/eval.php\"\ncat > \"$work/caught-eval.php\" <<'PHP'\n<?php\nini_set('display_errors', '0');\nini_set('log_errors', '0');\ntry { @eval('return 7;'); } catch (Error $error) { }\necho \"blocked\";\nPHP\nexpect 'caught eval denial bypasses PHP error settings' blocked \"$php\" \"$work/caught-eval.php\"\ngrep -F '\"group\":\"inline\"' \"$work/err\" | grep -F '\"operation\":\"eval\"'\n\ngrant inline\nexpect 'eval returns only with inline' 'eval ran' \"$php\" \"$work/eval.php\"\nrevoke inline\n\nstandard_input() { printf '%s\\n' '<?php echo \"stdin ran\";' | \"$php\"; }\nrefuse 'writable-source does not grant stdin' php:inline standard_input\nstandard_input_path() { printf '%s\\n' '<?php echo \"stdin ran\";' | \"$php\" -f php://stdin; }\nrefuse 'CLI rejects php://stdin as a filesystem path' 'input file' standard_input_path\nrefuse 'writable-source does not grant filters' php:inline \"$php\" \"$work/filter.php\"\nrefuse 'writable-source does not grant user streams' php:inline \"$php\" \"$work/user-stream.php\"\nrefuse 'auto_prepend_file cannot load a generated stream' php:inline \\\n    \"$php\" -d \"auto_prepend_file=\\\"php://filter/resource=$work/child.php\\\"\" \"$work/child.php\"\ngrant inline\nexpect 'filters need the inline group' 'script ran' \"$php\" \"$work/filter.php\"\nexpect 'user streams need the inline group' '123' \"$php\" \"$work/user-stream.php\"\nrevoke inline\nrevoke writable-source\nrefuse 'stdin needs inline' php:inline standard_input\ngrant inline\nexpect 'stdin returns with inline alone' 'stdin ran' standard_input\nrevoke inline\n\n# writable-source: a script whose file is on a writable mount, refused unless allowed.\nrevoke writable-source\nrefuse 'a script on a writable mount is refused' php:writable-source \"$php\" \"$work/child.php\"\n# A trusted entrypoint does not make the files it includes trusted. Inline is\n# the harness enabler here; it must not grant writable-source or stream wrappers.\ngrant inline\nfor construct in include include_once require require_once; do\n    refuse \"$construct refuses writable code\" php:writable-source \\\n        \"$php\" -r \"$construct '$work/child.php';\"\ndone\nrefuse 'include_path cannot hide writable code' php:writable-source \\\n    \"$php\" -d \"include_path=$work\" -r \"include 'child.php';\"\nln -s \"$work/child.php\" \"$work/alias.php\"\nrefuse 'a source symlink is checked by its target descriptor' php:writable-source \\\n    \"$php\" -r \"include '$work/alias.php';\"\nrefuse 'file:// cannot hide writable code' php:writable-source \\\n    \"$php\" -r \"include 'file://$work/child.php';\"\n# auto_prepend_file must not bypass the gate.\nrefuse 'auto_prepend_file refuses writable code' php:writable-source \\\n    \"$php\" -d \"auto_prepend_file=$work/child.php\" \"$work/child.php\"\ngrant writable-source\nexpect 'inline and writable-source grants compose' 'script ran' \\\n    \"$php\" -r \"include '$work/child.php';\"\nrevoke inline\nexpect 'the same script runs once writable-source is allowed' 'script ran' \"$php\" \"$work/child.php\"\n\n# Warm the shared OPcache in a persistent process, then remove only the file\n# allowance. A cache hit must still cross the source guard, without a restart.\nprintf '%s\\n' '<?php $s = opcache_get_status(false); echo $s && $s[\"opcache_statistics\"][\"num_cached_scripts\"] > 0 ? \"cached\" : \"uncached\";' > \"$work/cache.php\"\nport=$((18000 + $$ % 30000))\n\"$php\" -d opcache.enable=1 -d opcache.enable_cli=1 -d opcache.validate_timestamps=0 \\\n    -d opcache.file_update_protection=0 -d display_errors=stderr \\\n    -S \"127.0.0.1:$port\" -t \"$work\" >\"$work/server.log\" 2>&1 &\nserver_pid=$!\nready=false\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n    if curl -fsS --max-time 1 -o /dev/null \"http://127.0.0.1:$port/child.php\"; then ready=true; break; fi\n    sleep 0.1\ndone\n[ \"$ready\" = true ] || { cat \"$work/server.log\" >&2; exit 1; }\nexpect 'OPcache really holds compiled code' cached curl -fsS --max-time 5 \"http://127.0.0.1:$port/cache.php\"\nexpect 'warm script executes' 'script ran' curl -fsS --max-time 5 \"http://127.0.0.1:$port/child.php\"\nrevoke writable-source\n: > \"$work/cache-response\"\n: > \"$work/server.log\"\n# PHP may preserve HTTP 200 when display_errors=stderr. Judge execution and\n# the refusal diagnostic, not just the HTTP status.\nif curl -fsS --max-time 5 -o \"$work/cache-response\" \"http://127.0.0.1:$port/child.php\"; then\n    :\nelse\n    [ \"$?\" = 22 ] || { cat \"$work/server.log\" >&2; exit 1; }\nfi\ngrep -q php:writable-source \"$work/server.log\"\nif grep -q 'script ran' \"$work/cache-response\"; then\n    echo 'probe: FAIL: cached writable code ran without its allowance' >&2; exit 1\nfi\necho 'probe: ok: cached writable code is refused without a restart'\ngrant writable-source\nexpect 'the running cache observes the restored allowance' 'script ran' \\\n    curl -fsS --max-time 5 \"http://127.0.0.1:$port/child.php\"\nkill \"$server_pid\"\nwait \"$server_pid\" 2>/dev/null || true\nserver_pid=\n\n# The multipart parser is shared by automatic POST handling and\n# request_parse_body(). Keep it shut before callbacks or temporary files exist.\nmkdir \"$work/upload-tmp\" \"$work/progress\"\ncat > \"$work/upload.php\" <<'PHP'\n<?php\n$post = $_POST;\n$files = $_FILES;\nif ($_SERVER['REQUEST_METHOD'] === 'PUT' || isset($_GET['parse'])) {\n    try {\n        [$post, $files] = request_parse_body(['max_file_uploads' => 5]);\n    } catch (RequestParseBodyException $error) {\n        echo str_contains($error->getMessage(), 'php:upload') ? 'refused' : 'wrong exception';\n        return;\n    }\n}\n$file = $files['upload']['tmp_name'] ?? '';\n$uploaded = $file !== '' && is_uploaded_file($file);\nif (isset($_GET['revoke'])) {\n    unlink(trim(file_get_contents(__DIR__ . '/upload-allowance')));\n}\n$moved = $uploaded && @move_uploaded_file($file, __DIR__ . '/uploaded');\necho json_encode(['post' => $post['note'] ?? null, 'files' => count($files),\n                  'uploaded' => $uploaded, 'moved' => $moved]);\nPHP\nprintf '%s\\n' \"$base/upload\" > \"$work/upload-allowance\"\ncat > \"$work/move-upload.php\" <<'PHP'\n<?php\necho @move_uploaded_file(__FILE__, __DIR__ . '/should-not-exist') ? 'moved' : 'refused';\nPHP\nexpect 'upload moves are denied and logged even when suppressed' refused \"$php\" \"$work/move-upload.php\"\ngrep -F '\"group\":\"upload\"' \"$work/err\" | grep -F '\"operation\":\"move_uploaded_file\"'\n\n# Explicitly enabling PHP's ordinary settings cannot supply the allowance.\n\"$php\" -d file_uploads=1 -d display_errors=stderr -d log_errors=0 \\\n    -d \"upload_tmp_dir=$work/upload-tmp\" -d \"session.save_path=$work/progress\" \\\n    -d session.upload_progress.enabled=1 -d session.upload_progress.cleanup=0 \\\n    -S \"127.0.0.1:$port\" -t \"$work\" >\"$work/upload-server.log\" 2>&1 &\nserver_pid=$!\nready=false\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n    if curl -fsS --max-time 1 -o /dev/null \"http://127.0.0.1:$port/child.php\"; then ready=true; break; fi\n    sleep 0.1\ndone\n[ \"$ready\" = true ] || { cat \"$work/upload-server.log\" >&2; exit 1; }\n\nmultipart() {\n    method=$1; endpoint=${2:-upload.php}\n    curl -fsS --max-time 5 -X \"$method\" -b PHPSESSID=uploadprobe \\\n        -F PHP_SESSION_UPLOAD_PROGRESS=probe -F note=plain \\\n        -F \"upload=@$work/child.php;filename=payload.php\" \\\n        \"http://127.0.0.1:$port/$endpoint\"\n}\nno_upload='{\"post\":null,\"files\":0,\"uploaded\":false,\"moved\":false}'\nyes_upload='{\"post\":\"plain\",\"files\":1,\"uploaded\":true,\"moved\":true}'\nexpect 'POST multipart is refused without upload' \"$no_upload\" multipart POST\nexpect 'PUT request_parse_body cannot bypass upload' refused multipart PUT\nexpect 'text-only multipart also stays outside the parser' \"$no_upload\" \\\n    curl -fsS --max-time 5 -F note=plain \"http://127.0.0.1:$port/upload.php\"\nexpect 'a malformed boundary is refused before multipart parsing' \"$no_upload\" \\\n    curl -fsS --max-time 5 -H 'Content-Type: multipart/form-data' \\\n        --data-binary invalid \"http://127.0.0.1:$port/upload.php\"\nexpect 'ordinary URL-encoded forms still work' \\\n    '{\"post\":\"plain\",\"files\":0,\"uploaded\":false,\"moved\":false}' \\\n    curl -fsS --max-time 5 -d note=plain \"http://127.0.0.1:$port/upload.php\"\ntest -z \"$(ls -A \"$work/upload-tmp\")\"\ntest -z \"$(ls -A \"$work/progress\")\"\ntest ! -e \"$work/uploaded\"\ngrep -F '\"group\":\"upload\"' \"$work/upload-server.log\" | grep -F '\"operation\":\"parse\"'\n\n: > \"$work/target\"\nln -s \"$work/target\" \"$base/upload\"\nexpect 'an upload allowance symlink is refused' \"$no_upload\" multipart POST\nrevoke upload\ngrant upload\nexpect 'POST uploads and moves return with upload alone' \"$yes_upload\" multipart POST\ncmp \"$work/child.php\" \"$work/uploaded\"\ntest -z \"$(ls -A \"$work/progress\")\"\ngrep -F '\"group\":\"upload-progress\"' \"$work/upload-server.log\" | grep -F '\"operation\":\"session.upload_progress\"'\nln -s \"$work/target\" \"$base/upload-progress\"\nexpect 'a symlink cannot enable upload progress' \"$yes_upload\" multipart POST\ntest -z \"$(ls -A \"$work/progress\")\"\nrevoke upload-progress\ngrant upload-progress\nexpect 'both grants permit session upload progress' \"$yes_upload\" multipart POST\ngrep -q upload_progress_probe \"$work/progress/sess_uploadprobe\"\nrm -f \"$work/progress/sess_uploadprobe\"\nrevoke upload\nexpect 'upload-progress alone cannot enable uploads' \"$no_upload\" multipart POST\ntest -z \"$(ls -A \"$work/progress\")\"\ngrant upload\nrevoke upload-progress\nexpect 'progress revocation preserves ordinary uploads' \"$yes_upload\" multipart POST\ntest -z \"$(ls -A \"$work/progress\")\"\nexpect 'PUT uploads return through request_parse_body' \"$yes_upload\" multipart PUT\ncmp \"$work/child.php\" \"$work/uploaded\"\nexpect 'upload does not grant exec, native, deserialize or phar' \"$closed\" report\nrm -f \"$work/uploaded\"\nexpect 'revocation after parsing prevents an upload move' \\\n    '{\"post\":\"plain\",\"files\":1,\"uploaded\":true,\"moved\":false}' multipart POST 'upload.php?revoke'\ntest ! -e \"$work/uploaded\"\ngrep -F '\"group\":\"upload\"' \"$work/upload-server.log\" | grep -F '\"operation\":\"move_uploaded_file\"'\nexpect 'a running server observes upload revocation' \"$no_upload\" multipart POST\nexpect 'explicit parsing also observes upload revocation' refused multipart PUT\nkill \"$server_pid\"\nwait \"$server_pid\" 2>/dev/null || true\nserver_pid=\n\n# Disabling automatic POST handling must not bypass the explicit parsing guard.\n\"$php\" -d enable_post_data_reading=0 -d display_errors=stderr \\\n    -S \"127.0.0.1:$port\" -t \"$work\" >\"$work/explicit-server.log\" 2>&1 &\nserver_pid=$!\nready=false\nfor attempt in 1 2 3 4 5 6 7 8 9 10; do\n    if curl -fsS --max-time 1 -o /dev/null \"http://127.0.0.1:$port/child.php\"; then ready=true; break; fi\n    sleep 0.1\ndone\n[ \"$ready\" = true ] || { cat \"$work/explicit-server.log\" >&2; exit 1; }\nexpect 'explicit POST parsing still needs upload' refused \\\n    curl -fsS --max-time 5 -F \"upload=@$work/child.php\" \"http://127.0.0.1:$port/upload.php?parse\"\ngrant upload\nexpect 'explicit POST parsing returns with upload' \"$yes_upload\" \\\n    curl -fsS --max-time 5 -F note=plain -F \"upload=@$work/child.php\" \"http://127.0.0.1:$port/upload.php?parse\"\nrevoke upload\nkill \"$server_pid\"\nwait \"$server_pid\" 2>/dev/null || true\nserver_pid=\n\n# Each function group returns alone. Namespace APIs depend on the platform.\nfor group in exec native deserialize process listen special-files debug; do\n\tgrant \"$group\"\n\texpect \"$group is taken back alone\" \\\n\t\t\"$(printf '%s' \"$closed\" | sed 's/\"'\"$group\"'\":false/\"'\"$group\"'\":true/')\" report\n\trevoke \"$group\"\ndone\n\n# Optional capabilities are disabled before evaluating arguments, even with\n# an empty disable_functions setting. The same table must log every group.\nexpect 'optional functions remain closed despite -d' closed \\\n    \"$php\" -d disable_functions= \"$capabilities\" floor\nfor group in exec namespace process listen special-files debug; do\n    grep -F '\"group\":\"'\"$group\"'\"' \"$work/err\" >/dev/null\ndone\nfor group in namespace process listen special-files debug; do\n    ln -s \"$work/target\" \"$base/$group\"\n    expect \"$group refuses a symlink grant\" closed \"$php\" \"$capabilities\" floor\n    revoke \"$group\"\ndone\ngrant namespace\nexpect 'namespace grants do not open process creation' namespace \"$php\" \"$capabilities\" namespace\nrevoke namespace\ngrant process\nexpect 'process alone permits fork and detachment' forked \"$php\" \"$capabilities\" process\nrevoke process\ngrant listen\nexpect 'listen alone permits creating and accepting a listener' listening \"$php\" \"$capabilities\" listen\nrevoke listen\ngrant special-files\nexpect 'special-files alone permits FIFO creation' created \"$php\" \"$capabilities\" special-files \"$work\"\nrevoke special-files\n\"$php\" -d display_errors=stderr -i >\"$work/info\" 2>\"$work/err\"\ntest ! -s \"$work/info\"\ngrep -F '\"group\":\"debug\"' \"$work/err\" >/dev/null\ngrant debug\nexpect 'debug alone restores phpinfo' information \"$php\" \"$capabilities\" debug\n\"$php\" -i >\"$work/info\"\ngrep -q 'PHP Version' \"$work/info\"\nrevoke debug\n\n# Debug output does not grant execution, uploads, or ordinary reflection.\nexpect 'logging, exception traces and programmatic inspection work without debug' ordinary \\\n    \"$php\" \"$capabilities\" debug-ordinary \"$work\"\ngrep -q debug-ordinary-log \"$work/debug-ordinary.log\"\nexpect 'ReflectionExtension info cannot bypass debug' refused \\\n    \"$php\" \"$capabilities\" debug-module-denied\ngrep -F '\"group\":\"debug\"' \"$work/err\" | grep -F '\"operation\":\"module_info\"'\nfor extension in main standard; do\n    refuse \"--ri $extension requires debug\" php:debug \"$php\" --ri \"$extension\"\ndone\n# The old diagnostics grant must not restore debug functions or traces.\ngrant diagnostics\nexpect 'the retired diagnostics grant does not restore debug functions' \"$closed\" report\nrevoke diagnostics\n\nfatal_probe() {\n    mode=$1; setting=$2\n    if \"$php\" -d display_errors=stderr -d log_errors=0 -d \"fatal_error_backtraces=$setting\" \\\n        \"$capabilities\" \"$mode\" \"$base/debug\" >\"$work/fatal-out\" 2>\"$work/fatal-err\"; then\n        echo \"probe: FAIL: $mode did not terminate\" >&2; exit 1\n    else\n        test \"$?\" = 255\n    fi\n}\nno_fatal_trace() {\n    if grep -q 'Stack trace:' \"$work/fatal-out\" \"$work/fatal-err\"; then\n        echo 'probe: FAIL: fatal backtrace captured without permission' >&2; exit 1\n    fi\n    grep -F '\"group\":\"debug\"' \"$work/fatal-err\" | grep -F '\"operation\":\"fatal_error_backtraces\"'\n}\nfor mode in debug-fatal debug-fatal-quiet debug-oom; do\n    fatal_probe \"$mode\" 1\n    no_fatal_trace\ndone\nfatal_probe debug-fatal-enable 0\nno_fatal_trace\nln -s \"$work/target\" \"$base/debug\"\nfatal_probe debug-fatal 1\nno_fatal_trace\nrevoke debug\ngrant diagnostics\nfatal_probe debug-fatal 1\nno_fatal_trace\nrevoke diagnostics\ngrant debug\nfatal_probe debug-fatal 1\ngrep -q 'Stack trace:' \"$work/fatal-err\"\ngrep -q 'debug_fatal_probe' \"$work/fatal-err\"\n# An allowance permits the feature; it does not override an explicit INI opt-out.\nfatal_probe debug-fatal 0\nif grep -q 'Stack trace:\\|runtime-denial' \"$work/fatal-err\"; then\n    echo 'probe: FAIL: debug overrode fatal_error_backtraces=0' >&2; exit 1\nfi\n\"$php\" --ri main >\"$work/info\"\ngrep -q fatal_error_backtraces \"$work/info\"\n\"$php\" --ri standard >\"$work/info\"\ngrep -q standard \"$work/info\"\nfatal_probe debug-fatal-revoke 1\nno_fatal_trace\necho 'probe: ok: fatal capture needs debug despite INI settings and observes revocation'\n\n# A harmless mail transport proves all three entrypoints cross the helper.\ncat > \"$work/sendmail\" <<'SH'\n#!/bin/sh\ncat >/dev/null\nprintf 'sent\\n' >> \"$0.sent\"\nSH\nchmod +x \"$work/sendmail\"\nexpect 'mail-mode error_log needs exec while file logging works' refused \\\n    \"$php\" -d \"sendmail_path=$work/sendmail\" \"$capabilities\" mail-denied \"$work\"\ntest ! -e \"$work/sendmail.sent\"\ngrep -q ordinary-log \"$work/ordinary.log\"\ngrep -F '\"group\":\"exec\"' \"$work/err\" | grep -F '\"detail\":\"error_log\"'\ngrant exec\nexpect 'exec permits both mail functions and mail-mode error_log' sent \\\n    \"$php\" -d \"sendmail_path=$work/sendmail\" \"$capabilities\" mail\ntest \"$(wc -l < \"$work/sendmail.sent\" | tr -d ' ')\" = 3\nexpect 'the shared helper observes exec revocation in a running PHP' refused \\\n    \"$php\" -d \"sendmail_path=$work/sendmail\" \"$capabilities\" mail-revoke \"$base/exec\"\ntest \"$(wc -l < \"$work/sendmail.sent\" | tr -d ' ')\" = 3\ntest \"$(grep -c '\"group\":\"exec\"' \"$work/err\")\" = 3\n\n# No SQLite headers are required: the extension records reaching its entrypoint.\ncat > \"$work/loader.c\" <<'C'\n#include <stdio.h>\nstruct sqlite3;\nstruct sqlite3_api_routines;\nint sqlite3_extension_init(struct sqlite3 *db, char **error,\n                          const struct sqlite3_api_routines *api) {\n    (void)db; (void)error; (void)api;\n    FILE *f = fopen(__FILE__ \".loaded\", \"w\");\n    if (!f) return 1;\n    fputs(\"loaded\", f);\n    fclose(f);\n    return 0;\n}\nC\ncc -shared -fPIC -o \"$work/loader.so\" \"$work/loader.c\"\nexpect 'SQLite queries work while native library loading is denied' refused \\\n    \"$php\" -d \"sqlite3.extension_dir=$work\" \"$capabilities\" native-denied \"$work\"\ngrep -F '\"group\":\"native\"' \"$work/err\" | grep -F '\"operation\":\"loadExtension\"'\nln -s \"$work/target\" \"$base/native\"\nexpect 'SQLite native loading rejects a symlink grant' refused \\\n    \"$php\" -d \"sqlite3.extension_dir=$work\" \"$capabilities\" native-denied \"$work\"\nrevoke native\ngrant native\nexpect 'native permits reaching SQLite extension entrypoints' loaded \\\n    \"$php\" -d \"sqlite3.extension_dir=$work\" \"$capabilities\" native-load \"$work\"\nexpect 'SQLite loaders observe native revocation after connecting' refused \\\n    \"$php\" -d \"sqlite3.extension_dir=$work\" \"$capabilities\" native-revoke \"$work\" \"$base/native\"\n\n# FFI and SQLite3 are not added to the packages. Dev builds that include them\n# exercise their guarded paths too; the shipped driver is PDO SQLite.\nif [ \"$(\"$php\" \"$capabilities\" ffi-present)\" = yes ]; then\n    printf '#define FFI_SCOPE \"probe\"\\nint abs(int);\\n' > \"$work/ffi.h\"\n    expect 'ffi.enable cannot bypass native' refused \\\n        \"$php\" -d ffi.enable=1 \"$capabilities\" ffi-denied \"$work/ffi.h\"\n    grep -F '\"group\":\"native\"' \"$work/err\" | grep -F '\"operation\":\"ffi\"'\n    refuse 'FFI header preloading needs native' php:native \\\n        \"$php\" -d \"ffi.preload=$work/ffi.h\" \"$capabilities\" ffi-scope\n    grant native\n    expect 'native permits FFI declarations and header loading' loaded \\\n        \"$php\" -d ffi.enable=1 \"$capabilities\" ffi-load \"$work/ffi.h\"\n    expect 'native permits FFI header preloading and scope access' preloaded \\\n        \"$php\" -d \"ffi.preload=$work/ffi.h\" \"$capabilities\" ffi-scope\n    revoke native\nfi\n\n# Phar is not built; an allowance cannot restore its extension, class or wrapper.\ngrant phar\nexpect 'Phar stays absent even with an allowance' \"$closed\" report\nrevoke phar\n\n# A link is not an allowance, even to a regular file: lock times will be links.\n: > \"$work/target\"\nln -s \"$work/target\" \"$base/exec\"\nexpect 'a link is not an allowance' \"$closed\" report\nrm -f \"$base/exec\"\n\necho \"probe: ok: every php protection holds, and each group takes its own back\"\nWEREWOLF_PROBE_SH\ncat > /tmp/capabilities.php <<'WEREWOLF_PROBE_CAPABILITIES'\n<?php\n// Run against the installed PHP. Shell probes supply grants and fixtures.\nfunction check(bool $ok): void {\n    if (!$ok) {\n        throw new RuntimeException('capability probe failed');\n    }\n}\n\nfunction denied(callable $call, string $group): void {\n    try {\n        $call();\n    } catch (Error $error) {\n        check(str_contains($error->getMessage(), 'php:' . $group));\n        return;\n    }\n    throw new RuntimeException('capability was not denied: ' . $group);\n}\n\nswitch ($argv[1]) {\ncase 'floor':\n    $groups = [\n        'exec' => ['mail', 'mb_send_mail'],\n        'namespace' => ['pcntl_unshare', 'pcntl_setns'],\n        'process' => ['pcntl_fork', 'pcntl_rfork', 'pcntl_forkx', 'posix_setsid', 'posix_setpgid'],\n        'listen' => ['stream_socket_server', 'stream_socket_accept'],\n        'special-files' => ['posix_mkfifo', 'posix_mknod'],\n        'debug' => ['phpinfo', 'phpcredits', 'var_dump', 'print_r',\n                    'debug_zval_dump', 'debug_print_backtrace'],\n    ];\n    foreach ($groups as $functions) {\n        foreach ($functions as $function) {\n            check(!function_exists($function));\n            $evaluated = false;\n            try {\n                $function($evaluated = true);\n            } catch (Error $error) {\n                check(str_contains($error->getMessage(), 'undefined function'));\n            }\n            check(!$evaluated);\n        }\n    }\n    // Ordinary signal handling and process identity queries remain available.\n    check(function_exists('pcntl_signal') && function_exists('posix_getpid'));\n    echo 'closed';\n    break;\ncase 'namespace':\n    // macOS has neither API. Linux package probes must restore unshare.\n    check(PHP_OS_FAMILY !== 'Linux' || function_exists('pcntl_unshare'));\n    check(!function_exists('pcntl_fork') && !function_exists('system'));\n    echo 'namespace';\n    break;\ncase 'process':\n    check(function_exists('posix_setpgid'));\n    $pid = pcntl_fork();\n    check($pid >= 0);\n    if ($pid === 0) {\n        exit(posix_setsid() > 0 ? 0 : 1);\n    }\n    check(pcntl_waitpid($pid, $status) === $pid);\n    check(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);\n    check(!function_exists('pcntl_unshare') && !function_exists('pcntl_setns'));\n    echo 'forked';\n    break;\ncase 'listen':\n    $server = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);\n    check($server !== false);\n    $client = stream_socket_client('tcp://' . stream_socket_get_name($server, false));\n    check($client !== false);\n    $peer = stream_socket_accept($server, 2);\n    check($peer !== false);\n    fwrite($peer, 'listening');\n    fclose($peer);\n    check(stream_get_contents($client) === 'listening');\n    fclose($client);\n    fclose($server);\n    echo 'listening';\n    break;\ncase 'special-files':\n    check(posix_mkfifo($argv[2] . '/fifo', 0600));\n    check(posix_mknod($argv[2] . '/node', POSIX_S_IFIFO | 0600));\n    check(filetype($argv[2] . '/fifo') === 'fifo' && filetype($argv[2] . '/node') === 'fifo');\n    unlink($argv[2] . '/fifo');\n    unlink($argv[2] . '/node');\n    echo 'created';\n    break;\ncase 'debug':\n    ob_start();\n    phpinfo(INFO_GENERAL);\n    check(str_contains(ob_get_clean(), 'PHP Version'));\n    foreach (['var_dump', 'debug_zval_dump'] as $dump) {\n        ob_start();\n        $dump(['debug-dump-marker' => 42]);\n        check(str_contains(ob_get_clean(), 'debug-dump-marker'));\n    }\n    check(str_contains(print_r(['debug-print-marker' => 42], true), 'debug-print-marker'));\n    ob_start();\n    print_r(['debug-print-marker' => 42]);\n    check(str_contains(ob_get_clean(), 'debug-print-marker'));\n    ob_start();\n    (function () { debug_print_backtrace(); })();\n    check(str_contains(ob_get_clean(), '#0'));\n    ob_start();\n    phpcredits(CREDITS_GENERAL);\n    check(str_contains(ob_get_clean(), 'PHP Credits'));\n    ob_start();\n    (new ReflectionExtension('standard'))->info();\n    check(str_contains(ob_get_clean(), 'standard'));\n    echo 'information';\n    break;\ncase 'debug-module-denied':\n    ob_start();\n    @(new ReflectionExtension('standard'))->info();\n    check(ob_get_clean() === '');\n    echo 'refused';\n    break;\ncase 'debug-ordinary':\n    check(!function_exists('var_dump') && !function_exists('phpinfo'));\n    check(error_log('debug-ordinary-log', 3, $argv[2] . '/debug-ordinary.log'));\n    check(var_export(42, true) === '42');\n    (function () {\n        check(count(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)) > 0);\n        try { throw new RuntimeException('ordinary-exception'); }\n        catch (RuntimeException $error) { check(count($error->getTrace()) > 0); }\n    })();\n    $handled = false;\n    set_error_handler(function () use (&$handled) { $handled = true; return true; });\n    trigger_error('ordinary-warning', E_USER_WARNING);\n    restore_error_handler();\n    check($handled);\n    echo 'ordinary';\n    break;\ncase 'debug-fatal':\ncase 'debug-fatal-enable':\ncase 'debug-fatal-revoke':\ncase 'debug-fatal-quiet':\n    if ($argv[1] === 'debug-fatal-enable') {\n        ini_set('fatal_error_backtraces', '1');\n    }\n    if ($argv[1] === 'debug-fatal-revoke') {\n        check(function_exists('var_dump'));\n        unlink($argv[2]);\n    }\n    if ($argv[1] === 'debug-fatal-quiet') {\n        ini_set('display_errors', '0');\n        ini_set('log_errors', '0');\n        error_reporting(0);\n    }\n    function debug_fatal_probe() { trigger_error('debug-fatal-marker', E_USER_ERROR); }\n    debug_fatal_probe();\n    throw new RuntimeException('fatal error returned');\ncase 'debug-oom':\n    // Exercise the policy from the actual allocation-failure path too.\n    ini_set('memory_limit', '16M');\n    str_repeat('x', 32 * 1024 * 1024);\n    throw new RuntimeException('OOM returned');\ncase 'mail':\n    check(mail('probe@example.invalid', 'probe', 'body'));\n    check(mb_send_mail('probe@example.invalid', 'probe', 'body'));\n    check(error_log('probe', 1, 'probe@example.invalid'));\n    echo 'sent';\n    break;\ncase 'mail-denied':\n    // error_log() must keep ordinary logging, while its mail mode needs exec.\n    check(!@error_log('probe', 1, 'probe@example.invalid'));\n    check(error_log('ordinary-log', 3, $argv[2] . '/ordinary.log'));\n    echo 'refused';\n    break;\ncase 'mail-revoke':\n    check(function_exists('mail') && function_exists('mb_send_mail'));\n    unlink($argv[2]);\n    check(!@mail('probe@example.invalid', 'probe', 'body'));\n    check(!@mb_send_mail('probe@example.invalid', 'probe', 'body'));\n    check(!@error_log('probe', 1, 'probe@example.invalid'));\n    echo 'refused';\n    break;\ncase 'native-denied':\ncase 'native-load':\ncase 'native-revoke':\n    $pdo = PDO::connect('sqlite::memory:');\n    check(method_exists($pdo, 'loadExtension'));\n    check($pdo->query('SELECT 42')->fetchColumn() == 42);\n    $loaders = [fn() => $pdo->loadExtension($argv[2] . '/loader.so')];\n    if (class_exists('SQLite3', false)) {\n        $sqlite = new SQLite3(':memory:');\n        check(method_exists($sqlite, 'loadExtension'));\n        $loaders[] = fn() => $sqlite->loadExtension('loader.so');\n    }\n    if ($argv[1] === 'native-revoke') {\n        unlink($argv[3]);\n    }\n    foreach ($loaders as $load) {\n        if ($argv[1] === 'native-load') {\n            $load();\n            check(is_file($argv[2] . '/loader.c.loaded'));\n            unlink($argv[2] . '/loader.c.loaded');\n        } else {\n            denied($load, 'native');\n            check(!is_file($argv[2] . '/loader.c.loaded'));\n        }\n    }\n    echo $argv[1] === 'native-load' ? 'loaded' : 'refused';\n    break;\ncase 'ffi-present':\n    echo class_exists('FFI', false) ? 'yes' : 'no';\n    break;\ncase 'ffi-denied':\n    denied(fn() => FFI::cdef('int abs(int);'), 'native');\n    denied(fn() => FFI::load($argv[2]), 'native');\n    denied(fn() => FFI::scope('probe'), 'native');\n    denied(fn() => FFI::new('int'), 'native');\n    denied(fn() => FFI::cast('int', 1), 'native');\n    echo 'refused';\n    break;\ncase 'ffi-load':\n    check(FFI::cdef('int abs(int);')->abs(-42) === 42);\n    check(FFI::load($argv[2])->abs(-42) === 42);\n    echo 'loaded';\n    break;\ncase 'ffi-scope':\n    check(FFI::scope('probe')->abs(-42) === 42);\n    echo 'preloaded';\n    break;\ndefault:\n    throw new RuntimeException('unknown capability probe');\n}\nWEREWOLF_PROBE_CAPABILITIES\nsh /tmp/probe.sh /tmp/probe.php\n"
+      }
+    ]
+  }
+}

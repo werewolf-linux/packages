@@ -1,0 +1,318 @@
+{
+  "package": {
+    "name": "ffmpeg-9.0",
+    "version": "9.0.2",
+    "epoch": 4005,
+    "description": "ffmpeg multimedia library",
+    "copyright": [
+      {
+        "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "ffmpeg=${{package.full-version}}",
+        "upstream-origin:ffmpeg-9.0:9.0.2-r5",
+        "ffmpeg-hardened=${{package.full-version}}"
+      ],
+      "provider-priority": 5,
+      "runtime": [
+        "libavcodec63=${{package.full-version}}",
+        "libavdevice63=${{package.full-version}}",
+        "libavfilter12=${{package.full-version}}",
+        "libavformat63=${{package.full-version}}",
+        "libavutil61=${{package.full-version}}",
+        "libswresample7=${{package.full-version}}",
+        "libswscale10=${{package.full-version}}"
+      ]
+    },
+    "resources": {
+      "cpu": "7",
+      "memory": "8Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "2Gi"
+    }
+  },
+  "vars": {
+    "openssl-version": "4.0"
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "aom",
+        "aom-dev",
+        "aom-libs",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "dav1d-dev",
+        "glibc-2.44-dev",
+        "lame-dev",
+        "libogg-dev",
+        "libtheora",
+        "libtheora-dev",
+        "libvorbis-dev",
+        "libvpx-dev",
+        "libwebp-dev",
+        "nasm",
+        "opencore-amr-dev",
+        "openjpeg-dev",
+        "opus-dev",
+        "perl",
+        "snappy-dev",
+        "soxr-dev",
+        "speex-dev",
+        "svt-av1-dev",
+        "wolfi-baselayout",
+        "x264-dev",
+        "x265-dev",
+        "yasm",
+        "zlib-dev",
+        "bzip2-dev",
+        "xz-dev"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/FFmpeg/FFmpeg.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 946fcce07b6dcd0331c8cc609192aeff5e1924f8; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 946fcce07b6dcd0331c8cc609192aeff5e1924f8\n      git -c core.hooksPath=/dev/null checkout -q --detach 946fcce07b6dcd0331c8cc609192aeff5e1924f8\n      exit 0\n    fi\n  done\ndone\necho \"946fcce07b6dcd0331c8cc609192aeff5e1924f8: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "runs": "./configure \\\n  --prefix=/usr \\\n  --libdir=/usr/lib \\\n  --enable-shared \\\n  --enable-libx264 \\\n  --enable-libx265 \\\n  --enable-libaom \\\n  --enable-libtheora \\\n  --enable-gpl \\\n  --enable-version3 \\\n  --disable-openssl \\\n  --enable-libmp3lame \\\n  --enable-libopencore-amrnb \\\n  --disable-ffplay \\\n  --enable-libdav1d \\\n  --disable-libharfbuzz \\\n  --enable-libopus \\\n  --enable-libsnappy \\\n  --disable-libsrt \\\n  --disable-libssh \\\n  --enable-libsvtav1 \\\n  --enable-libvorbis \\\n  --enable-libvpx \\\n  --enable-libwebp \\\n  --disable-libxml2 \\\n  --enable-lzma \\\n  --disable-libfontconfig \\\n  --disable-libfreetype \\\n  --enable-libopenjpeg \\\n  --enable-libspeex \\\n  --enable-libsoxr \\\n  --disable-libzmq --disable-autodetect --disable-network --disable-protocols --enable-protocol=file,pipe --disable-indevs --enable-indev=lavfi --disable-outdevs --enable-zlib --enable-bzlib\n"
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "uses": "upstream-tests/ffmpeg-fate"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "runs": "make install-man DESTDIR=${{targets.destdir}}"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "data": [
+    {
+      "name": "libraries",
+      "items": {
+        "libavcodec63": "libavcodec.so.63",
+        "libavdevice63": "libavdevice.so.63",
+        "libavfilter12": "libavfilter.so.12",
+        "libavformat63": "libavformat.so.63",
+        "libavutil61": "libavutil.so.61",
+        "libswresample7": "libswresample.so.7",
+        "libswscale10": "libswscale.so.10"
+      }
+    }
+  ],
+  "subpackages": [
+    {
+      "range": "libraries",
+      "name": "${{package.name}}-${{range.key}}",
+      "description": "${{range.value}} library",
+      "dependencies": {
+        "provides": [
+          "${{range.key}}=${{package.full-version}}",
+          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+        ],
+        "provider-priority": 5
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/${{range.value}}* \"${{targets.subpkgdir}}\"/usr/lib/\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          },
+          {
+            "uses": "test/tw/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "${{range.key}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-static",
+      "dependencies": {
+        "provides": [
+          "ffmpeg-static=${{package.full-version}}",
+          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+        ]
+      },
+      "pipeline": [
+        {
+          "uses": "split/static"
+        }
+      ],
+      "description": "ffmpeg static libraries",
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/staticpackage"
+          },
+          {
+            "uses": "test/tw/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "ffmpeg-static"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-dev",
+      "dependencies": {
+        "runtime": [
+          "${{package.name}}",
+          "${{package.name}}-static"
+        ],
+        "provides": [
+          "ffmpeg-dev=${{package.full-version}}",
+          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+        ]
+      },
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "description": "ffmpeg development headers",
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check"
+          },
+          {
+            "uses": "test/tw/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "ffmpeg-dev"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-doc",
+      "dependencies": {
+        "provides": [
+          "ffmpeg-doc=${{package.full-version}}",
+          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+        ]
+      },
+      "pipeline": [
+        {
+          "uses": "split/alldocs"
+        }
+      ],
+      "description": "ffmpeg manpages",
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/docs"
+          },
+          {
+            "uses": "test/tw/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "ffmpeg-doc"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-qt-faststart",
+      "dependencies": {
+        "provides": [
+          "ffmpeg-qt-faststart=${{package.full-version}}",
+          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+        ]
+      },
+      "description": "Utility for optimizing MP4 files for HTTP streaming",
+      "pipeline": [
+        {
+          "uses": "autoconf/make",
+          "with": {
+            "dir": "tools",
+            "opts": "qt-faststart"
+          }
+        },
+        {
+          "runs": "install -Dpm0755 -t ${{targets.contextdir}}/usr/bin tools/qt-faststart"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "${{package.name}}"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "runs": "ffmpeg -f lavfi -i testsrc=size=640x480:duration=10:rate=30 -c:v libx264 -pix_fmt yuv420p sample_video.mp4\nqt-faststart sample_video.mp4 sample_video_faststart.mp4\n# Check if the output file is created\ntest -f sample_video_faststart.mp4\n# Check if the output file is a valid MP4 file\nffmpeg -v error -i sample_video_faststart.mp4 -f null -\n"
+          },
+          {
+            "uses": "test/tw/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "ffmpeg-qt-faststart"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "uses": "test/tw/virtualpackage",
+        "with": {
+          "virtual-pkg-name": "ffmpeg"
+        }
+      },
+      {
+        "uses": "test/tw/help-check",
+        "with": {
+          "bins": "ffmpeg\nffprobe\n"
+        }
+      },
+      {
+        "runs": "# Generate and verify a 1-second, 128x128 color test video using libx264 (H.264 encoder)\nffmpeg -f lavfi -i testsrc=duration=1:size=128x128:rate=30 \\\n   -c:v libx264 -pix_fmt yuv420p out.mp4\ntest -f out.mp4\n\n# Generate and confirm a 1-second 1000Hz sine wave and encode it to MP3 using libmp3lame\nffmpeg -f lavfi -i sine=frequency=1000:duration=1 -c:a libmp3lame test.mp3\ntest -f test.mp3\n\n# Inspect the video file metadata\nffprobe -v error -show_format -show_streams out.mp4\n\n# Generate and verify a 1-second, 128x128 VP8 test video using libvpx\nffmpeg -f lavfi -i testsrc=duration=1:size=128x128:rate=30 -c:v vp8 -b:v 1M out.webm\ntest -f out.webm\nffmpeg -hide_banner -encoders > encoders.txt\ngrep -q libvpx encoders.txt\n\n# Generate and verify a 1-second, 128x128 VP9 test video using libvpx\nffmpeg -f lavfi -i testsrc=duration=1:size=128x128:rate=30 -c:v libvpx-vp9 -b:v 1M out_vp9.webm\ntest -f out_vp9.webm\n"
+      },
+      {
+        "name": "Local media conversions work without network or display support",
+        "runs": "set -eu\nwork=$(mktemp -d)\ntrap 'rm -rf \"$work\"' EXIT\ntest ! -e /usr/bin/ffplay\nffmpeg -hide_banner -protocols > \"$work/protocols\"\ntest \"$(awk '/^  / {print $1}' \"$work/protocols\" | sort -u)\" = \"$(printf 'file\\npipe')\"\nif ffmpeg -v error -i https://127.0.0.1/unavailable -f null - 2> \"$work/error\"; then\n    echo 'network input was accepted' >&2\n    exit 1\nfi\ngrep -i 'protocol not found' \"$work/error\"\nffmpeg -nostdin -v error -f lavfi -i testsrc=duration=1:size=64x48:rate=10 \\\n    -f lavfi -i sine=frequency=1000:duration=1 -c:v libx264 -pix_fmt yuv420p \\\n    -c:a aac -movflags +faststart -shortest \"$work/video.mp4\"\nffmpeg -nostdin -v error -i \"$work/video.mp4\" -vf thumbnail,scale=32:24 -frames:v 1 \"$work/thumb.png\"\ntest \"$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"$work/thumb.png\")\" = 32\nffmpeg -nostdin -v error -f lavfi -i sine=frequency=1000:duration=1 \\\n    -filter_complex showwavespic=s=64x32 -frames:v 1 \"$work/wave.png\"\ntest -s \"$work/wave.png\"\nffmpeg -nostdin -v error -i \"$work/video.mp4\" -f null -\necho 'PASS: local H.264/AAC conversion, thumbnails, waveform and rejected network protocols'\n"
+      }
+    ]
+  }
+}

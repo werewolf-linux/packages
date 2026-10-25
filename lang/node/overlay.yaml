@@ -1,0 +1,152 @@
+# Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+title: Node.js
+sources:
+- https://github.com/nodejs/node.git
+description-suffix: ' (Werewolf fixed hardening policy)'
+patches: werewolf/patches
+context:
+  patches: werewolf/patches
+checks:
+- path: [pipeline, uses=git-checkout]
+  expect:
+    uses: git-checkout
+    with:
+      repository: https://github.com/nodejs/node.git
+      tag: v${{package.version}}
+      expected-commit: ${lock.source_commit}
+- path: [pipeline]
+  shape:
+  - uses=git-checkout
+  - uses=patch
+  - name=Configure and build
+  - uses=autoconf/make-install
+  - runs
+  - uses=strip
+  - runs
+- path: [subpackages]
+  shape:
+  - name=${{package.name}}-minimal
+  - name=${{package.name}}-minimal-compat
+  - name=libnode${{vars.soversion}}
+  - name=${{package.name}}-oci-entrypoint-compat
+  - name=${{package.name}}-doc
+  - name=${{package.name}}-minimal-doc
+- path: [vars, configure-flags]
+  expect: --prefix=/usr --shared-brotli --shared-zlib --shared-openssl --shared-cares --shared-nghttp2 --shared-libuv
+    --ninja --openssl-use-def-ca-store --with-icu-default-data-dir=$(icu-config --icudatadir) --with-intl=system-icu
+    --openssl-conf-name=openssl_conf
+- path: [pipeline, name=Configure and build, runs]
+  expect: |
+    # Add defines recommended in libuv readme.
+    case "${{build.arch}}" in
+    "aarch64")
+       common_flags="-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
+       ;;
+    "x86_64")
+       common_flags="-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
+       ;;
+    esac
+
+    # Compiling with O2 instead of Os increases binary size by ~10%
+    # (53.1 MiB -> 58.6 MiB), but also increases performance by ~20%
+    # according to v8/web-tooling-benchmark. Node.js is quite huge anyway;
+    # there are better options for size constrained environments.
+    export CFLAGS="${CFLAGS/-Os/-O2} $common_flags"
+    export CXXFLAGS="${CXXFLAGS/-Os/-O2} $common_flags"
+    export CPPFLAGS="${CPPFLAGS/-Os/-O2} $common_flags"
+    # NOTE: --without-corepack is no longer supported in Node.js 25+
+    # See: https://nodejs.org/dist/latest/docs/api/corepack.html
+    python${{vars.python-version}} configure.py ${{vars.configure-flags}}
+
+      make BUILDTYPE=Release -j$(nproc)
+- path: [pipeline, '1']
+  expect:
+    uses: patch
+    with:
+      patches: ncrypto-pbkdf2-pkcs5.patch
+edits:
+- path: [package, dependencies, provides]
+  append:
+  - nodejs-hardened=${{package.full-version}}
+- path: [vars, docker-entrypoint-hash]
+  delete: true
+  exists: true
+- path: [vars, configure-flags]
+  replace:
+  - old: --prefix=/usr --shared-brotli --shared-zlib --shared-openssl --shared-cares --shared-nghttp2 --shared-libuv
+      --ninja --openssl-use-def-ca-store --with-icu-default-data-dir=$(icu-config --icudatadir) --with-intl=system-icu
+      --openssl-conf-name=openssl_conf
+    new: --prefix=/usr --shared-zlib --shared-openssl --shared-cares --shared-nghttp2 --shared-libuv --ninja --openssl-use-def-ca-store
+      --with-icu-default-data-dir=$(icu-config --icudatadir) --with-intl=system-icu --openssl-conf-name=openssl_conf
+- path: [vars, soversion]
+  delete: true
+  exists: true
+- path: [pipeline, '6']
+  delete: true
+  expect:
+    runs: |
+      rm -rf "${{targets.destdir}}"/usr/lib/node_modules
+      rm "${{targets.destdir}}"/usr/bin/npm
+      rm "${{targets.destdir}}"/usr/bin/npx
+- path: [pipeline]
+  append:
+  - name: Omit package managers and documentation
+    runs: |
+      # --without-npm must actually omit npm, npx and their modules.
+      test ! -e "${{targets.destdir}}/usr/bin/npm"
+      test ! -e "${{targets.destdir}}/usr/bin/npx"
+      test ! -e "${{targets.destdir}}/usr/lib/node_modules/npm"
+      rm -R "${{targets.destdir}}/usr/share/man"
+- path: [pipeline, name=Configure and build, runs]
+  replace:
+  - old: |2
+        make BUILDTYPE=Release -j$(nproc)
+    new: |2
+        make BUILDTYPE=Release JOBS=4 -j4
+  - old: |
+      python${{vars.python-version}} configure.py ${{vars.configure-flags}}
+    new: |
+      python${{vars.python-version}} configure.py ${{vars.configure-flags}} --without-inspector --without-npm --without-node-options --disable-single-executable-application --without-lief --without-brotli --without-zstd --without-ffi
+- path: [pipeline]
+  append:
+  - name: Permit capabilities only in the build guest
+    runs: |
+      mkdir -p /etc/runtime-hardening
+      : > /etc/runtime-hardening/build-root
+      chmod 600 /etc/runtime-hardening/build-root
+      mkdir -p /etc/runtime-hardening/allow/all/node
+      for group in exec native inline writable-source environment; do
+        : > /etc/runtime-hardening/allow/all/node/$group
+      done
+  before: '2'
+- path: [test, pipeline]
+  append:
+  - name: Werewolf protections hold, and allowances take each back
+    needs:
+      packages:
+      - build-base
+      - openssl
+    runs: |
+      ${shared:root-probe-node}work=$(mktemp -d)
+      cat > "$work/probe.cjs" <<'WEREWOLF_NODE_PROBE_JS'
+      ${file:tests/probe.cjs}WEREWOLF_NODE_PROBE_JS
+      cat > "$work/probe.sh" <<'WEREWOLF_NODE_PROBE_SH'
+      ${file:tests/probe.sh}WEREWOLF_NODE_PROBE_SH
+      cat > "$work/codecs.cjs" <<'WEREWOLF_NODE_PROBE_JS'
+      ${file:tests/codecs.cjs}WEREWOLF_NODE_PROBE_JS
+      sh "$work/probe.sh" "$work"
+- path: [subpackages, 'name=${{package.name}}-minimal-doc']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-doc']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-oci-entrypoint-compat']
+  delete: true
+- path: [subpackages, 'name=libnode${{vars.soversion}}']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-minimal-compat']
+  delete: true
+- path: [subpackages, 'name=${{package.name}}-minimal']
+  delete: true
+suite-setup:
+  name: Permit capabilities only in the build guest
+  runs: ${file:tests/build-grants.sh}

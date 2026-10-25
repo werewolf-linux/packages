@@ -32,18 +32,18 @@ publication remain independent per package; only index commits serialize through
 R2 conditional writes. `wolfi-check.yml` runs discovery on pull requests without building
 or filing issues.
 
-**Discovery** (`discover.py`) clones Wolfi once, then runs refresh, verify, derive and
+**Discovery** (`package discover`) clones Wolfi once, then runs refresh, verify, derive and
 prepare for each package as separate commands. The first to fail stops that package: its
 issue is filed and discovery goes on. Passing packages are bundled with their inputs and
 listed to build or publish, by the state of their release.
 
-**Capture** (`refresh.py`) picks the highest stream named `FAMILY` plus digits and dots
+**Capture** (`package refresh`) picks the highest stream selected by the metadata recipe family plus digits and dots
 that the `stable` hook accepts; `policy.json` `"stream"` may pin one. It requires the
 recipe's exact source pin and captures the unchanged recipe, its directory, pipelines
 and Wolfi's key. The lock hashes them with their modes, plus our scripts, workflows,
 tool pins and package directory less docs: the build identity.
 
-**Version.** `policy.json` keeps a revision that `full_version` folds into the APK
+**Version.** `policy.json` keeps a revision that the common engine folds into the APK
 epoch, so ours outranks the Wolfi build it rebuilds. Raise it when behaviour changes.
 
 **Source.** Preparation and Melange both fetch only Wolfi's exact commit, depth one,
@@ -51,10 +51,10 @@ from the package's sources in order: 120 seconds each, three rounds, 15- and 45-
 pauses. A mismatched commit stops at once; branch tips never replace the pin.
 
 **Patches** apply with GNU patch, `-p1 --forward --fuzz=2`, as Wolfi applies its own: on
-the host by `prepare.py`, then in the build by one shared step `verify.py` requires
+the host by `package prepare`, then in the build by one shared step `package verify` requires
 unchanged. Fuzz still builds and files an advisory issue; a failure stops the package.
 
-**Issues** (`drift.py`) are labelled `drift`, `package/NAME` and their kind: `refresh`,
+**Issues** (`package discover --github`) are labelled `drift`, `package/NAME` and their kind: `refresh`,
 `derivation`, `patches` or `fuzz`. Each names the Wolfi version and quotes the output. A
 hidden marker finds the open issue, so a new failure comments on it.
 
@@ -65,7 +65,7 @@ bootstrap test needs; a private bubblewrap copy gets a profile allowing `sys_chr
 mismatches. The system binary is checked to still refuse chroot. Package tests, Wolfi's and our probes,
 run as a separate Melange command against the signed packages.
 
-**Publication** (`publish.py`) checks build records, APK signatures, payload hashes,
+**Publication** (`package publish`) checks build records, APK signatures, payload hashes,
 index coverage and matching versions on both architectures. `NAME-ARCH.tar.gz` archives
 go to a GitHub draft tagged `NAME/build-<input hash>`, its manifest last, so a later run
 resumes with the original bytes. Archives are normalized and assets never overwritten.
@@ -76,7 +76,7 @@ signed index, both architectures before the completion manifest. Machines follow
 APK and one index naming all package families and retained versions. Per-package
 stable indexes remain available for compatibility and as authenticated backfill inputs.
 
-`feed.py` authenticates each source index and each added APK, including its payload,
+`package feed` authenticates each source index and each added APK, including its payload,
 control checksum, architecture, identity and size. Immutable APKs arrive before the
 combined index. Index reads use the R2 API rather than a CDN. A signed union replaces
 the index with `If-Match` on the ETag read, or `If-None-Match: *` for initial creation.
@@ -92,11 +92,10 @@ backwards, and the GitHub release becomes public last.
 
 Release notes are made once, at staging: Wolfi's and upstream's changes, ours,
 advisories fixed, test counts, probe results and provenance. Every package provides
-`wolfi-origin:<origin>:<wolfi version>`, for Werewolf's CVE matching.
+`upstream-origin:<origin>:<source version>`, for Werewolf's CVE matching.
 
 The `release` environment holds `WEREWOLF_PACKAGES_KEY` and the R2 keys. Signing has its
-own step, so the key never reaches a build; OpenSSL converts it to PKCS#1 through
-standard input, mode 0600. Its public key must equal the committed trust root.
+own step; Go parses PKCS#1 or PKCS#8 and writes the builder key with mode 0600. Its public key must equal the committed trust root.
 
 ## Drawbacks
 

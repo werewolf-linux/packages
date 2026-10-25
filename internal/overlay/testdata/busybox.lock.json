@@ -1,0 +1,7 @@
+{
+  "recipe": "busybox.yaml",
+  "version": "1.38.0",
+  "epoch": 3,
+  "revision": 1,
+  "source_commit": "fc71374dfccd46448c62947269a35f1420d7ee28"
+}

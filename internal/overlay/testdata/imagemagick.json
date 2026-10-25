@@ -1,0 +1,222 @@
+{
+  "package": {
+    "name": "imagemagick-7",
+    "version": "7.1.2.34",
+    "epoch": 2000,
+    "description": "ImageMagick\u00ae is a free, open-source software suite, used for editing and manipulating digital images.",
+    "copyright": [
+      {
+        "license": "GPL-3.0-only"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "imagemagick=${{package.full-version}}",
+        "upstream-origin:imagemagick-7:7.1.2.34-r0"
+      ],
+      "runtime": [
+        "libgomp"
+      ]
+    },
+    "resources": {
+      "cpu": "2",
+      "memory": "7Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "1Gi"
+    }
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "autoconf",
+        "automake",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "chrpath",
+        "fontconfig-dev",
+        "freetype-dev",
+        "ghostscript-dev",
+        "glibc-2.44-dev",
+        "lcms2-dev",
+        "libheif-dev",
+        "libjpeg-turbo-dev",
+        "libpng-dev",
+        "libtool",
+        "libwebp-dev",
+        "libxml2-dev",
+        "openjpeg-dev",
+        "tiff-dev",
+        "zlib-dev"
+      ]
+    }
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.version}}",
+      "match": "\\.([^\\[.-]*)$",
+      "replace": "-$1",
+      "to": "mangled-package-version"
+    }
+  ],
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/ImageMagick/ImageMagick.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" a0c4bf729a26a5c2feb28b0365b47a8db736078a; then\n      test \"$(git rev-parse FETCH_HEAD)\" = a0c4bf729a26a5c2feb28b0365b47a8db736078a\n      git -c core.hooksPath=/dev/null checkout -q --detach a0c4bf729a26a5c2feb28b0365b47a8db736078a\n      exit 0\n    fi\n  done\ndone\necho \"a0c4bf729a26a5c2feb28b0365b47a8db736078a: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "autoconf/configure",
+      "with": {
+        "opts": "--without-x --without-fftw --without-pango --without-perl --without-gvc --without-dps"
+      }
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "${{package.name}}-doc",
+      "dependencies": {
+        "provides": [
+          "imagemagick-doc=${{package.full-version}}",
+          "upstream-origin:imagemagick-7:7.1.2.34-r0"
+        ]
+      },
+      "description": "ImageMagick documentation and manpages",
+      "pipeline": [
+        {
+          "uses": "split/manpages"
+        },
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/share\nmv \"${{targets.destdir}}\"/usr/share/doc/ \"${{targets.subpkgdir}}\"/usr/share\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/docs"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-static",
+      "dependencies": {
+        "provides": [
+          "imagemagick-static=${{package.full-version}}",
+          "upstream-origin:imagemagick-7:7.1.2.34-r0"
+        ]
+      },
+      "description": "ImageMagick static libraries",
+      "pipeline": [
+        {
+          "uses": "split/static"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/staticpackage"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-dev",
+      "description": "ImageMagick dev headers",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "imagemagick-dev=${{package.full-version}}",
+          "upstream-origin:imagemagick-7:7.1.2.34-r0"
+        ],
+        "runtime": [
+          "${{package.name}}"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "MagickCore-config\nMagickWand-config\n",
+              "version": "${{vars.mangled-package-version}}"
+            }
+          },
+          {
+            "runs": "Magick++-config --version\n"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check",
+            "with": {
+              "packages": "imagemagick-7-dev"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "pipeline": [
+      {
+        "uses": "test/tw/ver-check",
+        "with": {
+          "bins": "animate\ncompare\ncomposite\nconvert\ndisplay\nidentify\nimport\nmagick\nmagick-script\nmogrify\nmontage\n",
+          "version": "${{vars.mangled-package-version}}"
+        }
+      },
+      {
+        "uses": "test/tw/help-check",
+        "with": {
+          "bins": "stream\nconvert\nmagick\nmagick-script\nmontage\n"
+        }
+      },
+      {
+        "runs": "# Confirm HEIC format support\nmagick -list format | grep 'HEIC \\+rw'\n"
+      },
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "uses": "test/no-docs"
+      },
+      {
+        "name": "Server-side document and image consumers",
+        "needs": {
+          "packages": [
+            "ghostscript",
+            "ttf-dejavu"
+          ]
+        },
+        "runs": "#!/bin/sh\nset -eu\nif magick -version | grep '^Delegates' | grep -E '(^| )(x|fftw|pango|gvc)( |$)'; then\n    echo 'optional GUI/FFT delegate remains' >&2\n    exit 1\nfi\nwork=$(mktemp -d)\ntrap 'rm -rf \"$work\"' EXIT\ncd \"$work\"\n# Scans, web thumbnails and phone photos are common document inputs.\nmagick -size 120x80 gradient:white-black scan.png\nfor format in jpg tif webp heic; do\n    magick scan.png \"scan.$format\"\n    [ \"$(magick identify -format '%wx%h' \"scan.$format\")\" = 120x80 ]\n    magick \"scan.$format\" -resize 60x40 \"thumb-$format.png\"\n    [ \"$(magick identify -format '%wx%h' \"thumb-$format.png\")\" = 60x40 ]\ndone\nmagick -font DejaVu-Sans -pointsize 24 label:'Invoice 123' text.png\n[ \"$(magick identify -format '%k' text.png)\" -gt 1 ]\n# Preserve PDF rasterization through Ghostscript for Paperless document imports.\nmagick scan.png invoice.pdf\nmagick -density 72 invoice.pdf invoice.png\n[ \"$(magick identify -format '%wx%h' invoice.png)\" = 120x80 ]\necho 'PASS: JPEG/TIFF/WebP/HEIC, resize, font rendering and PDF rasterization'\n"
+      }
+    ]
+  }
+}

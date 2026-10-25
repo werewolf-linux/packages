@@ -11,10 +11,16 @@ import (
 // ResolveRelease returns a stable version and the exact commit it names. Wolfi
 // derivations use this without writing an application recipe or running tools.
 func (c *Client) ResolveRelease(ctx context.Context, p Policy) (Release, error) {
-	if p.Source != "github" && p.Source != "github-tags" && p.Source != "openjdk" {
+	switch p.Source {
+	case "github", "github-tags", "openjdk", "git-tags":
+	default:
 		return Release{}, fmt.Errorf("source %q cannot pin a release commit", p.Source)
 	}
-	if p.Source != "openjdk" && !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(p.Repo) {
+	if p.Source == "git-tags" {
+		if !gitURL.MatchString(p.URL) || p.Repo != "" {
+			return Release{}, fmt.Errorf("invalid git release source")
+		}
+	} else if p.URL != "" || p.Source != "openjdk" && !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(p.Repo) {
 		return Release{}, fmt.Errorf("invalid release repository")
 	}
 	if p.Series != "" || p.Hold != "" || p.Branch != "" || p.Lock != "" || len(p.Components) != 0 {
@@ -31,6 +37,10 @@ func (c *Client) ResolveRelease(ctx context.Context, p Policy) (Release, error) 
 	r, err := c.Discover(ctx, p, "0")
 	if err != nil {
 		return Release{}, err
+	}
+	if p.Source == "git-tags" {
+		r.Timestamp, err = gitCommitTime(ctx, p.URL, r.Tag, r.Commit)
+		return r, err
 	}
 	if r.Repository == "" {
 		r.Repository = p.Repo

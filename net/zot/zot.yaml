@@ -9,7 +9,7 @@
 package:
   name: zot
   version: 2.1.22
-  epoch: 3
+  epoch: 4
   description: OCI-native container image registry
   copyright:
     - license: Apache-2.0

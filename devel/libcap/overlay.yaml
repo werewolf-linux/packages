@@ -1,0 +1,47 @@
+# Checked changes to the captured Wolfi recipe (internal/overlay).
+title: libcap
+sources:
+- https://git.kernel.org/pub/scm/libs/libcap/libcap.git
+- https://kernel.googlesource.com/pub/scm/libs/libcap/libcap.git
+description-suffix: ' (Werewolf: no PAM module)'
+checks:
+- path: [pipeline, uses=git-checkout]
+  expect:
+    uses: git-checkout
+    with:
+      repository: https://kernel.googlesource.com/pub/scm/libs/libcap/libcap.git
+      tag: v1.${{package.version}}
+      expected-commit: ${lock.source_commit}
+- path: [pipeline]
+  shape:
+  - uses=git-checkout
+  - runs
+  - uses=strip
+- path: [subpackages]
+  shape:
+  - name=libcap-dev
+  - name=libcap-utils
+  - name=libcap-doc
+edits:
+- path: [environment, contents, packages]
+  remove:
+  - linux-pam-dev
+- path: [pipeline, 1, runs]
+  expect: |
+    set -x
+    make BUILD_CC=gcc CC=gcc lib=lib prefix=/usr DESTDIR="${{targets.destdir}}"
+    make sbindir=/bin lib=/lib prefix=/usr RAISE_SETFCAP=no DESTDIR="${{targets.destdir}}" install
+    chmod 755 "${{targets.destdir}}/usr/lib/libcap.so.${{package.version}}"
+    chmod 755 "${{targets.destdir}}/usr/lib/security/pam_cap.so"
+  set: |
+    set -x
+    make BUILD_CC=gcc CC=gcc lib=lib prefix=/usr PAM_CAP=no DESTDIR="${{targets.destdir}}"
+    make sbindir=/bin lib=/lib prefix=/usr RAISE_SETFCAP=no PAM_CAP=no DESTDIR="${{targets.destdir}}" install
+    chmod 755 "${{targets.destdir}}/usr/lib/libcap.so.${{package.version}}"
+- path: [test, pipeline]
+  append:
+  - name: No PAM module, and nothing loads libpam
+    runs: |
+      cat > /tmp/libcap-probe.sh <<'WEREWOLF_LIBCAP_PROBE'
+      ${file:tests/probe.sh}WEREWOLF_LIBCAP_PROBE
+      sh /tmp/libcap-probe.sh

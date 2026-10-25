@@ -34,13 +34,12 @@ jobs:
       - uses: astral-sh/setup-uv@c97f06e356bcca1b426f396ef93ec35ce149ce7b
         with:
           version: '0.12.23'
-      - run: python3 scripts/install-melange.py --dest build/tools/melange
-      - name: Install package test dependencies
-        run: |
-          python3 -m venv build/venv
-          build/venv/bin/pip install -r wolfi/requirements.txt
+      - run: make tools
+      - name: Install vendor archive tools
+        run: sudo -n apt-get -o Acquire::Retries=3 install -y libarchive-tools
+      - run: build/tools/package install-melange --dest build/tools/melange
       - name: Test update and publication logic
-        run: PATH="$PWD/build/tools:$PATH" make PYTHON=build/venv/bin/python test check
+        run: PATH="$PWD/build/tools:$PATH" make test lint check
       - name: Prepare each complete update independently
         id: update
         continue-on-error: true
@@ -57,7 +56,7 @@ jobs:
           test -f build/updates.json
           jq -r '.[] | select(.status == "updated") | [.package, .latest] | @tsv' build/updates.json >build/changed.tsv
           while IFS="$(printf '\t')" read -r package version; do
-            directory=$(python3 scripts/catalog.py path "$package" --engine upstream)
+            directory=$(build/tools/package catalog --engine upstream path "$package")
             git add -- "$directory"
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m "update: $package to $version"

@@ -1,0 +1,7 @@
+{
+  "recipe": "libvips.yaml",
+  "version": "8.18.7",
+  "epoch": 1,
+  "revision": 3,
+  "source_commit": "24ad4d042940e6bf99a68871ba886ca8847c9c82"
+}

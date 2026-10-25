@@ -35,7 +35,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: python3 scripts/install-melange.py --dest build/tools/melange
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version: '1.27.x'
+      - run: make tools
+      - run: build/tools/package install-melange --dest build/tools/melange
       - name: Download the x86_64 build
         if: inputs.build
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -58,7 +62,7 @@ jobs:
         run: |
           test -n "$AWS_ACCESS_KEY_ID"
           test -n "$AWS_SECRET_ACCESS_KEY"
-          PATH="$PWD/build/tools:$PATH" python3 scripts/publish.py "$PACKAGE"
+          PATH="$PWD/build/tools:$PATH" build/tools/package publish --package "$PACKAGE"
       - name: Remove any unfinished signing key
         if: always()
         run: rm -f build/keys/werewolf-packages.rsa

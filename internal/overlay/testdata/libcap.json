@@ -1,0 +1,170 @@
+{
+  "package": {
+    "name": "libcap",
+    "version": "2.78",
+    "epoch": 1004,
+    "description": "POSIX 1003.1e capabilities (Werewolf: no PAM module)",
+    "copyright": [
+      {
+        "license": "BSD-3-Clause OR GPL-2.0-only"
+      }
+    ],
+    "dependencies": {
+      "runtime": [
+        "merged-usrsbin",
+        "wolfi-baselayout"
+      ],
+      "provides": [
+        "upstream-origin:libcap:2.78-r4"
+      ]
+    }
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "bash",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "glibc-2.44-dev",
+        "perl"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://git.kernel.org/pub/scm/libs/libcap/libcap.git https://kernel.googlesource.com/pub/scm/libs/libcap/libcap.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" a1fef85d27d0ee12729a64d1c9b2183c6007e56a; then\n      test \"$(git rev-parse FETCH_HEAD)\" = a1fef85d27d0ee12729a64d1c9b2183c6007e56a\n      git -c core.hooksPath=/dev/null checkout -q --detach a1fef85d27d0ee12729a64d1c9b2183c6007e56a\n      exit 0\n    fi\n  done\ndone\necho \"a1fef85d27d0ee12729a64d1c9b2183c6007e56a: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "runs": "set -x\nmake BUILD_CC=gcc CC=gcc lib=lib prefix=/usr PAM_CAP=no DESTDIR=\"${{targets.destdir}}\"\nmake sbindir=/bin lib=/lib prefix=/usr RAISE_SETFCAP=no PAM_CAP=no DESTDIR=\"${{targets.destdir}}\" install\nchmod 755 \"${{targets.destdir}}/usr/lib/libcap.so.${{package.version}}\"\n"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "libcap-dev",
+      "description": "libcap development headers",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "libcap",
+          "libcap-utils",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:libcap:2.78-r4"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libcap-utils",
+      "description": "various utilities included with libcap",
+      "pipeline": [
+        {
+          "runs": "set -x\nmkdir -p \"${{targets.subpkgdir}}\"/usr/bin\nfor i in capsh getcap getpcaps setcap; do\n  mv \"${{targets.destdir}}\"/usr/bin/$i \"${{targets.subpkgdir}}\"/usr/bin/\ndone\nrmdir \"${{targets.destdir}}/usr/bin\"\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "libcap",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:libcap:2.78-r4"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "name": "Test capsh prints current capabilities",
+            "runs": "capsh --print\n"
+          },
+          {
+            "name": "Test getpcaps queries process capabilities",
+            "runs": "# Query capabilities of PID 1 (init/systemd)\ngetpcaps 1\n"
+          },
+          {
+            "name": "Test getcap reads file capabilities",
+            "runs": "# Query capabilities on a known binary; output may be empty if none set\ngetcap /usr/bin/capsh\n"
+          },
+          {
+            "name": "Test setcap sets and getcap reads back capabilities",
+            "runs": "cp /usr/bin/capsh /tmp/test-capsh\nsetcap cap_net_raw+ep /tmp/test-capsh\ngetcap /tmp/test-capsh | grep -F \"cap_net_raw\"\n# Clear the capability\nsetcap -r /tmp/test-capsh\nrm -f /tmp/test-capsh\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libcap-doc",
+      "description": "libcap documentation",
+      "pipeline": [
+        {
+          "uses": "split/manpages"
+        },
+        {
+          "runs": "set -x\nrm -rf \"${{targets.destdir}}/usr/share\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/docs"
+          }
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:libcap:2.78-r4"
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "uses": "test/no-docs"
+      },
+      {
+        "name": "No PAM module, and nothing loads libpam",
+        "runs": "cat > /tmp/libcap-probe.sh <<'WEREWOLF_LIBCAP_PROBE'\n# The installed libcap holds Werewolf's build policy: no PAM module, and no\n# library that loads libpam. libcap-utils, tested by Wolfi's own steps, links\n# only these libraries.\nset -eu\n\nif [ -e /usr/lib/security/pam_cap.so ]; then\n\techo 'libcap installed pam_cap.so' >&2\n\texit 1\nfi\nfound=\nfor file in /usr/lib/libcap.so.* /usr/lib/libpsx.so.*; do\n\ttest -e \"$file\" || continue\n\tfound=1\n\tif grep -q 'libpam\\.so' \"$file\"; then\n\t\techo \"$file names libpam\" >&2\n\t\texit 1\n\tfi\ndone\ntest -n \"$found\"\nWEREWOLF_LIBCAP_PROBE\nsh /tmp/libcap-probe.sh\n"
+      }
+    ]
+  }
+}

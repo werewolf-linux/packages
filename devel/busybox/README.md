@@ -35,8 +35,7 @@ Wolfi's tests run unchanged. Ours ([tests/probe.sh](tests/probe.sh)) runs `true`
 through `env`, `timeout`, `nohup`, `nice`, `setsid`, `flock`, `xargs` and `time` with
 `PATH` naming nothing, which no `PATH` search survives, in each variant. Derivation
 refuses a changed checkout, subpackage layout or configuration step, and stops for
-review once Wolfi sets the option itself. Werewolf's `forms/sshd/test/checks` holds the
-image to it.
+review once Wolfi sets the option itself. Werewolf's developer images exercise these tools; SSH images use standalone utilities.
 
 ## Troubleshooting
 
@@ -44,3 +43,9 @@ image to it.
 |---|---|
 | `env: can't execute 'NAME': No such file or directory` | NAME is not a busybox applet: give its path, such as `/usr/bin/ssh`. |
 | An applet shows as `busybox` in `ps` | It was re-executed through `/usr/bin/busybox`; its arguments are unchanged. |
+
+## Shell ownership
+
+BusyBox retains its explicitly invoked shell applets, but its link manifests
+and APK triggers never install `/bin/sh`. The `mksh` package owns that path.
+Installing or updating any BusyBox variant preserves the selected shell.

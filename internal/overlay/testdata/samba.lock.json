@@ -1,0 +1,7 @@
+{
+  "recipe": "samba.yaml",
+  "version": "4.25.1",
+  "epoch": 0,
+  "revision": 1,
+  "source_commit": "02e8e3f93f4af787bcb3389cbff9e22e74567eb2"
+}

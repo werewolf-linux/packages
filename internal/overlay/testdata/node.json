@@ -1,0 +1,150 @@
+{
+  "package": {
+    "name": "nodejs-26",
+    "version": "26.12.1",
+    "epoch": 7002,
+    "description": "JavaScript runtime built on V8 engine (Werewolf fixed hardening policy)",
+    "dependencies": {
+      "provides": [
+        "nodejs=${{package.full-version}}",
+        "upstream-origin:nodejs-26:26.12.1-r2",
+        "nodejs-hardened=${{package.full-version}}"
+      ]
+    },
+    "copyright": [
+      {
+        "license": "MIT"
+      }
+    ],
+    "annotations": {
+      "toolchain-stream": true
+    },
+    "resources": {
+      "cpu": 33,
+      "memory": "64Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "1Gi"
+    }
+  },
+  "vars": {
+    "configure-flags": "--prefix=/usr --shared-zlib --shared-openssl --shared-cares --shared-nghttp2 --shared-libuv --ninja --openssl-use-def-ca-store --with-icu-default-data-dir=$(icu-config --icudatadir) --with-intl=system-icu --openssl-conf-name=openssl_conf",
+    "openssl-version": "4.0",
+    "python-version": 3.13
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "brotli-dev",
+        "build-base",
+        "busybox",
+        "c-ares-dev",
+        "ca-certificates-bundle",
+        "gcc-14-default",
+        "glibc-2.44-dev",
+        "icu-dev",
+        "libuv-dev",
+        "linux-headers",
+        "nghttp2-dev",
+        "openssl-${{vars.openssl-version}}-dev",
+        "py${{vars.python-version}}-jinja2",
+        "py${{vars.python-version}}-setuptools",
+        "python-${{vars.python-version}}-base",
+        "samurai",
+        "wolfi-base",
+        "zlib-dev"
+      ]
+    },
+    "environment": {
+      "CXXFLAGS": "-fdelete-null-pointer-checks -DOPENSSL_NO_ENGINE",
+      "CFLAGS": "-DOPENSSL_NO_ENGINE"
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/nodejs/node.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" bc2e01dcf6acd5cf7d169b5f26cf89abaaeb41f1; then\n      test \"$(git rev-parse FETCH_HEAD)\" = bc2e01dcf6acd5cf7d169b5f26cf89abaaeb41f1\n      git -c core.hooksPath=/dev/null checkout -q --detach bc2e01dcf6acd5cf7d169b5f26cf89abaaeb41f1\n      exit 0\n    fi\n  done\ndone\necho \"bc2e01dcf6acd5cf7d169b5f26cf89abaaeb41f1: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "ncrypto-pbkdf2-pkcs5.patch"
+      }
+    },
+    {
+      "name": "Apply Werewolf policy patches",
+      "needs": {
+        "packages": [
+          "patch"
+        ]
+      },
+      "runs": "while IFS= read -r name; do\n  patch -p1 --forward --batch --fuzz=2 --no-backup-if-mismatch -i \"werewolf/patches/$name\" || exit 1\ndone < werewolf/patches/series\n"
+    },
+    {
+      "name": "Permit capabilities only in the build guest",
+      "runs": "mkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\nmkdir -p /etc/runtime-hardening/allow/all/node\nfor group in exec native inline writable-source environment; do\n  : > /etc/runtime-hardening/allow/all/node/$group\ndone\n"
+    },
+    {
+      "name": "Configure and build",
+      "runs": "# Add defines recommended in libuv readme.\ncase \"${{build.arch}}\" in\n\"aarch64\")\n   common_flags=\"-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64\"\n   ;;\n\"x86_64\")\n   common_flags=\"-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64\"\n   ;;\nesac\n\n# Compiling with O2 instead of Os increases binary size by ~10%\n# (53.1 MiB -> 58.6 MiB), but also increases performance by ~20%\n# according to v8/web-tooling-benchmark. Node.js is quite huge anyway;\n# there are better options for size constrained environments.\nexport CFLAGS=\"${CFLAGS/-Os/-O2} $common_flags\"\nexport CXXFLAGS=\"${CXXFLAGS/-Os/-O2} $common_flags\"\nexport CPPFLAGS=\"${CPPFLAGS/-Os/-O2} $common_flags\"\n# NOTE: --without-corepack is no longer supported in Node.js 25+\n# See: https://nodejs.org/dist/latest/docs/api/corepack.html\npython${{vars.python-version}} configure.py ${{vars.configure-flags}} --without-inspector --without-npm --without-node-options --disable-single-executable-application --without-lief --without-brotli --without-zstd --without-ffi\n\n  make BUILDTYPE=Release JOBS=4 -j4\n"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "runs": "make DESTDIR=\"$${{targets.destdir}}\" install\n"
+    },
+    {
+      "uses": "strip"
+    },
+    {
+      "name": "Omit package managers and documentation",
+      "runs": "# --without-npm must actually omit npm, npx and their modules.\ntest ! -e \"${{targets.destdir}}/usr/bin/npm\"\ntest ! -e \"${{targets.destdir}}/usr/bin/npx\"\ntest ! -e \"${{targets.destdir}}/usr/lib/node_modules/npm\"\nrm -R \"${{targets.destdir}}/usr/share/man\"\n"
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "pipeline": [
+      {
+        "uses": "test/tw/ver-check",
+        "with": {
+          "bins": "node",
+          "version": "${{package.version}}"
+        }
+      },
+      {
+        "uses": "test/tw/help-check",
+        "with": {
+          "bins": "node"
+        }
+      },
+      {
+        "name": "Execute Basic JavaScript",
+        "runs": "cat <<'EOF' > test.js\nconsole.log('Hello, World!');\nEOF\nnode test.js | grep -F 'Hello, World!'\n"
+      },
+      {
+        "name": "Test International Number Formatting",
+        "runs": "cat <<'EOF' > testIntl.js\nconsole.log(new Intl.NumberFormat('en-EN').format(1234.56));\nconsole.log(new Intl.NumberFormat('de-DE').format(1234.56));\nEOF\nnode testIntl.js | grep -F '1,234.56'\nnode testIntl.js | grep -F '1.234,56'\n"
+      },
+      {
+        "name": "Werewolf protections hold, and allowances take each back",
+        "needs": {
+          "packages": [
+            "build-base",
+            "openssl"
+          ]
+        },
+        "runs": "chmod 755 /\nroot_work=$(mktemp -d)\nchmod 755 \"$root_work\"\ncat > \"$root_work/identity.c\" <<'WEREWOLF_IDENTITY_C'\n#define _GNU_SOURCE\n#include <grp.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\nint main(int argc, char **argv) {\n    if (argc < 4) return 125;\n    uid_t real = (uid_t)strtoul(argv[1], NULL, 10);\n    uid_t effective = (uid_t)strtoul(argv[2], NULL, 10);\n    if (setgroups(0, NULL) || setresgid(65534, 65534, 65534) ||\n        setresuid(real, effective, effective)) {\n        perror(\"identity probe\");\n        return 125;\n    }\n    execvp(argv[3], argv + 3);\n    perror(\"identity exec\");\n    return 125;\n}\nWEREWOLF_IDENTITY_C\ncc -Wall -Werror -o \"$root_work/identity\" \"$root_work/identity.c\"\nrm -f /etc/runtime-hardening/build-root\nroot_refused() {\n    if \"$@\" >\"$root_work/out\" 2>\"$root_work/err\"; then\n        echo 'probe: FAIL: effective root ran' >&2; exit 1\n    fi\n    grep -F 'effective UID 0' \"$root_work/err\"\n    grep -F '\"event\":\"runtime-denial\"' \"$root_work/err\" | grep -F '\"group\":\"root\"'\n}\nroot_refused node --version\n\n# A real root UID does not prevent execution after effective privileges drop.\n\"$root_work/identity\" 0 65534 node --version\n# A non-root real UID must not disguise effective root.\nroot_refused \"$root_work/identity\" 65534 0 node --version\n: > \"$root_work/target\"\nln -s \"$root_work/target\" /etc/runtime-hardening/build-root\nroot_refused node --version\nrm /etc/runtime-hardening/build-root\nmkdir /etc/runtime-hardening/build-root\nroot_refused node --version\nrmdir /etc/runtime-hardening/build-root\nmkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\nnode --version\nrm -rf \"$root_work\"\necho \"probe: ok: node checks effective UID; only the build marker permits root\"\nwork=$(mktemp -d)\ncat > \"$work/probe.cjs\" <<'WEREWOLF_NODE_PROBE_JS'\n'use strict';\nconst assert = require('node:assert/strict');\nconst cp = require('node:child_process');\nconst fs = require('node:fs');\nconst { Worker } = require('node:worker_threads');\nconst { DatabaseSync } = require('node:sqlite');\n\nfunction denied(fn) {\n  try { fn(); } catch (e) {\n    if (e.code === 'ERR_ACCESS_DENIED') return true;\n    throw e;\n  }\n  return false;\n}\n\nasync function main() {\n  switch (process.argv[2]) {\n    case 'report': {\n      const exec = !denied(() => {\n        const result = cp.spawnSync(process.execPath, ['--version']);\n        if (result.error) throw result.error;\n        assert.equal(result.status, 0);\n      });\n      const native = !denied(() => assert.equal(require(process.argv[3]).value, 42));\n      const sqlite = !denied(() => new DatabaseSync(':memory:', { allowExtension: true }).close());\n      console.log(JSON.stringify({ exec, native, sqlite, inspector: process.features.inspector }));\n      break;\n    }\n    case 'exec-paths': {\n      for (const fn of [\n        () => cp.spawn('/bin/true'),\n        () => cp.spawnSync('/bin/true'),\n        () => cp.exec('true'),\n        () => cp.execSync('true'),\n        () => cp.execFile('/bin/true'),\n        () => cp.execFileSync('/bin/true'),\n        () => cp.fork(process.argv[3]),\n        () => process.binding('spawn_sync').spawn({\n          file: '/bin/true', args: ['/bin/true'],\n          stdio: [{ type: 'ignore' }, { type: 'ignore' }, { type: 'ignore' }],\n        }),\n      ]) assert(denied(fn), 'child-process entrypoint bypassed the floor');\n      console.log('blocked');\n      break;\n    }\n    case 'hide-stderr':\n      process.stderr.write = () => true;\n      assert(denied(() => cp.spawnSync('/denied-node-tool')));\n      console.log('blocked');\n      break;\n    case 'data-import':\n      await import('data:text/javascript,export default 42');\n      console.log('ran');\n      break;\n    case 'worker-eval': {\n      const w = new Worker('require(\"node:worker_threads\").parentPort.postMessage(42)', { eval: true });\n      const value = await new Promise((resolve, reject) => {\n        w.once('message', resolve); w.once('error', reject);\n      });\n      assert.equal(value, 42);\n      await w.terminate();\n      console.log('ran');\n      break;\n    }\n    case 'worker-options': {\n      const w = new Worker(process.argv[3], { env: { NODE_OPTIONS: '--require=/missing-werewolf-hook' } });\n      const value = await new Promise((resolve, reject) => {\n        w.once('message', resolve); w.once('error', reject);\n      });\n      assert.equal(value, 42);\n      await w.terminate();\n      console.log('ran');\n      break;\n    }\n    case 'data': {\n      fs.writeFileSync(process.argv[3], 'data');\n      assert.equal(fs.readFileSync(process.argv[3], 'utf8'), 'data');\n      const db = new DatabaseSync(':memory:');\n      assert.equal(db.prepare('SELECT 42 AS n').get().n, 42);\n      db.close();\n      console.log('ran');\n      break;\n    }\n    case 'openssl-env':\n      assert.equal(process.env.OPENSSL_CONF, undefined);\n      assert.equal(process.env.OPENSSL_MODULES, undefined);\n      console.log('cleared');\n      break;\n    case 'ffi':\n      assert(denied(() => require('node:ffi')));\n      console.log('blocked');\n      break;\n    case 'wasi':\n      assert(denied(() => new (require('node:wasi').WASI)({version: 'preview1'})));\n      console.log('blocked');\n      break;\n    default: throw new Error('Unknown probe action');\n  }\n}\nmain().catch(e => { console.error(e); process.exitCode = 1; });\nWEREWOLF_NODE_PROBE_JS\ncat > \"$work/probe.sh\" <<'WEREWOLF_NODE_PROBE_SH'\n#!/bin/sh\nset -eu\nwork=$1\nnode=${NODE:-node}\nbase=${ALLOW:-/etc/runtime-hardening/allow}/all/node\ntrap 'rm -rf \"$work\" \"$base\"' EXIT\ngrant() { mkdir -p \"$base\"; : > \"$base/$1\"; }\nrevoke() { rm -f \"$base/$1\"; }\nrefuse() {\n    name=$1; token=$2; shift 2\n    if \"$@\" >\"$work/out\" 2>\"$work/err\"; then\n        echo \"probe: FAIL: $name ran\" >&2; exit 1\n    fi\n    if ! grep -F \"$token\" \"$work/err\"; then\n        echo \"probe: FAIL: $name failed for the wrong reason\" >&2\n        cat \"$work/err\" >&2; exit 1\n    fi\n    echo \"probe: ok: $name\"\n}\nexpect() {\n    name=$1; want=$2; shift 2\n    if ! got=$(\"$@\" 2>\"$work/err\") || [ \"$got\" != \"$want\" ]; then\n        echo \"probe: FAIL: $name: expected $want, got $got\" >&2\n        cat \"$work/err\" >&2; exit 1\n    fi\n    echo \"probe: ok: $name\"\n}\ncat > \"$work/addon.c\" <<'ADDON_C'\n#include <node_api.h>\nstatic napi_value init(napi_env env, napi_value exports) {\n    napi_value value;\n    napi_create_int32(env, 42, &value);\n    napi_set_named_property(env, exports, \"value\", value);\n    return exports;\n}\nNAPI_MODULE(NODE_GYP_MODULE_NAME, init)\nADDON_C\ncase $(uname -s) in\n    Darwin) cc -bundle -undefined dynamic_lookup -I\"${NODE_INCLUDE:-/usr/include/node}\" -o \"$work/addon.node\" \"$work/addon.c\" ;;\n    *) cc -shared -fPIC -I\"${NODE_INCLUDE:-/usr/include/node}\" -o \"$work/addon.node\" \"$work/addon.c\" ;;\nesac\necho 'console.log(\"ran\")' > \"$work/child.cjs\"\necho 'require(\"node:worker_threads\").parentPort.postMessage(42)' > \"$work/worker.cjs\"\necho 'module.exports = 42' > \"$work/module.cjs\"\necho 'export default 42' > \"$work/module.mjs\"\necho '{\"value\":42}' > \"$work/data.json\"\ncat > \"$work/package.json\" <<'PACKAGE_JSON'\n{\"scripts\":{\"preinstall\":\"echo hook-ran > hook-marker\"}}\nPACKAGE_JSON\nrm -rf \"$base\"\ngrant writable-source\nopenssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \\\n    -addext subjectAltName=DNS:localhost -keyout \"$work/key.pem\" -out \"$work/cert.pem\" >/dev/null 2>&1\n\"$node\" \"$work/codecs.cjs\" \"$work/cert.pem\" \"$work/key.pem\"\nclosed='{\"exec\":false,\"native\":false,\"sqlite\":false,\"inspector\":false}'\nreport() { \"$node\" \"$work/probe.cjs\" report \"$work/addon.node\"; }\nexpect 'default capability floor' \"$closed\" report\ngrep -F '\"group\":\"exec\"' \"$work/err\" | grep -F '\"event\":\"runtime-denial\"'\ngrep -F '\"group\":\"native\"' \"$work/err\" | grep -F 'addon.node'\ngrep -F '\"group\":\"native\"' \"$work/err\" | grep -F 'sqlite extension'\nexpect 'every child-process API, including raw binding, refuses' blocked \\\n    \"$node\" \"$work/probe.cjs\" exec-paths \"$work/child.cjs\"\nexpect 'replacing process.stderr.write cannot hide a caught denial' blocked \\\n    \"$node\" \"$work/probe.cjs\" hide-stderr\ngrep -F '\"group\":\"exec\"' \"$work/err\" | grep -F '/denied-node-tool'\nexpect 'audit flags cannot lift the floor' \"$closed\" \"$node\" --permission-audit \\\n    --allow-child-process --allow-addons --allow-wasi \\\n    \"$work/probe.cjs\" report \"$work/addon.node\"\nexpect 'permission flags cannot lift the floor' \"$closed\" \"$node\" --permission \\\n    --allow-fs-read='*' --allow-fs-write='*' --allow-net --allow-worker \\\n    --allow-child-process --allow-addons --allow-wasi \\\n    \"$work/probe.cjs\" report \"$work/addon.node\"\nexpect 'ordinary writable data and SQLite still work' ran \\\n    \"$node\" \"$work/probe.cjs\" data \"$work/data.txt\"\nexpect 'WASI cannot bypass native restrictions' blocked \"$node\" \"$work/probe.cjs\" wasi\nif \"$node\" --help | grep -q -- --experimental-ffi; then\n    expect 'FFI pointers cannot bypass native restrictions' blocked \\\n        \"$node\" --experimental-ffi \"$work/probe.cjs\" ffi\nfi\nexpect 'NODE_OPTIONS is ignored' \"$closed\" env \\\n    NODE_OPTIONS=--require=/missing-werewolf-hook \\\n    \"$node\" \"$work/probe.cjs\" report \"$work/addon.node\"\necho 'NODE_OPTIONS=--require=/missing-werewolf-hook' > \"$work/injected.env\"\nexpect 'dotenv cannot inject NODE_OPTIONS' \"$closed\" \"$node\" \\\n    --env-file=\"$work/injected.env\" \"$work/probe.cjs\" report \"$work/addon.node\"\nexpect 'workers cannot inject NODE_OPTIONS' ran \\\n    \"$node\" \"$work/probe.cjs\" worker-options \"$work/worker.cjs\"\nexpect 'OpenSSL environment cannot load native code' cleared env \\\n    OPENSSL_CONF=/missing-werewolf-config OPENSSL_MODULES=/missing-werewolf-modules \\\n    \"$node\" \"$work/probe.cjs\" openssl-env\n\nrefuse 'eval' node:inline \"$node\" -e 'console.log(\"ran\")'\nrefuse 'print' node:inline \"$node\" -p 42\nrefuse 'stdin' node:inline sh -c 'echo \"console.log(42)\" | \"$1\"' sh \"$node\"\nrefuse 'data URL import' node:inline \"$node\" \"$work/probe.cjs\" data-import\nrefuse 'worker eval' node:inline \"$node\" \"$work/probe.cjs\" worker-eval\ngrant inline\nexpect 'eval allowance' ran \"$node\" -e 'console.log(\"ran\")'\nexpect 'data URL allowance' ran \"$node\" \"$work/probe.cjs\" data-import\nexpect 'worker eval allowance' ran \"$node\" \"$work/probe.cjs\" worker-eval\nrevoke writable-source\nrefuse 'writable main' node:writable-source \"$node\" \"$work/child.cjs\"\ngrep -F '\"group\":\"writable-source\"' \"$work/err\" | grep -F 'child.cjs'\nrefuse 'virtual filesystems cannot mask writable code' node:writable-source \\\n    \"$node\" --experimental-vfs \"$work/child.cjs\"\nexpect 'JSON data stays readable without writable-source' 42 \\\n    \"$node\" -e 'console.log(require(process.argv[1]).value)' \"$work/data.json\"\nexpect 'ESM JSON data stays readable without writable-source' 42 \\\n    \"$node\" --input-type=module -e 'console.log((await import(process.argv[1], {with:{type:\"json\"}})).default.value)' \"$work/data.json\"\nexpect 'disk code caches require writable-source' blocked \"$node\" -e \\\n    'const m=require(\"node:module\");console.log(m.enableCompileCache(process.argv[1]).status === m.constants.compileCacheStatus.DISABLED ? \"blocked\" : \"enabled\")' \"$work/compile-cache\"\ntest ! -e \"$work/compile-cache\"\nrefuse 'writable required dependency' node:writable-source \\\n    \"$node\" -e 'require(process.argv[1])' \"$work/module.cjs\"\nrefuse 'writable imported dependency' node:writable-source \\\n    \"$node\" --input-type=module -e 'await import(process.argv[1])' \"$work/module.mjs\"\ngrant writable-source\nexpect 'writable source allowance' ran \"$node\" \"$work/child.cjs\"\nrevoke inline\n\ngrant exec\nexpect 'exec alone' '{\"exec\":true,\"native\":false,\"sqlite\":false,\"inspector\":false}' report\nrevoke exec\ngrant native\nexpect 'native alone' '{\"exec\":false,\"native\":true,\"sqlite\":true,\"inspector\":false}' report\nrevoke native\n: > \"$work/target\"\nln -s \"$work/target\" \"$base/exec\"\nexpect 'symlink is not an allowance' \"$closed\" report\nrm \"$base/exec\"\nmkdir \"$base/exec\"\nexpect 'directory is not an allowance' \"$closed\" report\nrmdir \"$base/exec\"\n\n# The built-in task runner executes package scripts before a JS environment\n# exists, so it must enforce the same floor separately from child_process.\ncd \"$work\"\nrefuse 'package preinstall script' node:exec \"$node\" --run preinstall\ntest ! -e hook-marker\ngrant exec\n\"$node\" --run preinstall\ntest \"$(cat hook-marker)\" = hook-ran\nrevoke exec\nrefuse 'custom startup snapshot' 'snapshots are disabled' \"$node\" --snapshot-blob=/missing\nrefuse 'security revert' 'security reverts are disabled' \"$node\" --security-revert=CVE-0000-0000\nif \"$node\" --help | grep -q -- --openssl-config; then\n    refuse 'OpenSSL configuration cannot load native code' node:native \\\n        \"$node\" --openssl-config=/missing \"$work/child.cjs\"\nfi\ntest ! -e /usr/bin/npm\ntest ! -e /usr/bin/npx\ntest ! -e /usr/lib/node_modules/npm\necho 'probe: ok: every Node protection holds, and each allowance restores only its capability'\nWEREWOLF_NODE_PROBE_SH\ncat > \"$work/codecs.cjs\" <<'WEREWOLF_NODE_PROBE_JS'\n'use strict';\nconst assert = require('node:assert/strict');\nconst fs = require('node:fs');\nconst zlib = require('node:zlib');\nconst https = require('node:https');\nconst tls = require('node:tls');\n\nasync function main() {\n  for (const name of ['brotli', 'zstd']) assert.equal(process.versions[name], undefined);\n  for (const name of ['BrotliCompress', 'BrotliDecompress', 'ZstdCompress', 'ZstdDecompress',\n                     'createBrotliCompress', 'createBrotliDecompress',\n                     'createZstdCompress', 'createZstdDecompress',\n                     'brotliCompress', 'brotliCompressSync', 'brotliDecompress', 'brotliDecompressSync',\n                     'zstdCompress', 'zstdCompressSync', 'zstdDecompress', 'zstdDecompressSync']) {\n    assert.equal(zlib[name], undefined, name);\n  }\n  const binding = process.binding('zlib');\n  for (const name of ['BrotliEncoder', 'BrotliDecoder', 'ZstdCompress', 'ZstdDecompress']) {\n    assert.equal(binding[name], undefined, name);\n  }\n  assert.throws(() => new CompressionStream('brotli'), TypeError);\n  assert.throws(() => new DecompressionStream('brotli'), TypeError);\n  const plain = Buffer.from('retained gzip and deflate');\n  assert.deepEqual(zlib.gunzipSync(zlib.gzipSync(plain)), plain);\n  assert.deepEqual(zlib.inflateSync(zlib.deflateSync(plain)), plain);\n\n  const cert = fs.readFileSync(process.argv[2]);\n  // Local trust for this process; certificate verification stays enabled.\n  tls.setDefaultCACertificates([cert.toString()]);\n  const server = https.createServer({cert, key: fs.readFileSync(process.argv[3])}, (req, res) => {\n    assert.equal(req.headers['accept-encoding'], 'gzip, deflate');\n    const coding = req.url.slice(1);\n    const body = coding === 'gzip' ? zlib.gzipSync(plain) :\n      coding === 'deflate' ? zlib.deflateSync(plain) : Buffer.from('unsupported encoding');\n    res.writeHead(200, {'content-encoding': coding, 'content-length': body.length});\n    res.end(body);\n  });\n  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));\n  try {\n    const url = `https://localhost:${server.address().port}`;\n    for (const coding of ['gzip', 'deflate']) {\n      const response = await fetch(`${url}/${coding}`);\n      assert.equal(await response.text(), plain.toString());\n    }\n    for (const coding of ['br', 'zstd']) {\n      await assert.rejects(async () => {\n        const response = await fetch(`${url}/${coding}`);\n        await response.arrayBuffer();\n      });\n    }\n  } finally {\n    server.closeAllConnections();\n    await new Promise(resolve => server.close(resolve));\n  }\n  console.log('PASS: omitted codecs, retained gzip/deflate, HTTPS negotiation and rejected responses');\n}\nmain().catch(error => { console.error(error); process.exitCode = 1; });\n\nrequire('node:assert/strict').throws(() => require('node:ffi'), { code: 'ERR_UNKNOWN_BUILTIN_MODULE' });\nWEREWOLF_NODE_PROBE_JS\nsh \"$work/probe.sh\" \"$work\"\n"
+      }
+    ]
+  },
+  "subpackages": []
+}

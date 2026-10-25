@@ -8,7 +8,7 @@
 package:
   name: postdoc
   version: "0.2.0_git20261025"
-  epoch: 0
+  epoch: 1
   description: Worker and server coordination for the Atomdrift analysis fleet
   copyright:
     - license: Apache-2.0

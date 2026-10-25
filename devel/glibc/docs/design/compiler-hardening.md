@@ -30,13 +30,13 @@ Chainguard's [2025 investigation](https://www.chainguard.dev/unchained/this-shit
 | Return state | x86 CET; ARM PAC/BTI; normal register lifetime | Rejected for now: `-fzero-call-used-regs=used-gpr` adds instructions to every return and misses handwritten assembly. |
 | Branch targets | BTI applied to marked objects only | Deferred: enforcing would refuse unmarked Wolfi programs and libraries that 7 of 20 forms ship (2026-10-15: `node`, `php`, `gitea`, `ollama`, gmp, x264/x265, libruby). The CI arm runner does not expose BTI. |
 | Code layout | x86 links with `-z separate-code`; arm64 maps headers, symbols and read-only data executable (477 KiB of libc) | Adopted: `-z separate-code` for every shared object and the loader on both architectures. |
-| Minimum kernel | `--enable-kernel=4.9` | Adopted: 6.18, the oldest kernel Werewolf boots; fallbacks for older kernels go. It may only rise (`scripts/verify.py`). |
+| Minimum kernel | `--enable-kernel=4.9` | Adopted: 6.18, the oldest kernel Werewolf boots; fallbacks for older kernels go. It may only rise (`package verify`). |
 | Relocations | RELRO and eager binding | Verify actual ELF properties; no extra relaxation for startup speed. |
 | Control-flow redundancy | Hardware-aware protections | GCC software redundancy flags add checks; defer unless a measured workload justifies their cost and coverage. |
 | Shadow stacks | Upstream CET/GCS behavior | x86: glibc enables SHSTK when every startup object is marked, then refuses to `dlopen` an unmarked one; it needs `CONFIG_X86_USER_SHADOW_STACK`, which Alpine's kernel lacks and Werewolf's leaves off for that reason. Wolfi's `libjvm.so` is unmarked while `java` is marked, so Java would fail on CET hosts; so do extensions linking unmarked gmp, aom, x265 or NSS. arm64 GCS stays off: Wolfi's libcrypto and cyrus-sasl lack GCS marking, so optional mode would refuse them. |
 | Allocator | glibc 2.44 has no fastbins | Nothing to add: `M_MXFAST` is a no-op. |
 
-`scripts/verify.py` checks the derived recipe retains every upstream configure option, except a raised minimum kernel, and the exact compiler environment. Package builds use `openssf-compiler-options`; glibc still controls fortification and bootstrap exclusions. Record compiler versions, resolved specs, configuration and ELF results with releases. Plain Ubuntu/GCC builds validate patch behavior but do not establish equivalence to Wolfi's complete toolchain.
+`package verify` checks the derived recipe retains every upstream configure option, except a raised minimum kernel, and the exact compiler environment. Package builds use `openssf-compiler-options`; glibc still controls fortification and bootstrap exclusions. Record compiler versions, resolved specs, configuration and ELF results with releases. Plain Ubuntu/GCC builds validate patch behavior but do not establish equivalence to Wolfi's complete toolchain.
 
 GCC documents [strict flexible arrays](https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html), [register clearing](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html), and [hardening/stack protection](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html). Candidate flags affect generated code, including optimizer assumptions; compile success alone is insufficient. Preserve glibc's existing file-specific exemptions.
 
@@ -58,4 +58,4 @@ Retain upstream early-loader/IFUNC and unwinding fixes. Test backtrace, C++ exce
 
 ## Reliability Considerations
 
-Compare the same source, toolchain and workload with one added mechanism at a time. Gate on upstream and injection-test results, ABI stability, native supported-CPU tests, and no repeatable regression over 5% in required workloads. Release an addition only after its native builds pass with no test failing that passed in the previous release (`scripts/compare-results.py`); record a rejected candidate's reason.
+Compare the same source, toolchain and workload with one added mechanism at a time. Gate on upstream and injection-test results, ABI stability, native supported-CPU tests, and no repeatable regression over 5% in required workloads. Release an addition only after its native builds pass with no test failing that passed in the previous release (`package probe glibc-compare`); record a rejected candidate's reason.

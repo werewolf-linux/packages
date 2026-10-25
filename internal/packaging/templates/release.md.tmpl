@@ -1,0 +1,57 @@
+# {{.Title}} {{.Version}}
+
+Wolfi packaging baseline: `{{.Source.Recipe}}` {{.Source.WolfiVersion}} at [{{.Source.WolfiCommit}}](https://github.com/wolfi-dev/os/commit/{{.Source.WolfiCommit}}).
+Effective source: [{{.Source.Upstream}}]({{.Source.Upstream}}), commit `{{.Source.SourceCommit}}`, policy revision {{.Source.PolicyRevision}}.
+
+- Stable repository: {{.Repository.Stable}}
+- This build: {{.Repository.Snapshot}}
+- Build run: {{.Run}}
+- Signing key SHA256: `{{.Repository.KeySHA256}}`
+
+## Changes
+{{if .Previous}}
+Previous release: {{.Previous.Version}}.
+
+- Wolfi baseline: {{.Previous.WolfiVersion}} → {{.Source.WolfiVersion}}
+- Effective source: {{.Previous.SourceCommit}} → {{.Source.SourceCommit}}
+{{if .CommitsAvailable}}{{range .Commits}}- [{{.SHA}}](https://github.com/werewolf-linux/packages/commit/{{.SHA}}) {{.Subject}}
+{{else}}- Package repository: unchanged.
+{{end}}{{else}}- Package commit comparison: unavailable.
+{{end}}{{else}}
+First release with captured comparison evidence.
+{{end}}
+## Security
+{{if .Security.Previous}}{{range .Security.Fixed}}
+- Wolfi {{.Version}}: {{range .IDs}}{{.}} {{end}}
+{{else}}
+No new advisories are listed in Wolfi's security database since {{.Security.Previous}}.
+{{end}}{{else}}
+The previous effective source version is unknown; no advisory change is claimed.
+{{end}}
+{{.Security.Cumulative}} advisories are fixed through {{.Security.Current}} for {{.Security.Stream}}; {{.Security.NotAffected}} are listed as not affecting this stream. [Wolfi security database](https://packages.wolfi.dev/os/security.json).
+
+## Patches
+{{range .Patches}}
+- `{{.}}`
+{{end}}
+## Packages and test evidence
+{{range $arch, $native := .Architectures}}
+### {{$arch}}
+
+| Package | Version | Bytes |
+| --- | --- | ---: |
+{{range .Packages}}| {{.Name}} | {{.Version}} | {{.Size}} |
+{{end}}
+{{if .TestStatuses}}Raw upstream test statuses: {{range $status, $count := .Counts}}{{$status}}={{$count}} {{end}}
+
+Raw failure ceiling: {{.Ceiling}} per mille. The full policy report and test statuses are retained in release-notes.json and the signed test-results APK.
+{{if .Compared}}
+New failures: {{range .NewFailures}}`{{.}}` {{else}}none{{end}}.
+Fixed failures: {{range .Fixed}}`{{.}}` {{else}}none{{end}}.
+{{else}}
+Previous test statuses are unavailable; no test comparison is claimed.
+{{end}}{{end}}{{end}}
+## Provenance
+
+Build `{{.BuildID}}`, downstream commit `{{.Commit}}`, {{.Date}}.
+Check downloaded archives with `sha256sum -c SHA256SUMS`.

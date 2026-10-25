@@ -15,7 +15,7 @@
     "minimized_reason": "Omit X11, Pango, FFTW, Graphviz, Display PostScript and Perl support; retain common image formats, HEIC, PDF rasterization and font rendering.",
     "pledge_reason": "Service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "package.py",
+      "overlay.yaml",
       "tests/probe.sh"
     ]
   },
@@ -29,7 +29,7 @@
         "what": "Omit X11, Pango, FFTW, Graphviz, Display PostScript and Perl support; retain common image formats, HEIC, PDF rasterization and font rendering.",
         "why": "Document services do not need desktop display or FFT transforms.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/probe.sh"
         ]
       }

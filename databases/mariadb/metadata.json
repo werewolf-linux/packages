@@ -1,0 +1,46 @@
+{
+  "update": {
+    "source": "github-releases",
+    "repo": "MariaDB/server",
+    "prefix": "mariadb-"
+  },
+  "hardening": {
+    "minimized": true,
+    "pledge": false,
+    "minimized_reason": "Build MariaDB without PAM: no auth_pam plugins, no setuid-root auth_pam_tool, and nothing that loads libpam.",
+    "pledge_reason": "No package-enforced pledge-style capability policy is claimed; the Werewolf mariadb forms leash mariadbd.",
+    "evidence": [
+      "mariadb.yaml"
+    ]
+  },
+  "wolfi": {
+    "relationship": "replacement",
+    "recipes": [
+      "mariadb-13.1.yaml"
+    ],
+    "changes": [
+      {
+        "what": "MariaDB's newest stable release, the highest-versioned GitHub release that is not a prerelease, as one unversioned package set: mariadb, mariadb-client, mariadb-dump and the rest.",
+        "why": "Wolfi keeps one recipe for MariaDB's newest series and renames it each quarter, release candidates included (13.0.1, then 13.1.1). Forms need one name that moves only to stable releases; mariadb-init upgrades the data when it does.",
+        "evidence": [
+          "mariadb.yaml"
+        ]
+      },
+      {
+        "what": "Build with PLUGIN_AUTH_PAM=NO and PLUGIN_AUTH_PAM_V1=NO, and drop linux-pam-dev.",
+        "why": "The PAM plugins brought libpam and the setuid-root auth_pam_tool. Werewolf's MariaDB authenticates local users by unix_socket and others by password, never through PAM.",
+        "evidence": [
+          "mariadb.yaml"
+        ]
+      },
+      {
+        "what": "Drop the OCI entrypoint subpackage with its pwgen dependency, and the self-provides and virtual-package tests that an unversioned name makes redundant.",
+        "why": "Werewolf leashes mariadbd as a service rather than running Wolfi's container entrypoint, and the aliases now name the real packages.",
+        "evidence": [
+          "mariadb.yaml"
+        ]
+      }
+    ],
+    "removal_condition": "Wolfi tracks MariaDB's stable releases under stable package names and builds without PAM; review compatibility before retiring this context."
+  }
+}

@@ -15,11 +15,10 @@
     "minimized_reason": "Build OpenSSH without PAM, SELinux, zlib compression or PKCS#11 support; OpenSSL stays for P-256 security keys.",
     "pledge_reason": "No package-enforced pledge-style capability policy is claimed; sshd confinement is declared in the Werewolf sshd forms.",
     "evidence": [
-      "package.py",
+      "overlay.yaml",
       "patches/0001-no-pty-reopen.patch",
       "patches/0002-no-default-listen-in-session.patch",
-      "tests/probe.sh",
-      "tests/test_derivation.py"
+      "tests/probe.sh"
     ]
   },
   "wolfi": {
@@ -32,17 +31,15 @@
         "what": "Configure --without-pam --without-selinux --without-zlib --disable-pkcs11 and drop their build dependencies.",
         "why": "Werewolf runs sshd with UsePAM no on a kernel without SELinux; these libraries were only code mapped into root, network-facing processes. Compression and agent PKCS#11 support carried OpenSSH's own bugs.",
         "evidence": [
-          "package.py",
-          "tests/probe.sh",
-          "tests/test_derivation.py"
+          "overlay.yaml",
+          "tests/probe.sh"
         ]
       },
       {
         "what": "Remove the openssh-pam-config package.",
         "why": "It configures PAM for a server built without it.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
@@ -50,7 +47,7 @@
         "why": "Werewolf runs sshd without CAP_DAC_OVERRIDE; the redundant open, as root, of a pty owned by another user fails and logs an error at every login.",
         "evidence": [
           "patches/0001-no-pty-reopen.patch",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
@@ -58,7 +55,7 @@
         "why": "Werewolf refuses netlink to sshd; glibc's sort of that two-family lookup asked netlink, and every connection logged the refusal.",
         "evidence": [
           "patches/0002-no-default-listen-in-session.patch",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       }
     ],

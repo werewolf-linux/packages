@@ -1,0 +1,753 @@
+{
+  "package": {
+    "name": "samba",
+    "version": "4.25.1",
+    "epoch": 1000,
+    "description": "Tools to access a server's filespace and printers via SMB (Werewolf: no PAM)",
+    "copyright": [
+      {
+        "license": "GPL-3.0-or-later AND LGPL-3.0-or-later"
+      }
+    ],
+    "dependencies": {
+      "runtime": [
+        "merged-lib",
+        "merged-usrsbin",
+        "merged-varrun",
+        "wolfi-baselayout"
+      ],
+      "provides": [
+        "upstream-origin:samba:4.25.1-r0"
+      ]
+    },
+    "resources": {
+      "cpu": "10",
+      "memory": "10Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "2Gi"
+    }
+  },
+  "vars": {
+    "python-version": 3.13
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "acl-dev",
+        "autoconf",
+        "automake",
+        "bind-dev",
+        "bison",
+        "build-base",
+        "busybox",
+        "cups-dev",
+        "dbus-dev",
+        "docbook-xml",
+        "e2fsprogs-dev",
+        "flex",
+        "glibc-2.44-dev",
+        "gnutls-dev",
+        "iniparser-dev",
+        "jansson-dev",
+        "libarchive-dev",
+        "libcap-dev",
+        "libtirpc-dev",
+        "liburing-dev",
+        "lmdb-dev",
+        "ncurses-dev",
+        "ncurses-terminfo",
+        "ncurses-terminfo-base",
+        "openldap-dev",
+        "perl",
+        "perl-json",
+        "perl-parse-yapp",
+        "pkgconf-dev",
+        "popt-dev",
+        "py${{vars.python-version}}-dnspython",
+        "py${{vars.python-version}}-markdown",
+        "py${{vars.python-version}}-talloc-dev",
+        "py${{vars.python-version}}-tdb",
+        "py${{vars.python-version}}-tevent",
+        "python3-dev",
+        "rpcgen",
+        "subunit-dev",
+        "talloc-dev",
+        "tdb",
+        "tdb-dev",
+        "tevent-dev",
+        "zlib-dev"
+      ]
+    },
+    "environment": {
+      "IDMAP_MODULES": "idmap_ad,idmap_rid,idmap_adex,idmap_hash,idmap_tdb2",
+      "PDB_MODULES": "pdb_tdbsam,pdb_ldap,pdb_ads,pdb_smbpasswd,pdb_wbc_sam,pdb_samba4",
+      "AUTH_MODULES": "auth_unix,auth_wbc,auth_server,auth_netlogond,auth_script,auth_samba4"
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/samba-team/samba.git https://git.samba.org/samba.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 02e8e3f93f4af787bcb3389cbff9e22e74567eb2; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 02e8e3f93f4af787bcb3389cbff9e22e74567eb2\n      git -c core.hooksPath=/dev/null checkout -q --detach 02e8e3f93f4af787bcb3389cbff9e22e74567eb2\n      exit 0\n    fi\n  done\ndone\necho \"02e8e3f93f4af787bcb3389cbff9e22e74567eb2: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "tinfo.patch disable-quic.patch"
+      }
+    },
+    {
+      "uses": "autoconf/configure",
+      "with": {
+        "opts": "--prefix=/usr \\\n--sbindir=/usr/bin \\\n--sysconfdir=/etc/${{package.name}} \\\n--with-configdir=/etc/${{package.name}} \\\n--localstatedir=/var \\\n--libexecdir=/usr/lib \\\n--enable-fhs \\\n--with-lockdir=/var/cache/${{package.name}} \\\n--with-piddir=/run/${{package.name}} \\\n--with-logfilebase=/var/log/${{package.name}} \\\n--without-pam \\\n--without-systemd \\\n--with-ads \\\n--with-shared-modules=\"$IDMAP_MODULES,$PDB_MODULES,$AUTH_MODULES,vfs_io_uring\" \\\n--enable-cups \\\n--without-gettext \\\n--bundled-libraries=NONE,ntdb,roken,wind,hx509,asn1,heimbase,hcrypto,krb5,gssapi,heimntlm,hdb,kdc,cmocka \\\n--disable-rpath-install \\\n--without-gpgme \\\n--disable-fault-handling \\\n--private-libraries='!ldb,!samba-credentials' \\\n--without-regedit\n"
+      }
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "runs": "install -d -m755 \"${{targets.destdir}}\"/usr/lib/tmpfiles.d\nsed 's, /var/run/samba , /run/samba ,' packaging/systemd/samba.conf.tmp >\"${{targets.destdir}}\"/usr/lib/tmpfiles.d/samba.conf\n# We only need /run/samba, not /var/run/samba; merged-varrun ensures\n# they refer to the same directory.\nrmdir \"${{targets.destdir}}\"/var/run/samba\n"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "samba-common",
+      "description": "Samba common files for both client an servers",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/etc\nmv \"${{targets.destdir}}\"/etc/* \"${{targets.contextdir}}\"/etc\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-dev",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "samba",
+          "samba-libs-py3",
+          "samba-server-libs",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "description": "samba dev",
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-libs-py3",
+      "description": "Samba libraries that require libpython",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-net*private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-python*private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-common-tools",
+      "description": "Tools for Samba servers and clients",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/bin\n\nmv \"${{targets.destdir}}\"/usr/bin/net \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/pdbedit \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/profiles \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbcontrol \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbpasswd \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/testparm \"${{targets.contextdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "pdbedit\nprofiles\ntestparm\n"
+            }
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "pdbedit\nprofiles\ntestparm\n"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      }
+    },
+    {
+      "name": "samba-common-server-libs",
+      "description": "Samba libraries shared by common-tools and servers",
+      "dependencies": {
+        "runtime": [
+          "libauth-samba",
+          "samba-libs",
+          "samba-util-libs",
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/lib/libdcerpc-server-core.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libnetapi.so.* \"${{targets.contextdir}}\"/usr/lib\n\nmv \"${{targets.destdir}}\"/usr/lib/samba/libRPC-SERVER-LOOP-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdfs-server-ad-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libprinting-migrate-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsmbd-base-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsmbldaphelper-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/pdb \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check",
+            "with": {
+              "extra-library-paths": "/usr/lib/samba/"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "libsmbclient",
+      "description": "The SMB client library",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsmbclient.so.* \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-client",
+      "description": "Samba client programs",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/bin\n\nmv \"${{targets.destdir}}\"/usr/bin/cifsdd \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/dumpmscat \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/dbwrap_tool \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/mdsearch \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/mvxattr \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/nmblookup \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/oLschema2ldif \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/regdiff \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/regpatch \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/regshell \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/regtree \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/rpcclient \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/sharesec \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbcacls \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbclient \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbcquotas \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbget \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbspool \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbtar \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbtree \"${{targets.contextdir}}\"/usr/bin\n\nmkdir -p \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/samba/smbspool_krb5_wrapper \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "samba-server",
+              "libauth-samba"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "dbwrap_tool\nnmblookup\noLschema2ldif\nsharesec\nsmbcacls\nsmbclient\nsmbcquotas\nsmbget\nsmbtree\n"
+            }
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "dbwrap_tool\nmvxattr\nnmblookup\noLschema2ldif\nsharesec\nsmbcacls\nsmbclient\nsmbcquotas\nsmbget\nsmbtree\n"
+            }
+          },
+          {
+            "name": "Test Samba client",
+            "runs": "mkdir -p /var/lib/samba/private/ /var/log/samba /etc/samba\ncat > /etc/samba/smb.conf <<'EOF'\n[global]\n    # Set charset to avoid CP850 error\n    dos charset = ASCII\n    unix charset = UTF-8\nEOF\nsmbd\nsleep 2\nsmbclient -L 127.0.0.1 -N\n"
+          }
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      }
+    },
+    {
+      "name": "samba-server-libs",
+      "description": "Samba libraries shared by server and windbind",
+      "dependencies": {
+        "runtime": [
+          "samba-common-server-libs",
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdcerpc-samba4-private-samba.so \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/samba/libidmap-private-samba.so \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/samba/libnss-info-private-samba.so \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "winbind",
+      "description": "Samba user and group resolver",
+      "dependencies": {
+        "runtime": [
+          "libauth-samba",
+          "samba-server-libs",
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\nmkdir -p \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/winbindd \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/lib/samba/idmap \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/nss_info \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-util-libs",
+      "description": "Samba utility libraries",
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/lib/libsamba-util.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/samba/libgenrand-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsocket-blocking-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-debug-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libtime-basic-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsys-rw-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libiov-buf-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcom-err-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libreplace-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libstable-sort-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libwbclient",
+      "description": "Samba winbind client libraries",
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libwbclient.so.* \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-winbind-clients",
+      "description": "Samba winbind client tools",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/ntlm_auth \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/wbinfo \"${{targets.contextdir}}\"/usr/bin\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "ntlm_auth\nwbinfo\n"
+            }
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "ntlm_auth\nwbinfo\n"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      }
+    },
+    {
+      "name": "samba-libnss-winbind",
+      "description": "Samba winbind NSS plugin",
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libnss_winbind.so* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libnss_wins.so* \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-winbind-krb5-locator",
+      "description": "Samba winbind krb5 locator",
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/krb5 \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-server",
+      "description": "Samba server",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/bin\nmkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/bin/nmbd \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbd \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/eventlogadm \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbstatus \"${{targets.contextdir}}\"/usr/bin\n\nmv \"${{targets.destdir}}\"/usr/lib/samba/auth \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libREG-FULL-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libRPC-WORKER-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libxattr-tdb-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/rpcd_* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/samba-bgqd \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/samba-dcerpcd \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/vfs \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "samba-common",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "eventlogadm\nnmbd\n"
+            }
+          },
+          {
+            "name": "Test smbd starts and serves shares",
+            "runs": "mkdir -p /var/lib/samba/private/ /var/log/samba /etc/samba /tmp/samba-share\ncat > /etc/samba/smb.conf <<'EOF'\n[global]\n    dos charset = ASCII\n    unix charset = UTF-8\n[testshare]\n    path = /tmp/samba-share\n    read only = yes\n    guest ok = yes\nEOF\nsmbd\nsleep 2\n# Verify smbd is running by checking its PID file\ntest -f /run/samba/smbd.pid && kill -0 \"$(cat /run/samba/smbd.pid)\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "py${{vars.python-version}}-samba",
+      "description": "Samba python libraries",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/python* \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "merged-usrsbin",
+          "merged-lib",
+          "py${{vars.python-version}}-tdb",
+          "samba-libs-py3",
+          "samba-server",
+          "samba-server-libs",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "py3-samba",
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "samba-test",
+      "description": "Samba server and client testing tools",
+      "dependencies": {
+        "runtime": [
+          "py${{vars.python-version}}-tdb",
+          "samba-libs-py3",
+          "samba-server-libs",
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/bin\nmkdir -p \"${{targets.contextdir}}\"/usr/lib\n\nmv \"${{targets.destdir}}\"/usr/bin/gentest \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/locktest \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/masktest \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/ndrdump \"${{targets.contextdir}}\"/usr/bin\nmv \"${{targets.destdir}}\"/usr/bin/smbtorture \"${{targets.contextdir}}\"/usr/bin\n\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdlz-bind9-for-torture-private-samba.so \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/samba/libtorture-private-samba.so \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          },
+          {
+            "uses": "test/tw/ver-check",
+            "with": {
+              "bins": "gentest\nlocktest\nmasktest\nndrdump\n"
+            }
+          },
+          {
+            "uses": "test/tw/help-check",
+            "with": {
+              "bins": "gentest\nlocktest\nmasktest\n"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "libauth-samba",
+      "description": "Samba auth library shared by common-tools, server and clients",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libauth-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      }
+    },
+    {
+      "name": "samba-libs",
+      "description": "Samba core libraries shared by common-tools, server and clients",
+      "dependencies": {
+        "runtime": [
+          "merged-lib",
+          "merged-usrsbin",
+          "wolfi-baselayout"
+        ],
+        "provides": [
+          "upstream-origin:samba:4.25.1-r0"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/lib/samba/libasn1-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libgssapi-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libhcrypto-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libheimbase-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libheimntlm-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libhx509-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libkrb5-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libroken-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libwind-private-samba.so* \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/lib/samba/libCHARSET3-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libMESSAGING-SEND-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libMESSAGING-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libaddns-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libads-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libasn1util-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libauthkrb5-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-cldap-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-ldap-common-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-ldap-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-nbt-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-smb-common-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcli-spoolss-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcliauth-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libclidns-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcluster-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcmdline-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcmocka-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libcommon-auth-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdbwrap-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdcerpc-pkt-auth-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libdcerpc-samba-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libevents-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libflag-mapping-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libgensec-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libgse-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libinterfaces-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libkrb5samba-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libldbsamba-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/liblibcli-lsa3-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/liblibcli-netlogon3-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/liblibsmb-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libmessages-dgm-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libmessages-util-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libmsghdr-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libmsrpc3-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libndr-samba-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libndr-samba4-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libnetif-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libnpa-tstream-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-cluster-support-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-modules-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-security-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-security-trusts-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba-sockets-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamba3-util-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsamdb-common-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsecrets3-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libserver-id-db-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libserver-role-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libsmbd-shim-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libtalloc-report-printf-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libtalloc-report-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libtdb-wrap-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libutil-reg-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libutil-setid-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\nmv \"${{targets.destdir}}\"/usr/lib/samba/libutil-tdb-private-samba.so \"${{targets.contextdir}}\"/usr/lib/samba\n\nmv \"${{targets.destdir}}\"/usr/lib/libdcerpc-binding.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libndr-krb5pac.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libndr-nbt.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libndr-standard.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libndr.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsamba-credentials.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsamba-errors.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsamba-hostconfig.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsamba-passdb.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsamdb.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsmbconf.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libsmbldap.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libtevent-util.so.* \"${{targets.contextdir}}\"/usr/lib\nmv \"${{targets.destdir}}\"/usr/lib/libldb.so.* \"${{targets.contextdir}}\"/usr/lib\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "libauth-samba",
+          "samba-libs",
+          "samba-libs-py3",
+          "samba-server",
+          "samba-server-libs"
+        ]
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check",
+        "with": {
+          "extra-library-paths": "/usr/lib/samba/"
+        }
+      },
+      {
+        "name": "Check Installed Binaries",
+        "runs": "find /usr -name smbd\nfind /usr -name nmbd\n"
+      },
+      {
+        "name": "Check smbd Installation",
+        "runs": "if [ -f /usr/bin/smbd ]; then\n  echo \"smbd found in /usr/bin.\"\nelse\n  echo \"smbd could not be found in /usr/bin!\" && exit 1\nfi\n"
+      },
+      {
+        "name": "Check nmbd Installation",
+        "runs": "if [ -f /usr/bin/nmbd ]; then\n  echo \"nmbd found in /usr/bin.\"\nelse\n  echo \"nmbd could not be found in /usr/bin!\" && exit 1\nfi\n"
+      },
+      {
+        "name": "Test smbd Version",
+        "uses": "test/tw/ver-check",
+        "with": {
+          "bins": "smbd"
+        }
+      },
+      {
+        "name": "Test smbd Service Start",
+        "runs": "TMP_CONF=$(mktemp)\ncat > \"$TMP_CONF\" <<'EOF'\n[global]\nlog file = /dev/stdout\n[public]\npath = /tmp\nread only = no\nEOF\nsmbd -i -s \"$TMP_CONF\" &\nSMBD_PID=$!\nsleep 2\nif kill -0 $SMBD_PID; then\n  echo \"smbd started successfully.\"\n  kill $SMBD_PID\nelse\n  echo \"smbd failed to start!\" && exit 1\nfi\nrm \"$TMP_CONF\"\n"
+      },
+      {
+        "name": "No PAM module, and nothing Samba installs loads libpam",
+        "runs": "cat > /tmp/samba-probe.sh <<'WEREWOLF_SAMBA_PROBE'\n# The installed Samba holds Werewolf's build policy: no PAM module, and no\n# server program or Samba library that loads libpam.\nset -eu\n\nif [ -e /usr/lib/security/pam_winbind.so ]; then\n\techo 'Samba installed pam_winbind.so' >&2\n\texit 1\nfi\ntest -e /usr/lib/samba/libauth-private-samba.so\nfor file in /usr/bin/smbd /usr/bin/nmbd /usr/lib/samba/*.so* /usr/lib/libsmbconf.so* \\\n\t/usr/lib/libsamba-*.so*; do\n\ttest -e \"$file\" || continue\n\tif grep -q 'libpam\\.so' \"$file\"; then\n\t\techo \"$file names libpam\" >&2\n\t\texit 1\n\tfi\ndone\nWEREWOLF_SAMBA_PROBE\nsh /tmp/samba-probe.sh\n"
+      }
+    ]
+  }
+}

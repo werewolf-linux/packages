@@ -1,0 +1,272 @@
+{
+  "package": {
+    "name": "openjdk-27",
+    "version": "27.0.1.0.2",
+    "epoch": 9002,
+    "description": "OpenJDK ${{vars.java-version}} (Werewolf fixed hardening policy)",
+    "copyright": [
+      {
+        "license": "GPL-2.0 WITH Classpath-exception-2.0"
+      }
+    ],
+    "cpe": {
+      "vendor": "oracle",
+      "product": "jdk"
+    },
+    "dependencies": {
+      "runtime": [
+        "java-cacerts",
+        "libfontconfig1",
+        "ttf-dejavu"
+      ],
+      "provides": [
+        "upstream-origin:openjdk-27:27.0.1.0.2-r2"
+      ]
+    },
+    "resources": {
+      "cpu": "25",
+      "memory": "23Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "1Gi"
+    }
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.name}}",
+      "match": "openjdk-(\\d+)",
+      "replace": "$1",
+      "to": "java-version"
+    }
+  ],
+  "vars": {
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "alsa-lib-dev",
+        "autoconf",
+        "automake",
+        "bash",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "cups-dev",
+        "default-jdk<=1.${{vars.java-version}}",
+        "file",
+        "fontconfig-dev",
+        "freetype-dev",
+        "giflib-dev",
+        "glibc-2.44-dev",
+        "googletest-src-1.14",
+        "java-cacerts",
+        "lcms2-dev",
+        "libffi-dev",
+        "libjpeg-turbo-dev",
+        "libx11-dev",
+        "libxext-dev",
+        "libxi-dev",
+        "libxrandr-dev",
+        "libxrender-dev",
+        "libxt-dev",
+        "libxtst-dev",
+        "zip"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "runs": "# Ensure package.version has three parts (e.g., 27.0.0) so that art\n# version-stream automation does not reject it as a major-only version.\nver=\"${{package.version}}\"\nparts=$(echo \"$ver\" | tr '.' '\\n' | wc -l)\nif [ \"$parts\" -lt 3 ]; then\n  echo \"ERROR: package.version '$ver' must have at least three parts (e.g., 27.0.0)\"\n  exit 1\nfi\n"
+    },
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/openjdk/jdk27u.git https://github.com/openjdk/jdk.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 360190464fafe7f6dc53b87304aef715b8d96920; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 360190464fafe7f6dc53b87304aef715b8d96920\n      git -c core.hooksPath=/dev/null checkout -q --detach 360190464fafe7f6dc53b87304aef715b8d96920\n      exit 0\n    fi\n  done\ndone\necho \"360190464fafe7f6dc53b87304aef715b8d96920: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "JDK-8312267.patch\n"
+      }
+    },
+    {
+      "name": "Apply Werewolf policy patches",
+      "needs": {
+        "packages": [
+          "patch"
+        ]
+      },
+      "runs": "while IFS= read -r name; do\n  patch -p1 --forward --batch --fuzz=2 --no-backup-if-mismatch -i \"werewolf/patches/$name\" || exit 1\ndone < werewolf/patches/series\n"
+    },
+    {
+      "name": "Permit effective root only in the build guest",
+      "runs": "mkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\n"
+    },
+    {
+      "runs": "chmod +x configure"
+    },
+    {
+      "uses": "autoconf/configure",
+      "with": {
+        "opts": "--with-boot-jdk=/usr/lib/jvm/default-jvm \\\n--prefix=/usr/lib/jvm/java-${{vars.java-version}}-openjdk \\\n--with-vendor-name=wolfi \\\n--with-vendor-url=https://wolfi.dev \\\n--with-vendor-bug-url=https://github.com/wolfi-dev/os/issues \\\n--with-version-opt=\"wolfi-r${{package.epoch}}\" \\\n--with-vendor-version-string=\"${{package.name}}-${{package.full-version}}\" \\\n--disable-warnings-as-errors \\\n--disable-precompiled-headers \\\n--enable-dtrace=no \\\n--with-zlib=system \\\n--with-debug-level=release \\\n--with-native-debug-symbols=external \\\n--with-external-symbols-in-bundles=none \\\n--with-cacerts-file=/etc/ssl/certs/java/cacerts \\\n--with-jvm-variants=server \\\n--with-jtreg=no  \\\n--with-libpng=system \\\n--with-jvm-variants=server \\\n--with-libjpeg=system \\\n--with-giflib=system \\\n--with-lcms=system \\\n--enable-linkable-runtime \\\n--with-gtest=\"/usr/src/googletest\" \\\n--with-version-pre=\"no\" \\\n--with-version-string=\"\" --enable-headless-only"
+      }
+    },
+    {
+      "runs": "make jdk-image legacy-jre-image\n"
+    },
+    {
+      "runs": "_java_bin=\"./build/*-server-release/images/jdk/bin\"\n\n# Check we built something valid\n$_java_bin/javac -d . HelloWorld.java\n$_java_bin/java HelloWorld\n\n# run the gtest unittest suites\n# Temporarily disable G1HeapRegion.apply_to_marked_object_other_vm\n# due to a segfault that's been reported to (but\n# not acknowledged yet by) upstream.\nmake test-hotspot-gtest \\\n  GTEST='OPTIONS=--gtest_filter=-G1HeapRegion.apply_to_marked_object_other_vm'\n"
+    },
+    {
+      "runs": "find ./build -name \"*.debuginfo\" -delete\n"
+    },
+    {
+      "runs": "_java_home=\"usr/lib/jvm/java-${{vars.java-version}}-openjdk\"\n\nmkdir -p \"${{targets.destdir}}\"/$_java_home\ncp -r build/*-server-release/images/jdk/* \"${{targets.destdir}}\"/$_java_home\nrm \"${{targets.destdir}}\"/$_java_home/lib/src.zip\n\n# symlink to shared java cacerts store\nrm -f \"${{targets.contextdir}}\"/$_java_home/lib/security/cacerts\nln -sf /etc/ssl/certs/java/cacerts \\\n  \"${{targets.contextdir}}\"/$_java_home/lib/security/cacerts\n# symlink for `java-common` to work (which expects jre in $_java_home/jre)\nln -sf . \"${{targets.contextdir}}/$_java_home/jre\"\n"
+    },
+    {
+      "name": "Remove demos before packaging the JDK",
+      "runs": "rm -R \"${{targets.destdir}}/usr/lib/jvm/java-${{vars.java-version}}-openjdk/demo\"\n"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "${{package.name}}-jre",
+      "description": "OpenJDK ${{vars.java-version}} Java Runtime Environment",
+      "dependencies": {
+        "runtime": [
+          "java-cacerts",
+          "libfontconfig1",
+          "ttf-dejavu"
+        ],
+        "provider-priority": 10,
+        "provides": [
+          "upstream-origin:openjdk-27:27.0.1.0.2-r2"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "_java_home=\"usr/lib/jvm/java-${{vars.java-version}}-openjdk\"\n\nmkdir -p \"${{targets.subpkgdir}}\"/$_java_home\ncp -r build/*-server-release/images/jre/* \"${{targets.subpkgdir}}\"/$_java_home\n\n# symlink to shared java cacerts store\nrm -f \"${{targets.subpkgdir}}\"/$_java_home/lib/security/cacerts\nln -sf /etc/ssl/certs/java/cacerts \\\n  \"${{targets.subpkgdir}}\"/$_java_home/lib/security/cacerts\n\n# symlink for `java-common` to work (which expects jre in $_java_home/jre)\nln -sf . \"${{targets.subpkgdir}}/$_java_home/jre\"\n\n# check that jdk.crypto.ec is included in image\n${{targets.destdir}}/$_java_home/bin/jimage list \"${{targets.subpkgdir}}\"/$_java_home/lib/modules | grep \"Module: jdk.crypto.ec\"\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-default-jvm",
+      "description": "Use the openjdk-${{vars.java-version}} JVM as the default JVM",
+      "dependencies": {
+        "runtime": [
+          "java-common-jre",
+          "${{package.name}}-jre"
+        ],
+        "provides": [
+          "default-jvm=1.${{vars.java-version}}",
+          "upstream-origin:openjdk-27:27.0.1.0.2-r2"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib/jvm\nln -sf java-${{vars.java-version}}-openjdk \"${{targets.subpkgdir}}\"/usr/lib/jvm/default-jvm\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "default-jvm",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-default-jdk",
+      "description": "Use the openjdk-${{vars.java-version}} JVM as the default JVM with the JDK installed",
+      "dependencies": {
+        "runtime": [
+          "java-common",
+          "${{package.name}}"
+        ],
+        "provider-priority": 5,
+        "provides": [
+          "default-jdk=1.${{vars.java-version}}",
+          "${{package.name}}-jre=${{package.full-version}}",
+          "upstream-origin:openjdk-27:27.0.1.0.2-r2"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"/usr/lib/jvm\nln -sf java-${{vars.java-version}}-openjdk \"${{targets.subpkgdir}}\"/usr/lib/jvm/default-jvm\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "default-jdk",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          },
+          {
+            "uses": "test/virtualpackage",
+            "with": {
+              "virtual-pkg-name": "${{package.name}}-jre",
+              "real-pkg-name": "${{subpkg.name}}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "openjdk-${{vars.java-version}}-default-jdk"
+        ]
+      },
+      "environment": {
+        "JAVA_HOME": "/usr/lib/jvm/java-${{vars.java-version}}-openjdk"
+      }
+    },
+    "pipeline": [
+      {
+        "working-directory": "basic",
+        "runs": "set -euo pipefail\njavac HelloWorld.java\njava HelloWorld | grep -Fi \"Hello World!\"\n"
+      },
+      {
+        "working-directory": "basic",
+        "runs": "set -euo pipefail\njavac RequestTest.java\njava RequestTest | grep -Fi \"Successfully connected to example.org\"\n"
+      },
+      {
+        "working-directory": "advanced/module-project",
+        "runs": "mkdir output\njavac -d output --module-source-path modules $(find modules -name \"*.java\")\n\n# Create a jar with the compiled classes\njar --verbose --create --file app.jar \\\n  --main-class dev.chainguard.module.main.Main \\\n  --module-version 1.0 \\\n  -C output/test.modules . \\\n  -C output/main.app .\n\n# Test the jar\njava -jar app.jar\n\n# Test jlink\njlink --verbose --module-path \"app.jar\" \\\n  --add-modules test.modules \\\n  --output test-project-jre\n\n# Test custom JRE\ntest-project-jre/bin/java -jar app.jar\n"
+      },
+      {
+        "name": "Werewolf protections hold, and allowances take each back",
+        "needs": {
+          "packages": [
+            "build-base"
+          ]
+        },
+        "runs": "chmod 755 /\nroot_work=$(mktemp -d)\nchmod 755 \"$root_work\"\ncat > \"$root_work/identity.c\" <<'WEREWOLF_IDENTITY_C'\n#define _GNU_SOURCE\n#include <grp.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\nint main(int argc, char **argv) {\n    if (argc < 4) return 125;\n    uid_t real = (uid_t)strtoul(argv[1], NULL, 10);\n    uid_t effective = (uid_t)strtoul(argv[2], NULL, 10);\n    if (setgroups(0, NULL) || setresgid(65534, 65534, 65534) ||\n        setresuid(real, effective, effective)) {\n        perror(\"identity probe\");\n        return 125;\n    }\n    execvp(argv[3], argv + 3);\n    perror(\"identity exec\");\n    return 125;\n}\nWEREWOLF_IDENTITY_C\ncc -Wall -Werror -o \"$root_work/identity\" \"$root_work/identity.c\"\nrm -f /etc/runtime-hardening/build-root\nroot_refused() {\n    if \"$@\" >\"$root_work/out\" 2>\"$root_work/err\"; then\n        echo 'probe: FAIL: effective root ran' >&2; exit 1\n    fi\n    grep -F 'effective UID 0' \"$root_work/err\"\n    grep -F '\"event\":\"runtime-denial\"' \"$root_work/err\" | grep -F '\"group\":\"root\"'\n}\nroot_refused java -version\n\n# A real root UID does not prevent execution after effective privileges drop.\n\"$root_work/identity\" 0 65534 java -version\n# A non-root real UID must not disguise effective root.\nroot_refused \"$root_work/identity\" 65534 0 java -version\n: > \"$root_work/target\"\nln -s \"$root_work/target\" /etc/runtime-hardening/build-root\nroot_refused java -version\nrm /etc/runtime-hardening/build-root\nmkdir /etc/runtime-hardening/build-root\nroot_refused java -version\nrmdir /etc/runtime-hardening/build-root\nmkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\njava -version\nrm -rf \"$root_work\"\necho \"probe: ok: java checks effective UID; only the build marker permits root\"\nwork=$(mktemp -d)\ncat > \"$work/Probe.java\" <<'WEREWOLF_PROBE_JAVA'\n// What this JVM lets a program do, as one JSON line; tests/probe.sh compares\n// it with what the protections in patches/series and the image's allowances say.\nimport com.sun.management.HotSpotDiagnosticMXBean;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport java.io.IOException;\nimport java.io.InvalidClassException;\nimport java.io.ObjectInputStream;\nimport java.io.ObjectOutputStream;\nimport java.lang.foreign.MemorySegment;\nimport java.lang.management.ManagementFactory;\nimport java.lang.reflect.Field;\n\npublic class Probe {\n    public static void main(String[] args) throws Exception {\n        if (args.length > 0 && args[0].equals(\"hide-stderr\")) {\n            System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));\n        }\n        String attach = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class)\n                .getVMOption(\"DisableAttachMechanism\").getValue();\n        System.out.println(\"{\\\"options\\\":\\\"\" + System.getProperty(\"werewolf.probe\", \"none\")\n                + \"\\\",\\\"attach\\\":\\\"\" + (\"true\".equals(attach) ? \"disabled\" : \"enabled\")\n                + \"\\\",\\\"deserialize\\\":\\\"\" + deserialize(Integer.valueOf(7))\n                + \"\\\",\\\"primitive_array\\\":\\\"\" + deserialize(new int[] {7})\n                + \"\\\",\\\"unsafe\\\":\\\"\" + unsafe()\n                + \"\\\",\\\"native\\\":\\\"\" + nativeAccess() + \"\\\"}\");\n    }\n\n    static String deserialize(Object value) throws IOException {\n        ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n        try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {\n            out.writeObject(value);\n        }\n        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {\n            in.readObject();\n            return \"read\";\n        } catch (InvalidClassException e) {\n            return \"refused\";\n        } catch (ClassNotFoundException e) {\n            return \"missing\";\n        }\n    }\n\n    static String unsafe() throws Exception {\n        Field field = sun.misc.Unsafe.class.getDeclaredField(\"theUnsafe\");\n        field.setAccessible(true);\n        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) field.get(null);\n        try {\n            unsafe.freeMemory(unsafe.allocateMemory(8));\n            return \"allowed\";\n        } catch (UnsupportedOperationException e) {\n            return \"refused\";\n        }\n    }\n\n    static String nativeAccess() {\n        try {\n            MemorySegment.NULL.reinterpret(1);  // a restricted method: native access\n            return \"allowed\";\n        } catch (IllegalCallerException e) {\n            return \"refused\";\n        }\n    }\n}\nWEREWOLF_PROBE_JAVA\ncat > \"$work/probe.sh\" <<'WEREWOLF_PROBE_SH'\n#!/bin/sh\n# probe.sh WORK holds the installed JDK to the protections patches/series\n# compiles in, then takes each back with an allowance and sees it return.\n# WORK holds Probe.java. The package test runs it as root, with\n# /etc/runtime-hardening/allow free to use (the YAML overlay includes it).\nset -eu\nwork=$1\nallow=/etc/runtime-hardening/allow/all/java\ntrap 'rm -rf \"$allow\"' EXIT\ncd \"$work\"\n# Probe uses sun.misc.Unsafe on purpose: javac warns, and that is all.\njavac -nowarn Probe.java\n\nexpect() {\n\tname=$1\n\twant=$2\n\tshift 2\n\tgot=$(\"$@\" 2>\"$work/stderr\")\n\tif [ \"$got\" != \"$want\" ]; then\n\t\techo \"probe: FAIL: $name\" >&2\n\t\techo \"  want $want\" >&2\n\t\techo \"  got  $got\" >&2\n\t\tcat \"$work/stderr\" >&2\n\t\texit 1\n\tfi\n\techo \"probe: ok: $name\"\n}\n\nstate() {\n\techo \"{\\\"options\\\":\\\"$1\\\",\\\"attach\\\":\\\"disabled\\\",\\\"deserialize\\\":\\\"$2\\\",\\\"primitive_array\\\":\\\"read\\\",\\\"unsafe\\\":\\\"$3\\\",\\\"native\\\":\\\"$4\\\"}\"\n}\nclosed=$(state none refused refused refused)\n\nrm -rf \"$allow\"\nexpect 'closed without allowances' \"$closed\" java Probe\ngrep -F '\"group\":\"deserialize\"' \"$work/stderr\" | grep -F 'java.lang.Integer'\ngrep -F '\"group\":\"native\"' \"$work/stderr\" | grep -F 'sun.misc.Unsafe'\ngrep -F '\"group\":\"native\"' \"$work/stderr\" | grep -F 'reinterpret'\n\nexpect 'replacing System.err cannot hide caught denials' \"$closed\" java Probe hide-stderr\ngrep -F '\"event\":\"runtime-denial\"' \"$work/stderr\" | grep -F '\"group\":\"deserialize\"'\n\n# The environment opens nothing: the JVM and the launcher read none of it.\nopen='-Dwerewolf.probe=leaked -Djdk.serialFilter=* -Dsun.misc.unsafe.memory.access=allow -XX:-DisableAttachMechanism'\nexpect 'JAVA_TOOL_OPTIONS is ignored' \"$closed\" env JAVA_TOOL_OPTIONS=\"$open\" java Probe\nexpect '_JAVA_OPTIONS is ignored' \"$closed\" env _JAVA_OPTIONS=\"$open\" java Probe\nexpect 'JDK_JAVA_OPTIONS is ignored' \"$closed\" env \\\n\tJDK_JAVA_OPTIONS=\"-Dwerewolf.probe=leaked --illegal-native-access=allow --sun-misc-unsafe-memory-access=allow\" \\\n\tjava Probe\n# Stock java fails here: it would load /nonexistent/libjvm.so.\nexpect 'JDK_ALTERNATE_VM is ignored' \"$closed\" env JDK_ALTERNATE_VM=/nonexistent java Probe\n\n# Neither does argv; its own system properties still reach the program.\nexpect 'argv cannot lift a protection' \"$(state argv refused refused refused)\" \\\n\tjava -Dwerewolf.probe=argv -Djdk.serialFilter='*' --sun-misc-unsafe-memory-access=allow \\\n\t--illegal-native-access=allow --enable-native-access=ALL-UNNAMED Probe\n\n# A JAR's manifest still grants native access, as the image's own jars may.\nprintf 'Main-Class: Probe\\nEnable-Native-Access: ALL-UNNAMED\\n' >\"$work/manifest\"\njar --create --file \"$work/probe.jar\" --manifest \"$work/manifest\" -C \"$work\" Probe.class\nexpect \"a JAR manifest grants native access\" \"$(state none refused refused allowed)\" java -jar \"$work/probe.jar\"\n\n# Each allowance takes back what it names, and nothing else.\nmkdir -p \"$allow\"\nfor name in deserialize native; do\n\trm -f \"$allow\"/*\n\t: >\"$allow/$name\"\n\tcase $name in\n\tdeserialize) want=$(state none read refused refused) ;;\n\tnative) want=$(state none refused allowed allowed) ;;\n\tesac\n\texpect \"the $name group takes back its own\" \"$want\" java Probe\ndone\n\n# A link is not an allowance, even to a file: lock times will be links.\nrm -f \"$allow\"/*\n: >\"$work/target\"\nfor name in deserialize native; do\n\tln -s \"$work/target\" \"$allow/$name\"\ndone\nexpect 'a link is not an allowance' \"$closed\" java Probe\n\ncat > Headless.java <<'WEREWOLF_HEADLESS_JAVA'\nimport java.awt.Color;\nimport java.awt.Font;\nimport java.awt.Graphics2D;\nimport java.awt.GraphicsEnvironment;\nimport java.awt.image.BufferedImage;\nimport java.io.ByteArrayInputStream;\nimport java.io.ByteArrayOutputStream;\nimport javax.imageio.ImageIO;\n\n// Server consumers still render QR codes, charts and documents without X11.\npublic class Headless {\n    public static void main(String[] args) throws Exception {\n        if (!GraphicsEnvironment.isHeadless()) throw new AssertionError(\"headless\");\n        var image = new BufferedImage(200, 80, BufferedImage.TYPE_INT_RGB);\n        Graphics2D graphics = image.createGraphics();\n        graphics.setColor(Color.WHITE);\n        graphics.fillRect(0, 0, 200, 80);\n        graphics.setColor(Color.BLACK);\n        graphics.setFont(new Font(\"SansSerif\", Font.PLAIN, 18));\n        graphics.drawString(\"Login 123456\", 5, 30);\n        graphics.fillRect(5, 40, 20, 20);\n        graphics.dispose();\n        var bytes = new ByteArrayOutputStream();\n        if (!ImageIO.write(image, \"png\", bytes)) throw new AssertionError(\"PNG encoder\");\n        var decoded = ImageIO.read(new ByteArrayInputStream(bytes.toByteArray()));\n        if (decoded.getWidth() != 200 || decoded.getRGB(10, 45) != Color.BLACK.getRGB())\n            throw new AssertionError(\"PNG round trip\");\n        System.out.println(\"probe: ok: headless fonts and PNG rendering\");\n    }\n}\n\nWEREWOLF_HEADLESS_JAVA\njavac Headless.java\njava -Djava.awt.headless=true Headless\nWEREWOLF_PROBE_SH\nsh \"$work/probe.sh\" \"$work\"\n"
+      }
+    ]
+  }
+}

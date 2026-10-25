@@ -7,7 +7,7 @@
 package:
   name: miniflux
   version: "2.3.4"
-  epoch: 1
+  epoch: 2
   description: Minimalist and opinionated feed reader
   copyright:
     - license: Apache-2.0

@@ -1,0 +1,27 @@
+actions:
+  requirements:
+    requirements:
+      input: requirements-slim.txt
+      output: requirements-slim.txt
+      omit: &id001
+      - aiodns
+      - starlette-compress
+      - brotli
+      - ldap3
+      - azure-ai-documentintelligence
+      - azure-identity
+      - azure-search-documents
+      - googleapis-common-protos
+      omit-prefixes:
+      - opentelemetry-
+      required: *id001
+      required-prefixes:
+      - opentelemetry-
+      replace:
+      - old: httpx[socks,http2,zstd,cli,brotli]==0.28.1
+        new: httpx[http2]==0.28.1
+  metadata:
+    wheels:
+    - distribution: langsmith
+      remove-requirements:
+      - zstandard

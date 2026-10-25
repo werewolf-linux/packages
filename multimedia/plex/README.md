@@ -9,7 +9,7 @@ hardened glibc or Python does not replace those bundled components.
 `plex.yaml` pins the current public release and every codec by SHA-256 for x86_64
 and aarch64. `InRelease`, the two package indexes and `PlexSign.v2.key` retain the
 vendor's signed provenance. `sources.json` records the codec manifest results.
-`python3 verify.py` checks the repository signature, signing-key fingerprint,
+`go run ./cmd/package plex-verify` (from the repository root) checks the repository signature, signing-key fingerprint,
 package-index hashes and all recipe pins without network access.
 
 Build with `make PACKAGE=plex build` from this repository. The recipe installs
@@ -22,7 +22,7 @@ supervisor can interpose on the ordinary helper path without modifying that ELF.
 Codec downloads are independent vendor artifacts. For an update, verify the new
 signed APT metadata and both DEB hashes, derive the codec set from the new
 transcoder's version, capture codec manifests over vendor HTTPS, and update every
-URI and SHA-256 together. Run `verify.py`, build both architectures, and run the
+URI and SHA-256 together. Run `package plex-verify`, build both architectures, and run the
 form's real media and confinement tests. Never warm a writable codec cache in a
 running VM or substitute a newly downloaded module when a pinned codec is missing.
 

@@ -14,27 +14,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/werewolf-linux/packages/internal/catalog"
 )
 
-type Policy struct {
-	Source         string `json:"source"`
-	Separator      string `json:"separator,omitempty"`
-	Repo           string `json:"repo,omitempty"`
-	Project        string `json:"project,omitempty"`
-	Prefix         string `json:"prefix,omitempty"`
-	Pattern        string `json:"pattern,omitempty"`
-	Suffix         string `json:"suffix,omitempty"`
-	VersionPattern string `json:"version-pattern,omitempty"`
-	VersionReplace string `json:"version-replace,omitempty"`
-	Series         string `json:"series,omitempty"`
-	Branch         string `json:"branch,omitempty"`
-	Lock           string `json:"lock,omitempty"`
-	Reason         string `json:"reason,omitempty"`
-	Hold           string `json:"hold,omitempty"`
-	// Components are keyed by the recipe variable holding their version.
-	Components map[string]Policy `json:"components,omitempty"`
-	CommitVar  string            `json:"commit-var,omitempty"`
-}
+type Policy = catalog.Policy
 
 type Release struct {
 	Version    string `json:"version"`
@@ -128,6 +112,9 @@ func (c *Client) Download(ctx context.Context, address string, out io.Writer) (s
 }
 
 var stable = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)*(?:\+[0-9]+|_p[0-9]+)?$`)
+
+// Letter patch releases (mksh R59c) require an explicit tag-format policy.
+var letterRelease = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)*)([a-z])$`)
 var commitID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // Compare compares numeric release components, so 1.10 is newer than 1.9.
@@ -136,7 +123,15 @@ func Compare(a, b string) int {
 	parts := func(v string) []string {
 		return strings.FieldsFunc(v, func(r rune) bool { return r == '.' || r == '+' || r == '_' || r == 'p' })
 	}
-	aa, bb := parts(a), parts(b)
+	patch := func(v string) (string, string) {
+		if m := letterRelease.FindStringSubmatch(v); m != nil {
+			return m[1], m[2]
+		}
+		return v, ""
+	}
+	av, ap := patch(a)
+	bv, bp := patch(b)
+	aa, bb := parts(av), parts(bv)
 	for i := 0; i < len(aa) || i < len(bb); i++ {
 		x, y := "0", "0"
 		if i < len(aa) {
@@ -161,7 +156,7 @@ func Compare(a, b string) int {
 			return strings.Compare(x, y)
 		}
 	}
-	return 0
+	return strings.Compare(ap, bp)
 }
 
 func candidate(tag string, p Policy) (Release, bool) {
@@ -193,7 +188,7 @@ func candidate(tag string, p Policy) (Release, bool) {
 	if p.Series != "" && r.Version != p.Series && !strings.HasPrefix(r.Version, p.Series+".") {
 		return Release{}, false
 	}
-	return r, stable.MatchString(v)
+	return r, stable.MatchString(v) || p.VersionPattern != "" && letterRelease.MatchString(v)
 }
 
 func (c *Client) Discover(ctx context.Context, p Policy, current string) (Release, error) {
@@ -255,7 +250,7 @@ func (c *Client) Discover(ctx context.Context, p Policy, current string) (Releas
 			return Release{}, fmt.Errorf("upstream latest release is not stable: %s", item.Tag)
 		}
 		return r, nil
-	case "github-tags":
+	case "github-releases", "github-tags":
 		var best Release
 		endpoint := "releases"
 		if p.Source == "github-tags" {
@@ -373,6 +368,12 @@ func (c *Client) Discover(ctx context.Context, p Policy, current string) (Releas
 		return Release{Version: base + "_git" + data.Commit.Committer.Date.UTC().Format("20060102"), Commit: data.SHA}, nil
 	case "content":
 		return Release{Version: current}, nil
+	case "git-tags":
+		tags, err := gitTags(ctx, p.URL)
+		if err != nil {
+			return Release{}, err
+		}
+		return newestTag(tags, p)
 	default:
 		return Release{}, fmt.Errorf("unknown source %q", p.Source)
 	}

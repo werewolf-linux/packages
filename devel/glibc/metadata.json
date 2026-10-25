@@ -16,8 +16,7 @@
     "minimized_reason": "Remove nscd, legacy NSS modules and tracing components; use fixed local resolver policy.",
     "pledge_reason": "No package-enforced pledge-style capability policy is claimed; service confinement is tracked in Werewolf forms.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py"
+      "overlay.yaml"
     ]
   },
   "wolfi": {
@@ -30,16 +29,14 @@
         "what": "Ignore environment-controlled libc and dynamic loader configuration; disable loader injection and external NSS/converter loading.",
         "why": "Keep process startup and libc behavior independent of attacker-controlled environment and loadable modules.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Remove nscd, legacy NSS modules and tracing components; use fixed local resolver policy.",
         "why": "Reduce executable components and dynamic loading paths while retaining the supported libc ABI.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       }
     ],

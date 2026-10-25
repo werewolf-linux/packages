@@ -24,8 +24,8 @@ one unversioned context and package set. Deliberately vulnerable demonstrations 
 real source metadata and an explicit update hold.
 
 ```sh
-python3 scripts/catalog.py list
-python3 scripts/catalog.py show caddy
+go run ./cmd/package catalog list
+go run ./cmd/package catalog show caddy
 make metadata                     # offline maintenance assertions
 make test check                   # tests and Melange recipe validation
 make PACKAGE=caddy updates        # discover an upstream release
@@ -34,23 +34,23 @@ make PACKAGE=caddy build          # build through ../werewolf
 make PACKAGE=php build            # build the Wolfi derivation
 ```
 
-Python 3.12+ with PyYAML, Go 1.27+, pinned Melange, OpenSSL 3+ and package-specific
-test tools are required. Put OpenSSL 3+ on `PATH` for signing tests; macOS's system
-LibreSSL does not support the required key conversion. Java logging probes run
-when a JDK 11+ is available on `PATH`.
-Plex provenance checks also require GnuPG (`gpg`). Create a local
-environment with a supported interpreter before running the tests:
+Go 1.27+, git, pinned Melange and package-specific test tools are required.
+Plex provenance checks also require GnuPG (`gpg`). Install the pinned builder with:
 
 ```sh
-python3.12 -m venv build/venv
-build/venv/bin/python -m pip install -r wolfi/requirements.txt
-make PYTHON=build/venv/bin/python test check
+go run ./cmd/package install-melange
+make test lint metadata check
 ```
 
 Local application builds also need the sibling Werewolf checkout.
 [Application packaging](docs/applications.md) covers dependency locks and native
 smoke tests. [Wolfi builds](wolfi/README.md) covers capture, derivation, patching,
 installed-package probes and local build tools.
+
+Tooling is Go with one YAML dependency. Package changes live in
+[YAML overlays](docs/overlays.md) and `packaging/changes.yaml`; the shared Go
+helper applies them inside build guests. Python files remain only where they
+launch a Python application or exercise its interpreter and APIs.
 
 ## Publication
 
@@ -72,8 +72,9 @@ not change a package's public release identity.
 
 Top-level categories describe what software does. Update origin and hardening
 status are metadata, so adding hardening never requires moving a package.
-`scripts/` holds shared tools and the application publisher; `wolfi/` holds the
-Wolfi derivation engine. Tool pins, runner helpers and the signing trust root each
+`cmd/package` exposes maintenance commands; `internal/` holds the shared engines.
+`cmd/package-helper` runs YAML actions and probes inside build guests. `scripts/`
+and `wolfi/` retain runner helpers and Wolfi configuration. Tool pins and the signing trust root each
 have one maintained copy. Build outputs stay under ignored `build/` directories.
 
 The application recipes and original tools retain [Apache-2.0](LICENSE).

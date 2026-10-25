@@ -10,7 +10,7 @@
 package:
   name: mattermost-team
   version: "12.0.1"
-  epoch: 1
+  epoch: 2
   description: Open source collaboration for developer teams (Team Edition)
   copyright:
     - license: MIT

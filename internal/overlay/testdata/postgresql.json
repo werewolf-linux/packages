@@ -1,0 +1,479 @@
+{
+  "package": {
+    "name": "postgresql",
+    "version": "18.6",
+    "epoch": 2006,
+    "description": "A sophisticated object-relational DBMS",
+    "copyright": [
+      {
+        "license": "BSD-3-Clause"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "upstream-origin:postgresql-18:18.6-r6"
+      ],
+      "runtime": [
+        "${{package.name}}-base=${{package.full-version}}",
+        "tzdata"
+      ]
+    },
+    "resources": {
+      "cpu": "10",
+      "memory": "15Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "memory": "4Gi"
+    },
+    "annotations": {
+      "toolchain-stream-reconcile-optout": true
+    }
+  },
+  "environment": {
+    "environment": {
+      "ALPINE_VERSION": "3.23",
+      "CONFIGURE_FLAGS": "--bindir=/usr/libexec/${{vars.mangled-package-name}} \\\n--datadir=/usr/share/${{vars.mangled-package-name}} \\\n--docdir=/usr/share/doc/${{vars.mangled-package-name}} \\\n--mandir=/usr/share/${{vars.mangled-package-name}}/man \\\n--with-openssl \\\n--with-libedit-preferred \\\n--with-uuid=e2fs \\\n--with-libxml \\\n--with-libxslt \\\n--with-icu \\\n--with-lz4 \\\n--with-zstd \\\n--without-gssapi \\\n--without-ldap \\\n--with-llvm \\\n--without-pam \\\n--enable-thread-safety\n"
+    },
+    "contents": {
+      "packages": [
+        "autoconf",
+        "automake",
+        "bash",
+        "bison",
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "clang-19",
+        "flex",
+        "gawk",
+        "glibc-2.44-dev",
+        "icu-dev",
+        "libedit-dev",
+        "libuuid",
+        "libxml2-dev",
+        "libxslt-dev",
+        "llvm-19-dev",
+        "llvm-lld-19-dev",
+        "lz4-dev",
+        "net-tools",
+        "openssl-${{vars.openssl-version}}-dev",
+        "tzdata",
+        "util-linux-dev",
+        "zlib-dev",
+        "zstd-dev"
+      ]
+    }
+  },
+  "vars": {
+    "client-tools": "clusterdb createdb createuser dropdb dropuser pg_amcheck pg_basebackup pg_dump pg_dumpall pg_isready pg_receivewal pg_recvlogical pg_restore pg_verifybackup psql reindexdb vacuumdb",
+    "docker-entrypoint-hash": "aa35cfa675a64ac7687909c83a98798c9ff72ab3855722a0d9643e48408b6c12",
+    "openssl-version": "4.0",
+    "pypi-package": "plpython"
+  },
+  "var-transforms": [
+    {
+      "from": "${{package.version}}",
+      "match": "^(\\d+).*",
+      "replace": "postgresql$1",
+      "to": "mangled-package-name"
+    },
+    {
+      "from": "${{package.version}}",
+      "match": "\\.",
+      "replace": "_",
+      "to": "mangled-package-version"
+    },
+    {
+      "from": "${{package.version}}",
+      "match": "^(\\d+).*",
+      "replace": "$1",
+      "to": "major-version"
+    }
+  ],
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/postgres/postgres.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 724edf9bde9d356724ad384a2e196edc3c9f80f7; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 724edf9bde9d356724ad384a2e196edc3c9f80f7\n      git -c core.hooksPath=/dev/null checkout -q --detach 724edf9bde9d356724ad384a2e196edc3c9f80f7\n      exit 0\n    fi\n  done\ndone\necho \"724edf9bde9d356724ad384a2e196edc3c9f80f7: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "patch",
+      "with": {
+        "patches": "per-version-dirs.patch\nssl-groups-fips-tolerant-default.patch\n"
+      }
+    },
+    {
+      "uses": "autoconf/configure",
+      "with": {
+        "opts": "$CONFIGURE_FLAGS --without-perl --without-python --without-tcl"
+      }
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "runs": "# Symlink postgres to /usr/bin\nmkdir -p ${{targets.destdir}}/usr/bin\nln -sf /usr/libexec/${{vars.mangled-package-name}}/postgres ${{targets.destdir}}/usr/bin/postgres${{vars.major-version}}\n\n# the official postgres image listens on all interfaces by default, let's do the same for consistency\nsed -ri \"s!^#?(listen_addresses)\\s*=\\s*\\S+.*!\\1 = '*'!\" ${{targets.destdir}}/usr/share/${{vars.mangled-package-name}}/postgresql.conf.sample\ngrep -F \"listen_addresses = '*'\" ${{targets.destdir}}/usr/share/${{vars.mangled-package-name}}/postgresql.conf.sample\n"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "${{package.name}}-dev",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ],
+        "runtime": [
+          "${{package.name}}",
+          "openssl-${{vars.openssl-version}}-dev",
+          "${{package.name}}-client",
+          "libpq",
+          "libecpg-dev"
+        ]
+      },
+      "description": "postgresql dev",
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "pkgconf"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check",
+            "with": {
+              "packages": "postgresql-dev"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-client-base",
+      "description": "PostgreSQL client base",
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/libexec/${{vars.mangled-package-name}}\nfor binary in ${{vars.client-tools}}; do\n  mv ${{targets.destdir}}/usr/libexec/${{vars.mangled-package-name}}/${binary} ${{targets.subpkgdir}}/usr/libexec/${{vars.mangled-package-name}}/${binary}\ndone\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/contains-files",
+            "with": {
+              "dir": "/usr/libexec/${{vars.mangled-package-name}}/",
+              "name": "pg_*"
+            }
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-client",
+      "description": "PostgreSQL client",
+      "dependencies": {
+        "runtime": [
+          "${{package.name}}-client-base=${{package.full-version}}"
+        ],
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/bin\nfor binary in ${{vars.client-tools}}; do\n  ln -sf /usr/libexec/${{vars.mangled-package-name}}/${binary} ${{targets.subpkgdir}}/usr/bin/${binary}\ndone\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "name": "Unversioned PostgreSQL client identity",
+            "runs": "test \"$(apk list --installed postgresql-client 2>/dev/null | awk '{print $1}')\" = \"postgresql-client-${{package.full-version}}\"\npsql --version | grep -F \"${{package.version}}\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-contrib-base",
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}\nmake DESTDIR=${{targets.subpkgdir}} -C contrib install\n# The PL/Perl transform modules (bool/hstore/jsonb_plperl) ship in the\n# -plperl subpackage, matching Debian's postgresql-plperl layout. Drop\n# them here so -contrib carries no libperl runtime dependency.\nfind \"${{targets.subpkgdir}}\" -name '*plperl*' -delete\n"
+        }
+      ],
+      "description": "Extension modules distributed with PostgreSQL",
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-contrib",
+      "description": "Extension modules distributed with PostgreSQL",
+      "checks": {
+        "disabled": [
+          "empty"
+        ]
+      },
+      "dependencies": {
+        "runtime": [
+          "${{package.name}}-contrib-base=${{package.full-version}}"
+        ],
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      },
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/emptypackage"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libpq",
+      "description": "PostgreSQL libraries",
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/lib\nmv ${{targets.destdir}}/usr/lib/libpq.so* ${{targets.subpkgdir}}/usr/lib/\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      }
+    },
+    {
+      "name": "libecpg",
+      "description": "Embedded PostgreSQL libraries",
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/lib\nmv ${{targets.destdir}}/usr/lib/libecpg.so* ${{targets.subpkgdir}}/usr/lib/\nmv ${{targets.destdir}}/usr/lib/libecpg_compat.so* ${{targets.subpkgdir}}/usr/lib/\nmv ${{targets.destdir}}/usr/lib/libpgtypes.so* ${{targets.subpkgdir}}/usr/lib/\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      }
+    },
+    {
+      "name": "libecpg-dev",
+      "description": "Embedded PostgreSQL libraries (development files)",
+      "dependencies": {
+        "runtime": [
+          "libecpg=${{package.full-version}}"
+        ],
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/include/postgresql\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/ecpg*.h ${{targets.subpkgdir}}/usr/include/postgresql/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/postgresql/informix ${{targets.subpkgdir}}/usr/include/postgresql/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/pgtypes*.h ${{targets.subpkgdir}}/usr/include/postgresql/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/sql3types.h ${{targets.subpkgdir}}/usr/include/postgresql/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/sqlca.h ${{targets.subpkgdir}}/usr/include/postgresql/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/include/sqlda*.h ${{targets.subpkgdir}}/usr/include/postgresql/\n\nmkdir -p ${{targets.subpkgdir}}/usr/lib/pkgconfig\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/lib/libecpg.* ${{targets.subpkgdir}}/usr/lib/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/lib/libpgtypes.* ${{targets.subpkgdir}}/usr/lib/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/lib/pkgconfig/libecpg.pc ${{targets.subpkgdir}}/usr/lib/pkgconfig/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/lib/pkgconfig/libecpg_compat.pc ${{targets.subpkgdir}}/usr/lib/pkgconfig/\nmv ${{targets.outdir}}/${{package.name}}-dev/usr/lib/pkgconfig/libpgtypes.pc ${{targets.subpkgdir}}/usr/lib/pkgconfig/\n"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "pkgconf"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/tw/ldd-check"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "runs": "# Test that key header files are present\ntest -f /usr/include/postgresql/ecpg_config.h\ntest -f /usr/include/postgresql/ecpglib.h\ntest -f /usr/include/postgresql/pgtypes.h\ntest -f /usr/include/postgresql/sqlca.h\n\n# Test that pkgconfig files are present and working\npkg-config --exists libecpg\npkg-config --exists libecpg_compat\npkg-config --exists libpgtypes\n\n# Test that static libraries are present\ntest -f /usr/lib/libecpg.a\ntest -f /usr/lib/libpgtypes.a\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ecpg",
+      "description": "Embedded PostgreSQL SQL preprocessor for C programs",
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      },
+      "pipeline": [
+        {
+          "runs": "mkdir -p ${{targets.subpkgdir}}/usr/bin/\nmv ${{targets.destdir}}/usr/libexec/${{vars.mangled-package-name}}/ecpg ${{targets.subpkgdir}}/usr/bin/\n"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "libecpg-dev=${{package.full-version}}"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          },
+          {
+            "runs": "ecpg --help"
+          },
+          {
+            "runs": "cat <<\"EOF\" >test.pgc\n/* test.pgc */\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nEXEC SQL INCLUDE sqlca;\n\nint main() {\n    EXEC SQL BEGIN DECLARE SECTION;\n    const char *db = \"testdb\";\n    const char *user = \"postgres\";\n    int id;\n    char name[100];\n    EXEC SQL END DECLARE SECTION;\n\n    EXEC SQL CONNECT TO :db USER :user;\n\n    if (sqlca.sqlcode < 0) {\n        fprintf(stderr, \"Connection failed: %s\\n\", sqlca.sqlerrm.sqlerrmc);\n        exit(1);\n    }\n\n    EXEC SQL CREATE TABLE IF NOT EXISTS demo (id INT, name TEXT);\n    EXEC SQL INSERT INTO demo (id, name) VALUES (1, 'chainguard');\n    EXEC SQL COMMIT;\n\n    EXEC SQL DECLARE cur CURSOR FOR SELECT id, name FROM demo;\n    EXEC SQL OPEN cur;\n\n    while (1) {\n        EXEC SQL FETCH cur INTO :id, :name;\n        if (sqlca.sqlcode != 0) break;\n        printf(\"Row: id = %d, name = %s\\n\", id, name);\n    }\n\n    EXEC SQL CLOSE cur;\n    EXEC SQL COMMIT;\n    EXEC SQL DISCONNECT;\n\n    return 0;\n}\nEOF\necpg -I /usr/include/postgresql test.pgc\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "${{package.name}}-base",
+      "description": "Base for PostgreSQL 18",
+      "pipeline": [
+        {
+          "runs": "mkdir -p \"${{targets.subpkgdir}}\"\n\n# Move contents of main package to base package\nmv \"${{targets.destdir}}\"/* \"${{targets.subpkgdir}}\"\n\n# Create symlinks to binaries in execdir to bindir in main package\nexport bindir=\"${{targets.destdir}}/usr/bin\"\nexport execdir=\"/usr/libexec/${{vars.mangled-package-name}}\"\n\nmkdir -p \"${bindir}\"\n\ncd \"${{targets.subpkgdir}}/${execdir}\"\nfor binary in *; do\n  ln -sf \"${execdir}/${binary}\" \"${bindir}/${binary}\"\ndone\n"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:postgresql-18:18.6-r6"
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "${{package.name}}-client",
+          "shadow",
+          "sudo-rs",
+          "glibc-locales"
+        ]
+      },
+      "environment": {
+        "PGDATA": "/tmp/test_db",
+        "PGUSER": "wolfi"
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "name": "Test if PostgreSQL binaries are present and runnable",
+        "runs": "command -v initdb\ncommand -v pg_ctl\ncommand -v psql\necpg --version\necpg --help\ninitdb --version\ninitdb --help\npg_archivecleanup --version\npg_archivecleanup --help\npg_checksums --version\npg_checksums --help\npg_combinebackup --version\npg_combinebackup --help\npg_config --version\npg_controldata --version\npg_controldata --help\npg_createsubscriber --version\npg_createsubscriber --help\npg_ctl --version\npg_ctl --help\npg_resetwal --version\npg_resetwal --help\npg_rewind --version\npg_rewind --help\npg_test_fsync --version\npg_test_fsync --help\npg_test_timing --version\npg_test_timing --help\npg_upgrade --version\npg_upgrade --help\npg_waldump --version\npg_waldump --help\npg_walsummary --version\npg_walsummary --help\npgbench --version\npgbench --help\npostgres --version\npostgres --help\n"
+      },
+      {
+        "name": "Test database creation",
+        "runs": "useradd $PGUSER\nsudo -u $PGUSER initdb -D /tmp/test_db\nsudo -u $PGUSER pg_ctl -D /tmp/test_db -l /tmp/logfile start\ncreatedb testdb\npsql -lqt | cut -d \\| -f 1 | grep -Fw testdb\n"
+      },
+      {
+        "name": "Test basic read/write operations",
+        "runs": "psql -d testdb -c \"CREATE TABLE test_table (id SERIAL PRIMARY KEY, test_value VARCHAR(50));\"\npsql -d testdb -c \"INSERT INTO test_table (test_value) VALUES ('Hello, PostgreSQL!');\"\npsql -d testdb -t -A -c \"SELECT test_value FROM test_table WHERE id=1;\"\n"
+      },
+      {
+        "name": "Test xml support",
+        "runs": "psql -d testdb -c \"CREATE TABLE test (data xml);\"\npsql -d testdb -c \"INSERT INTO test values (XMLPARSE(CONTENT '<foo>bar</foo>'));\"\n"
+      },
+      {
+        "name": "Test server can run and respond to requests",
+        "runs": "psql -d testdb -c \"\\conninfo\"\n"
+      },
+      {
+        "name": "Test XML xpath support",
+        "runs": "psql -d testdb -c \"SELECT xpath('/book/title', '<book><title>My Title</title></book>');\" | grep \"<title>My Title</title>\"\n"
+      },
+      {
+        "name": "Test ICU collation presence",
+        "runs": "psql -d testdb -c \"SELECT collname FROM pg_collation WHERE collprovider = 'i';\" | grep -E \"unicode|und-x-icu|af-x-icu\"\n"
+      },
+      {
+        "name": "Test JIT is enabled",
+        "runs": "psql -t -A -d testdb -c \"SHOW jit;\" | grep \"on\"\n"
+      },
+      {
+        "name": "Test toast compression set to lz4",
+        "runs": "psql -t -A -d testdb -c \"SET default_toast_compression = 'lz4'; SHOW default_toast_compression;\" | grep \"^lz4$\""
+      },
+      {
+        "name": "Peer, SCRAM, TLS, JIT, extensions and backup/restore consumers",
+        "needs": {
+          "packages": [
+            "postgresql-dev",
+            "postgresql-contrib",
+            "openssl",
+            "shadow"
+          ]
+        },
+        "runs": "cat > /tmp/postgresql-consumers.sh <<'WEREWOLF_POSTGRESQL_CONSUMERS'\n#!/bin/sh\nset -eu\nif [ \"$(id -u)\" -eq 0 ]; then\n    id pgtest >/dev/null 2>&1 || useradd -M -s /bin/sh pgtest\n    exec su -p -s /bin/sh pgtest -c \"exec sh '$0'\"\nfi\nbindir=$(pg_config --bindir)\nexport PATH=$bindir:$PATH\n# Verify both sides of authentication: libpq must not retain GSSAPI/LDAP either.\nfor binary in \"$bindir/postgres\" /usr/lib/libpq.so.5; do\n    if ldd \"$binary\" | grep -E 'lib(pam|ldap|gssapi|krb5)'; then\n        echo \"optional authentication library remains: $binary\" >&2\n        exit 1\n    fi\ndone\npg_config --configure | grep -- '--with-llvm'\nwork=$(mktemp -d)\nexport HOME=$work\ntrap 'pg_ctl -D \"$work/data\" -m immediate stop >/dev/null 2>&1 || true; rm -rf \"$work\"' EXIT\nexport PGHOST=$work PGUSER=pgtest PGDATABASE=postgres PGPORT=55432\ninitdb -D \"$work/data\" --no-locale --encoding=UTF8 --auth-local=peer --auth-host=scram-sha-256\nopenssl req -x509 -newkey rsa:2048 -nodes -keyout \"$work/server.key\" -out \"$work/server.crt\" -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost\nchmod 600 \"$work/server.key\"\ncat >> \"$work/data/postgresql.conf\" <<EOF\nunix_socket_directories = '$work'\nport = 55432\nlisten_addresses = '127.0.0.1'\nssl = on\nssl_cert_file = '$work/server.crt'\nssl_key_file = '$work/server.key'\nEOF\npg_ctl -D \"$work/data\" -l \"$work/server.log\" -w start\npsql -v ON_ERROR_STOP=1 <<'SQL'\nALTER ROLE pgtest PASSWORD 'consumer-test-password';\nCREATE EXTENSION pg_trgm;\nCREATE EXTENSION pgcrypto;\nCREATE EXTENSION \"uuid-ossp\";\nCREATE TABLE documents(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), body jsonb NOT NULL);\nINSERT INTO documents(body) VALUES ('{\"title\":\"common consumer\",\"count\":3}');\nCREATE INDEX documents_search ON documents USING gin ((body->>'title') gin_trgm_ops);\nDO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM documents WHERE body->>'title' ILIKE '%consumer%') THEN\n    RAISE EXCEPTION 'JSONB/search query failed';\n  END IF;\nEND $$;\nSQL\nexport PGPASSWORD=consumer-test-password\n# TLS hostname verification plus password authentication, as application drivers use.\nexport PGHOST=localhost PGHOSTADDR=127.0.0.1 PGSSLMODE=verify-full PGSSLROOTCERT=$work/server.crt\n[ \"$(psql -At -c \"SELECT body->>'count' FROM documents\")\" = 3 ]\npsql -At -c 'SET jit_above_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT sum(i) FROM generate_series(1,10000) AS i' > \"$work/jit.json\"\ngrep '\"JIT\"' \"$work/jit.json\"\npg_dump --format=custom --file=\"$work/backup\" postgres\ncreatedb restored\npg_restore --exit-on-error --dbname=restored \"$work/backup\"\n[ \"$(psql -d restored -At -c 'SELECT count(*) FROM documents')\" = 1 ]\necho 'PASS: peer/SCRAM/TLS, JSONB, common extensions, LLVM JIT and backup/restore'\nWEREWOLF_POSTGRESQL_CONSUMERS\nsh /tmp/postgresql-consumers.sh\n"
+      }
+    ]
+  }
+}

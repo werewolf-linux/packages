@@ -6,7 +6,7 @@
 package:
   name: minecraft
   version: 26.3
-  epoch: 1
+  epoch: 2
   description: Minecraft Java Edition server
   copyright:
     - license: LicenseRef-Minecraft-EULA

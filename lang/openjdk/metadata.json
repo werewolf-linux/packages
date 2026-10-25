@@ -12,8 +12,7 @@
     "minimized_reason": "Headless-only JVM omits X11/desktop-window support, jmods, demos and the OCI entrypoint; font/image rendering and JIT remain.",
     "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py",
+      "overlay.yaml",
       "tests/Headless.java"
     ]
   },
@@ -27,23 +26,21 @@
         "what": "Omit jmods, demos and the OCI entrypoint.",
         "why": "Keep the runtime and supported development packages without unused distribution artifacts.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Ignore environment-controlled startup options, refuse effective-root initialization and restrict native access and object deserialization.",
         "why": "Enforce runtime policy within the JVM so application-controlled relaunches cannot discard it.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Build headless-only with explicit fontconfig dependency.",
         "why": "Remove desktop-window support while preserving server font and image rendering.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/Headless.java"
         ]
       }

@@ -1,10 +1,7 @@
-# Runs only inside the Alpine Pi-hole tree, never against the host's glibc.
-# no-depends/no-provides prevents its musl ABI from affecting the Wolfi solver.
-# The private executable is checked against the OCI image in the form tests.
 package:
   name: pihole-curl
   version: 8.23.0
-  epoch: 1
+  epoch: 2
   description: HTTP(S)-only musl curl for the Pi-hole OCI filesystem
   copyright:
   - license: curl
@@ -25,11 +22,9 @@ environment:
     - automake
     - libtool
     - perl
-    - openssl
     - openssl-dev
     - zlib-dev
     - ca-certificates-bundle
-    - python3
     - git
 pipeline:
 - uses: git-checkout
@@ -37,31 +32,14 @@ pipeline:
     repository: https://github.com/curl/curl.git
     tag: curl-8_23_0
     expected-commit: 3163ec065643ba20709f190111f42c3e1fe95273
-- runs: 'autoreconf -fi
-
-    ./configure --prefix=/usr --enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls
-    --with-zlib --with-pic --without-brotli --without-zstd --without-nghttp2 --without-nghttp3 --without-ngtcp2
-    --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv
-    --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet
-    --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets
-    --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy
-    --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual
-    --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir --disable-shared --enable-static
-    --disable-cookies --without-libpsl --disable-mime --with-ca-bundle=/etc/ssl/certs/ca-certificates.crt --with-ca-path=/etc/ssl/certs
-
+- runs: |
+    autoreconf -fi
+    ./configure --prefix=/usr --enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls --with-zlib --with-pic --without-brotli --without-zstd --without-nghttp2 --without-nghttp3 --without-ngtcp2 --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir --disable-shared --enable-static --disable-cookies --without-libpsl --disable-mime --with-ca-bundle=/etc/ssl/certs/ca-certificates.crt --with-ca-path=/etc/ssl/certs
     make -j$(nproc)
-
-    python3 probe.py ./src/curl
-
+    werewolf-tools/package-helper --action probe
     # libcurl is linked into this executable; TLS/zlib use the image libraries.
-
-    python3 check-linkage.py ./src/curl
-
     install -Dm755 src/curl "${{targets.destdir}}/oci/pi-hole/usr/lib/werewolf-pihole/curl"
-
     install -Dm644 COPYING "${{targets.destdir}}/usr/share/licenses/pihole-curl/COPYING"
-
-    '
 - uses: strip
 update:
   enabled: false

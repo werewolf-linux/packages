@@ -250,7 +250,7 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 			return nil, fmt.Errorf("only vuln-demo contexts may be pinned: %s", name)
 		}
 		switch p.Source {
-		case "github", "github-tags", "git":
+		case "github", "github-releases", "github-tags", "git":
 			if !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(p.Repo) {
 				return nil, fmt.Errorf("invalid GitHub repository: %s", name)
 			}
@@ -266,7 +266,7 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 		default:
 			return nil, fmt.Errorf("unknown source for %s", name)
 		}
-		if p.Separator != "" && (p.Separator != "_" || (p.Source != "github" && p.Source != "github-tags")) {
+		if p.Separator != "" && (p.Separator != "_" || (p.Source != "github" && p.Source != "github-releases" && p.Source != "github-tags")) {
 			return nil, fmt.Errorf("unsupported version separator: %s", name)
 		}
 		if p.Pattern != "" {
@@ -305,7 +305,7 @@ type Runner func(context.Context, string, string, ...string) error
 func RunCommand(ctx context.Context, dir, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	for _, k := range []string{"PATH", "HOME", "LANG", "SSL_CERT_FILE", "TMPDIR"} {
+	for _, k := range []string{"PATH", "HOME", "LANG", "SSL_CERT_FILE", "TMPDIR", "QEMU_KERNEL_IMAGE", "QEMU_BASE_INITRAMFS", "QEMU_DISKS_PATH"} {
 		if v, ok := os.LookupEnv(k); ok {
 			cmd.Env = append(cmd.Env, k+"="+v)
 		}
@@ -400,7 +400,7 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 		if err := copyContext(directory, scratch); err != nil {
 			return fail(err)
 		}
-		if err := run(ctx, scratch, "python3", "update.py", "--expected-version", release.Build); err != nil {
+		if err := run(ctx, scratch, "go", "-C", root, "run", "./cmd/package", "plex-update", "--root", scratch, "--expected-version", release.Build); err != nil {
 			return fail(err)
 		}
 		prepared, err := readRecipe(filepath.Join(scratch, filepath.Base(paths[0])))

@@ -43,18 +43,15 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
-      - run: python3 scripts/install-melange.py --dest build/tools/melange
-      - name: Install package test dependencies
-        run: |
-          python3 -m venv build/venv
-          build/venv/bin/pip install -r wolfi/requirements.txt
+      - run: make tools
+      - run: build/tools/package install-melange --dest build/tools/melange
       - name: Test the publisher before selecting builds
-        run: PATH="$PWD/build/tools:$PATH" make PYTHON=build/venv/bin/python test check
+        run: PATH="$PWD/build/tools:$PATH" make test lint check
       - name: Select unpublished packages and staged retries
         id: plan
         env:
           PACKAGE: ${{ inputs.package }}
-        run: PATH="$PWD/build/tools:$PATH" python3 scripts/plan.py --package "$PACKAGE"
+        run: PATH="$PWD/build/tools:$PATH" build/tools/package plan --package "$PACKAGE"
   release:
     needs: plan
     if: needs.plan.outputs.publish != '[]'

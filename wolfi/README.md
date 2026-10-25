@@ -100,22 +100,22 @@ work. These defaults complement the service's kernel restrictions.
 
 Every ten minutes `wolfi-refresh.yml` takes one Wolfi snapshot and, for each package:
 
-1. **Capture** (`scripts/refresh.py`, `releases.py`): resolve the latest upstream
+1. **Capture** (`package refresh`): resolve the latest upstream
    stable release using the shared Go updater, then capture a suitable Wolfi recipe,
    its directory, pipelines and key unchanged. Lock the baseline separately from
    the selected release. Same-release maintenance commits are retained; newer
    upstream releases advance without waiting for Wolfi. Older-stream pins are rejected.
-2. **Verify and derive** (`verify.py`, `derive.py`): the package's `derive` hook edits
-   the recipe; `check` refuses an upstream change nobody has reviewed. Its source is
+2. **Verify and derive** (`package verify`, `package derive`): the package's YAML overlay edits
+   the recipe; guarded edits refuse an upstream change nobody has reviewed. Its source is
    fetched at the effective source's exact commit by one shared step, with mirrors and retries.
-3. **Prepare** (`prepare.py`): every patch applies at that commit as the build will
+3. **Prepare** (`package prepare`): every patch applies at that commit as the build will
    apply it, GNU patch with fuzz 2.
 4. **Build** (`wolfi-build.yml`): Melange on native x86_64 and aarch64 runners, then Wolfi's
    package tests and our own probes against the signed packages.
-5. **Publish** (`publish.py`, `feed.py`): a GitHub draft, immutable APKs, signed indexes,
+5. **Publish** (`package publish`, `package feed`): a GitHub draft, immutable APKs, signed indexes,
    then the release. Each index update is conditional on the version read; a concurrent
    publisher re-reads and merges. Existing versions stay available, and a failed
-   package leaves its previous release available while others publish. `feed.py`
+   package leaves its previous release available while others publish. `package feed`
    backfills existing signed releases even when no rebuild is needed. See
    [publishing](docs/design/publishing.md).
 
@@ -133,11 +133,11 @@ close when the step passes again. One package's failure holds back no other.
 ## Building locally
 
 On macOS Melange boots a QEMU guest, built once into `build/guest/ARCH` with apko; on
-Linux it uses bubblewrap. You need Python 3.12+ with PyYAML, git, GNU or BSD patch, and:
+Linux it uses bubblewrap. You need Go 1.27+, git, GNU patch, and:
 
 ```sh
 brew install apko qemu libarchive          # Linux: apko, bubblewrap, bsdtar
-python3 scripts/install-melange.py --dest build/tools/melange
+go run ../cmd/package install-melange --root .. --dest build/tools/melange
 make test                                  # every unit test, no network
 make discover                              # capture, verify, derive and patch all
 make PACKAGE=php build                     # one package, this machine's arch
@@ -169,9 +169,9 @@ as an administrator (keep Arch's system packages up to date before installing):
 
 ```sh
 # Fedora
-sudo dnf install bubblewrap python3-pip git make openssl patch util-linux shadow-utils
+sudo dnf install bubblewrap golang git make patch util-linux shadow-utils
 # CachyOS / Arch
-sudo pacman -S --needed bubblewrap python python-pip git make openssl patch util-linux shadow
+sudo pacman -S --needed bubblewrap go git make patch util-linux shadow
 ```
 
 The runner account needs subordinate UID and GID ranges covering at least 65536
@@ -191,23 +191,11 @@ duplicate owner environments or copies of their secrets are needed.
 
 ## Adding a package
 
-From the repository root, make `CATEGORY/NAME/` with `metadata.json`, `package.py`, `policy.json` (`{"revision": 1}`),
-`patches/series` and `tests/`. Copy the closest package. `package.py` defines:
-
-| Hook | Required | Purpose |
-|---|---|---|
-| `FAMILY` or `RECIPE` | yes | recipe prefix, such as `php-`, whose newest stable stream wins; or one recipe Wolfi versions within, such as `libffi` |
-| `SOURCES` or `sources(lock)` | yes | git URLs for the locked commit, first choice first |
-| `PATCHES` | yes | patch directory inside the build context; `None` with an empty `patches/series`, for a policy of build options alone |
-| `source_commit(config)` | yes | the commit Wolfi's recipe pins |
-| `full_version(lock)` | yes | the version we publish |
-| `context(pkg, dir)` | yes | copy patches and probes into the build context |
-| `derive(pkg, config, lock)` | yes | Wolfi's recipe to ours |
-| `check(pkg, upstream, derived)` | yes | refuse a derivation that lost a protection |
-| `TITLE`, `UPSTREAM` | no | names for issues and release notes |
-| `stable`, `check_policy`, `prepared`, `upstream_patches` | no | baseline selection and source preparation checks; retained Wolfi patch list |
-| `test_recipe`, `TEST_PACKAGES`, `TEST_UNPINNED`, `MIN_KERNEL` | no | package tests |
-| `check_apk`, `check_apks`, `gather`, `notes` | no | publication checks and notes |
+From the repository root, make `CATEGORY/NAME/` with `metadata.json`, `overlay.yaml`,
+`policy.json` (`{"revision": 1}`), `patches/series` and `tests/`. Copy the closest
+package. [The overlay guide](../docs/overlays.md) explains source mirrors,
+checked YAML edits, context files and shared probes. Recipe selection and the
+upstream release source belong in `metadata.json`; common behavior belongs in Go.
 
 Raise `policy.json`'s revision whenever patches, packaging or tests change behaviour:
 it moves the version above our previous build of the same Wolfi release.

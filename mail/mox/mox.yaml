@@ -9,7 +9,7 @@
 package:
   name: mox
   version: 0.0.17
-  epoch: 2
+  epoch: 3
   description: Modern full-featured open source secure mail server
   copyright:
     - license: MIT

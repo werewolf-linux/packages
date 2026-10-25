@@ -1,0 +1,7 @@
+{
+  "recipe": "postgresql-18.yaml",
+  "version": "18.6",
+  "epoch": 6,
+  "revision": 2,
+  "source_commit": "724edf9bde9d356724ad384a2e196edc3c9f80f7"
+}

@@ -1,0 +1,177 @@
+{
+  "package": {
+    "name": "libffi",
+    "version": "3.8.0",
+    "epoch": 4002,
+    "description": "portable foreign function interface library (Werewolf static trampolines)",
+    "copyright": [
+      {
+        "license": "MIT"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "upstream-origin:libffi:3.8.0-r2"
+      ]
+    }
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "build-base",
+        "busybox",
+        "ca-certificates-bundle",
+        "glibc-2.44-dev",
+        "libtool",
+        "texinfo"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/libffi/libffi.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 12ffd1f9dc56fcea79d2f742f424301ae668d663; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 12ffd1f9dc56fcea79d2f742f424301ae668d663\n      git -c core.hooksPath=/dev/null checkout -q --detach 12ffd1f9dc56fcea79d2f742f424301ae668d663\n      exit 0\n    fi\n  done\ndone\necho \"12ffd1f9dc56fcea79d2f742f424301ae668d663: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "autoconf/configure",
+      "with": {
+        "opts": "--disable-builddir --enable-portable-binary --disable-pax_emutramp --enable-exec-static-tramp"
+      }
+    },
+    {
+      "uses": "autoconf/make"
+    },
+    {
+      "name": "Static trampolines are built in",
+      "runs": "grep -qx '#define FFI_EXEC_STATIC_TRAMP 1' fficonfig.h\n"
+    },
+    {
+      "uses": "autoconf/make-install"
+    },
+    {
+      "uses": "strip"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "libffi-dev",
+      "description": "libffi headers",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        },
+        {
+          "runs": "cp -a \"${{targets.contextdir}}\" save-for-pic-dev\n"
+        }
+      ],
+      "dependencies": {
+        "runtime": [
+          "libffi"
+        ]
+      },
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "build-base"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "name": "Basic closure test",
+            "runs": "echo '#include <stdio.h>' > test_closure.c\necho '#include <ffi.h>' >> test_closure.c\necho 'void puts_binding(ffi_cif *cif, unsigned int *ret, void* args[], FILE *stream) { *ret = fputs(*(char **)args[0], stream); }' >> test_closure.c\necho 'int main() { ffi_cif cif; ffi_type *args[1]; ffi_closure *closure; int (*bound_puts)(char *); int rc; closure = ffi_closure_alloc(sizeof(ffi_closure), &bound_puts); if (closure) { args[0] = &ffi_type_pointer; if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_uint, args) == FFI_OK) { if (ffi_prep_closure_loc(closure, &cif, puts_binding, stdout, bound_puts) == FFI_OK) { rc = bound_puts(\"Hello World!\"); } } ffi_closure_free(closure); } return 0; }' >> test_closure.c\ngcc -Wno-incompatible-pointer-types -o test_closure test_closure.c -lffi\n./test_closure | grep -F \"Hello World\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libffi-pic-dev",
+      "pipeline": [
+        {
+          "runs": "rm -rf \"${{targets.contextdir}}\"\ncp -a save-for-pic-dev \"${{targets.contextdir}}\"\n# Lifted from Debian - provide an -fPIC option for linking.\n# Install to usr/lib rather than usr/lib64: usr/lib64 is a symlink\n# owned by wolfi-baselayout (part of the /usr merge), so packages\n# must not create it as a real directory.  Same approach used by gcc\n# and glibc/ld-linux in this repo.\nmkdir -p \"${{targets.contextdir}}/usr/lib\"\nmv \"${{targets.contextdir}}/usr/lib64/\"* \"${{targets.contextdir}}/usr/lib\"\nrmdir \"${{targets.contextdir}}/usr/lib64\"\ncp -p .libs/libffi_convenience.a \\\n  \"${{targets.contextdir}}/usr/lib/libffi.a\"\n"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "build-base"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/devpackage"
+          },
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "name": "Verify static PIC library links into a shared object",
+            "runs": "# Link /usr/lib/libffi.a into a shared object.  This requires the\n# .a to be compiled with -fPIC; if it is not, gcc fails with:\n#   relocation ... can not be used when making a shared object;\n#   recompile with -fPIC\n# This directly validates the purpose of libffi-pic-dev.\ncat > /tmp/test_ffi.c <<'EOF'\n#include <ffi.h>\nvoid cb(ffi_cif *cif, void *ret, void **args, void *data) {\n  *(ffi_arg *)ret = 0;\n}\nEOF\nif ! gcc -fPIC -shared -o /tmp/libtest.so /tmp/test_ffi.c /usr/lib/libffi.a; then\n  echo \"FAIL: gcc compilation failed\" >&2\n  exit 1\nfi\necho \"PASS: gcc compilation succeeded\"\nif [ ! -s /tmp/libtest.so ]; then\n  echo \"FAIL: /tmp/libtest.so is missing or empty\" >&2\n  exit 1\nfi\necho \"PASS: /tmp/libtest.so is non-zero size\"\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "libffi-doc",
+      "description": "libffi docs",
+      "pipeline": [
+        {
+          "uses": "split/manpages"
+        },
+        {
+          "uses": "split/infodir"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/tw/docs"
+          }
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "build-base",
+          "libffi-dev"
+        ]
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "uses": "test/no-docs"
+      },
+      {
+        "name": "Functional FFI call test",
+        "runs": "cat > /tmp/test_ffi_call.c << 'EOF'\n#include <ffi.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Use libffi to call strlen() via the FFI interface */\nint main(void) {\n  ffi_cif cif;\n  ffi_type *args[1];\n  void *values[1];\n  ffi_arg result;\n  char *str = \"Hello, libffi!\";\n\n  args[0] = &ffi_type_pointer;\n  values[0] = &str;\n\n  if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1,\n                   &ffi_type_ulong, args) != FFI_OK) {\n    fprintf(stderr, \"ffi_prep_cif failed\\n\");\n    return 1;\n  }\n\n  ffi_call(&cif, FFI_FN(strlen), &result, values);\n\n  if ((size_t)result != strlen(str)) {\n    fprintf(stderr, \"FFI call returned %zu, expected %zu\\n\",\n            (size_t)result, strlen(str));\n    return 1;\n  }\n\n  printf(\"FFI call succeeded: strlen(\\\"%s\\\") = %zu\\n\",\n         str, (size_t)result);\n  return 0;\n}\nEOF\ngcc -o /tmp/test_ffi_call /tmp/test_ffi_call.c -lffi\n/tmp/test_ffi_call | grep -F \"FFI call succeeded\"\n"
+      },
+      {
+        "name": "A closure works with executable-memory gain refused",
+        "runs": "work=$(mktemp -d)\ncat > \"$work/probe.c\" <<'WEREWOLF_LIBFFI_PROBE'\n/*\n * With executable-memory gain refused (PR_SET_MDWE), as werewolf refuses it\n * every process, a libffi closure must still be made and called, its code\n * must lie in libffi.so's own mapping, and no mapping may be both writable\n * and executable. Wolfi's libffi, without static trampolines, writes each\n * closure's code into a file it maps twice, writable and executable, which\n * MDWE allows but werewolf's noexec mounts and memfd_noexec refuse: its\n * closure code is then not the library's.\n */\n#include <ffi.h>\n#include <stdio.h>\n#include <string.h>\n#include <sys/prctl.h>\n\n#ifndef PR_SET_MDWE\n#define PR_SET_MDWE 65\n#endif\n#ifndef PR_MDWE_REFUSE_EXEC_GAIN\n#define PR_MDWE_REFUSE_EXEC_GAIN 1\n#endif\n\nstatic void plus_one(ffi_cif *cif, void *ret, void **args, void *data)\n{\n\t(void)cif;\n\t(void)data;\n\t*(ffi_arg *)ret = *(int *)args[0] + 1;\n}\n\nint main(void)\n{\n\tffi_cif cif;\n\tffi_type *arg = &ffi_type_sint;\n\tffi_closure *closure;\n\tvoid *code;\n\tchar line[512], perms[5], path[256];\n\tunsigned long start, end;\n\tint in_library = 0;\n\tFILE *maps;\n\n\tif (prctl(PR_SET_MDWE, PR_MDWE_REFUSE_EXEC_GAIN, 0, 0, 0) != 0) {\n\t\tperror(\"PR_SET_MDWE\");\n\t\treturn 1;\n\t}\n\tclosure = ffi_closure_alloc(sizeof(ffi_closure), &code);\n\tif (closure == NULL || ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_sint, &arg) != FFI_OK ||\n\t    ffi_prep_closure_loc(closure, &cif, plus_one, NULL, code) != FFI_OK) {\n\t\tfputs(\"libffi: no closure under MDWE\\n\", stderr);\n\t\treturn 1;\n\t}\n\tif (((int (*)(int))code)(41) != 42) {\n\t\tfputs(\"libffi: the closure returned the wrong value\\n\", stderr);\n\t\treturn 1;\n\t}\n\tmaps = fopen(\"/proc/self/maps\", \"r\");\n\tif (maps == NULL) {\n\t\tperror(\"/proc/self/maps\");\n\t\treturn 1;\n\t}\n\twhile (fgets(line, sizeof(line), maps) != NULL) {\n\t\tpath[0] = '\\0';\n\t\tif (sscanf(line, \"%lx-%lx %4s %*s %*s %*s %255s\", &start, &end, perms, path) < 3)\n\t\t\tcontinue;\n\t\tif (strchr(perms, 'w') && strchr(perms, 'x')) {\n\t\t\tfprintf(stderr, \"libffi: writable code: %s\", line);\n\t\t\treturn 1;\n\t\t}\n\t\tif ((unsigned long)code >= start && (unsigned long)code < end) {\n\t\t\tin_library = strstr(path, \"/libffi.so\") != NULL;\n\t\t\tif (!in_library)\n\t\t\t\tfprintf(stderr, \"libffi: closure code outside the library: %s\", line);\n\t\t}\n\t}\n\tif (!in_library)\n\t\treturn 1;\n\tffi_closure_free(closure);\n\tputs(\"libffi: closure called under MDWE, from the library's read-only code\");\n\treturn 0;\n}\nWEREWOLF_LIBFFI_PROBE\ngcc -o \"$work/probe\" \"$work/probe.c\" -lffi\n\"$work/probe\"\n"
+      }
+    ]
+  }
+}

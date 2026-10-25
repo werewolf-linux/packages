@@ -14,8 +14,7 @@
     "minimized_reason": "Keep JPEG, PNG, WebP, GIF, EXIF and ICC processing; omit unused loaders, modules, C++ API and documentation.",
     "pledge_reason": "This package removes features; it does not implement a pledge-style capability policy. Service restrictions live in the form.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py",
+      "overlay.yaml",
       "tests/probe.sh"
     ]
   },
@@ -29,7 +28,7 @@
         "what": "Keep JPEG, PNG, WebP, GIF, EXIF and ICC processing; omit unused loaders, modules, C++ API and documentation.",
         "why": "Retain the media operations required by Mastodon while reducing library integrations and code paths.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/probe.sh"
         ]
       }

@@ -1,0 +1,7 @@
+{
+  "recipe": "libcap.yaml",
+  "version": "2.78",
+  "epoch": 4,
+  "revision": 1,
+  "source_commit": "a1fef85d27d0ee12729a64d1c9b2183c6007e56a"
+}

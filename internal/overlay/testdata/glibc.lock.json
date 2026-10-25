@@ -1,0 +1,7 @@
+{
+  "recipe": "glibc-2.44.yaml",
+  "version": "2.44",
+  "epoch": 8,
+  "revision": 19,
+  "source_commit": "34106fee698c83eb0af71d4d0381e66b399be746"
+}

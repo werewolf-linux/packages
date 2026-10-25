@@ -10,7 +10,7 @@
 package:
   name: mediawiki
   version: "1.46.2"
-  epoch: 1
+  epoch: 2
   description: The wiki engine of Wikipedia, long-term release
   copyright:
     - license: GPL-2.0-or-later

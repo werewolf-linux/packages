@@ -1,7 +1,7 @@
 package:
   name: musl-werewolf
   version: 1.2.6
-  epoch: 1
+  epoch: 2
   description: musl with local resolver socket confinement
   copyright:
     - license: MIT
@@ -17,6 +17,9 @@ pipeline:
     with:
       uri: https://musl.libc.org/releases/musl-${{package.version}}.tar.gz
       expected-sha256: d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a
+      # musl.libc.org takes 4-7 s to finish TLS and over 10 s to answer: past
+      # wget's default 5 s, which fails the handshake without a retry.
+      timeout: 60
   - uses: patch
     with:
       patches: 0001-regcomp-overflow.patch

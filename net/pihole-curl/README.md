@@ -21,8 +21,8 @@ does not use cookies or MIME; local-file lists are handled by its own script.
 
 ## Security Considerations
 
-`check-linkage.py` requires exactly the expected musl/OpenSSL/zlib dependencies.
-`probe.py` checks HTTPS trust, redirects, uploads, ETags and rejected encodings.
+The shared Go curl probe requires exactly the expected musl/OpenSSL/zlib dependencies.
+The same probe checks HTTPS trust, redirects, uploads, ETags and rejected encodings.
 The form's blocklist test verifies the installed binary inside the actual OCI
 tree. Changing Pi-hole's libc or OpenSSL ABI requires rebuilding and retesting.
 

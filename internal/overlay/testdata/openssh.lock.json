@@ -1,0 +1,7 @@
+{
+  "recipe": "openssh.yaml",
+  "version": "10.6_p1",
+  "epoch": 0,
+  "revision": 2,
+  "source_commit": "a8c72b842423f0774f542d3c2197247c3dd28d74"
+}

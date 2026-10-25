@@ -4,7 +4,7 @@
 package:
   name: pg-gvm
   version: 22.6.18
-  epoch: 5
+  epoch: 6
   description: Greenbone PostgreSQL extension and its base library
   copyright:
     - license: GPL-3.0-or-later

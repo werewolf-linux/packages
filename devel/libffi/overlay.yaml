@@ -1,0 +1,54 @@
+# Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+title: libffi
+sources:
+- https://github.com/libffi/libffi.git
+description-suffix: ' (Werewolf static trampolines)'
+min-kernel: '6.3'
+test-unpinned:
+- libffi-dev
+- libffi-pic-dev
+origin-main-only: true
+checks:
+- path: [pipeline, uses=git-checkout]
+  expect:
+    uses: git-checkout
+    with:
+      repository: https://github.com/libffi/libffi.git
+      tag: v${{package.version}}
+      expected-commit: ${lock.source_commit}
+- path: [pipeline]
+  shape:
+  - uses=git-checkout
+  - uses=autoconf/configure
+  - uses=autoconf/make
+  - uses=autoconf/make-install
+  - uses=strip
+- path: [subpackages]
+  shape:
+  - name=libffi-dev
+  - name=libffi-pic-dev
+  - name=libffi-doc
+- path: [pipeline, uses=autoconf/configure, with, opts]
+  expect: |
+    --disable-builddir --enable-portable-binary --enable-pax_emutramp --disable-exec-static-tramp
+edits:
+- path: [pipeline]
+  append:
+  - name: Static trampolines are built in
+    runs: |
+      grep -qx '#define FFI_EXEC_STATIC_TRAMP 1' fficonfig.h
+  before: '3'
+- path: [pipeline, uses=autoconf/configure, with, opts]
+  replace:
+  - old: |
+      --disable-builddir --enable-portable-binary --enable-pax_emutramp --disable-exec-static-tramp
+    new: --disable-builddir --enable-portable-binary --disable-pax_emutramp --enable-exec-static-tramp
+- path: [test, pipeline]
+  append:
+  - name: A closure works with executable-memory gain refused
+    runs: |
+      work=$(mktemp -d)
+      cat > "$work/probe.c" <<'WEREWOLF_LIBFFI_PROBE'
+      ${file:tests/probe.c}WEREWOLF_LIBFFI_PROBE
+      gcc -o "$work/probe" "$work/probe.c" -lffi
+      "$work/probe"

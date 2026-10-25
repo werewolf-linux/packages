@@ -4,7 +4,7 @@
 package:
   name: velociraptor
   version: 0.77.3
-  epoch: 1
+  epoch: 2
   description: Endpoint visibility and collection server
   copyright:
     - license: AGPL-3.0-only

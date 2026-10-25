@@ -1,5 +1,5 @@
 # melange-guest: Alpine's linux-virt, the kernel melange's QEMU runner boots
-# where there is no bubblewrap, as on macOS (scripts/build.py). melange's
+# where there is no bubblewrap, as on macOS (the shared Go builder). melange's
 # initramfs loads its drivers as modules, and werewolf's kernel has none. It
 # only builds packages. Alpine's keys are in alpine-keys/; werewolf's
 # boot/melange-guest.yaml is the same recipe.

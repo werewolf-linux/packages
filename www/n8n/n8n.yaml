@@ -1,7 +1,7 @@
 package:
   name: n8n
   version: "2.44.6"
-  epoch: 2
+  epoch: 3
   description: n8n workflow automation on hardened Node.js
   copyright:
     - license: LicenseRef-Sustainable-Use

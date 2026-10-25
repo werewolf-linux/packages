@@ -14,8 +14,7 @@
     "minimized_reason": "Omit npm/npx, inspector, SEA, Brotli/Zstd implementations and unused subpackages. Omit node:ffi while retaining native addons, SQLite and TypeScript.",
     "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py"
+      "overlay.yaml"
     ]
   },
   "wolfi": {
@@ -28,16 +27,14 @@
         "what": "Omit npm/npx, inspector, SEA and unused subpackages.",
         "why": "Keep the server runtime without package installation and debugging entrypoints.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Ignore runtime environment options, refuse effective-root initialization, and gate execution, native loading, inline input and writable modules.",
         "why": "Require explicit root-held allowances for dangerous runtime capability groups.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
@@ -46,14 +43,14 @@
         "evidence": [
           "patches/0008-omit-optional-compression-libraries.patch",
           "tests/codecs.cjs",
-          "package.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Disable the standalone node:ffi API.",
         "why": "Keep native addons used by n8n without an additional general-purpose FFI entrypoint.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/codecs.cjs"
         ]
       }

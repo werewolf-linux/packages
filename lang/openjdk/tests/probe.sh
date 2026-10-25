@@ -2,7 +2,7 @@
 # probe.sh WORK holds the installed JDK to the protections patches/series
 # compiles in, then takes each back with an allowance and sees it return.
 # WORK holds Probe.java. The package test runs it as root, with
-# /etc/runtime-hardening/allow free to use (package.py embeds it).
+# /etc/runtime-hardening/allow free to use (the YAML overlay includes it).
 set -eu
 work=$1
 allow=/etc/runtime-hardening/allow/all/java

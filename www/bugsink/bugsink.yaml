@@ -3,7 +3,7 @@
 package:
   name: bugsink
   version: "2.6.2"
-  epoch: 2
+  epoch: 3
   description: Error tracking compatible with Sentry SDKs
   copyright:
     - license: PolyForm-Shield-1.0.0
@@ -41,11 +41,14 @@ pipeline:
       site=/usr/lib/bugsink/lib/python3.15/site-packages
       # ctypes initializes libffi callbacks on import. Compile the queue's three
       # inotify calls instead, so the service needs neither JIT nor python:native.
-      /usr/lib/bugsink/bin/python inotify-build.py "$site"
+      /usr/lib/bugsink/bin/python inotify-module.py "$site"
+      werewolf-tools/package-helper --action inotify --root "$site"
+      /usr/lib/bugsink/bin/python -m compileall -q -f --invalidation-mode checked-hash "$site/inotify_simple.py"
+      /usr/lib/bugsink/bin/python inotify-check.py
       # Keep CFFI for the compiled inotify adapter. Minidumps and Brotli
       # are removed together with their eager imports and configuration.
       patch --batch --fuzz=0 -p1 -d "$site" < disable-optional.patch
-      /usr/lib/bugsink/bin/python optional-metadata.py "$site"
+      werewolf-tools/package-helper --action metadata --root "$site"
       uv pip uninstall --python /usr/lib/bugsink/bin/python brotli symbolic milksnake setuptools wheel
       /usr/lib/bugsink/bin/python -m compileall -q "$site/bugsink" "$site/events" "$site/files" "$site/sentry"
       cp "$site/bugsink/conf_templates/docker.py.template" "$site/bugsink_conf.py"

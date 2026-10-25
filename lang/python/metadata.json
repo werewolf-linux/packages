@@ -14,7 +14,7 @@
     "minimized_reason": "Omit readline and curses native extensions in addition to GUI, JIT and free-threaded variants. Retain SQLite, GDBM and shelve for application persistence.",
     "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
     "evidence": [
-      "package.py",
+      "overlay.yaml",
       "tests/probe.py",
       "tests/probe.sh"
     ]
@@ -29,23 +29,21 @@
         "what": "Omit GUI, documentation, alternate JIT and unused interpreter variants.",
         "why": "Publish the interpreter and development packages needed by current consumers.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Ignore runtime environment settings and user sites; refuse effective-root startup; gate ctypes, pickle globals, inline input and writable main scripts.",
         "why": "Reduce attacker-controlled code loading paths while preserving explicit root-held allowances.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Omit readline and curses native extensions in addition to GUI, JIT and free-threaded variants. Retain SQLite, GDBM and shelve for application persistence.",
         "why": "Reduce optional runtime dependencies while preserving tested common consumers.",
         "evidence": [
-          "package.py",
+          "overlay.yaml",
           "tests/probe.py",
           "tests/probe.sh"
         ]

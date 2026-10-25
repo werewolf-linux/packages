@@ -1,0 +1,7 @@
+{
+  "recipe": "curl.yaml",
+  "version": "8.23.0",
+  "epoch": 2,
+  "revision": 6,
+  "source_commit": "3163ec065643ba20709f190111f42c3e1fe95273"
+}

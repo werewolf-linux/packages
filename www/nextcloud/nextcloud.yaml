@@ -7,7 +7,7 @@
 package:
   name: nextcloud
   version: "35.0.2"
-  epoch: 1
+  epoch: 2
   description: Nextcloud server, a safe home for all your data
   copyright:
     - license: AGPL-3.0-or-later

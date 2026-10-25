@@ -12,8 +12,7 @@
     "pledge_reason": "The Pi-hole form confines the service; curl does not enforce package-level capability grants.",
     "evidence": [
       "pihole-curl.yaml",
-      "probe.py",
-      "check-linkage.py"
+      "packaging/changes.yaml"
     ]
   },
   "wolfi": {
@@ -25,7 +24,7 @@
         "why": "Preserve the OCI image ABI and its TLS/zlib libraries without altering the host Wolfi package solver.",
         "evidence": [
           "pihole-curl.yaml",
-          "check-linkage.py"
+          "packaging/changes.yaml"
         ]
       }
     ],

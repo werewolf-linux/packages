@@ -1,0 +1,141 @@
+{
+  "package": {
+    "name": "libvips",
+    "version": "8.18.7",
+    "epoch": 3001,
+    "description": "A fast image processing library with low memory needs",
+    "copyright": [
+      {
+        "license": "LGPL-2.1-or-later"
+      }
+    ],
+    "resources": {
+      "cpu": "2",
+      "memory": "6Gi"
+    },
+    "test-resources": {
+      "cpu": "2",
+      "memory": "1Gi"
+    },
+    "dependencies": {
+      "provides": [
+        "upstream-origin:libvips:8.18.7-r1",
+        "libvips-hardened=${{package.full-version}}"
+      ]
+    }
+  },
+  "environment": {
+    "contents": {
+      "packages": [
+        "build-base",
+        "busybox",
+        "expat-dev",
+        "glib-dev",
+        "glibc-2.44-dev",
+        "libexif-dev",
+        "libjpeg-turbo-dev",
+        "libpng-dev",
+        "libwebp-dev",
+        "lcms2-dev",
+        "meson",
+        "zlib-dev"
+      ]
+    }
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/libvips/libvips.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 24ad4d042940e6bf99a68871ba886ca8847c9c82; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 24ad4d042940e6bf99a68871ba886ca8847c9c82\n      git -c core.hooksPath=/dev/null checkout -q --detach 24ad4d042940e6bf99a68871ba886ca8847c9c82\n      exit 0\n    fi\n  done\ndone\necho \"24ad4d042940e6bf99a68871ba886ca8847c9c82: every source failed, three times\" >&2\nexit 1\n"
+    },
+    {
+      "uses": "meson/configure",
+      "with": {
+        "opts": "-Dauto_features=disabled -Dheif=disabled -Dmodules=disabled -Dexif=enabled -Djpeg=enabled -Dpng=enabled -Dwebp=enabled -Dlcms=enabled -Dzlib=enabled -Dnsgif=true -Dppm=false -Danalyze=false -Dradiance=false -Dcplusplus=false -Ddeprecated=false -Dexamples=false -Ddocs=false"
+      }
+    },
+    {
+      "uses": "meson/compile"
+    },
+    {
+      "uses": "meson/install"
+    },
+    {
+      "uses": "strip"
+    },
+    {
+      "name": "Omit CLI manpages",
+      "runs": "rm -rf \"${{targets.destdir}}/usr/share/man\"\n"
+    }
+  ],
+  "subpackages": [
+    {
+      "name": "libvips-dev",
+      "pipeline": [
+        {
+          "uses": "split/dev"
+        }
+      ],
+      "test": {
+        "pipeline": [
+          {
+            "uses": "test/pkgconf"
+          },
+          {
+            "uses": "test/tw/ldd-check"
+          }
+        ]
+      },
+      "dependencies": {
+        "provides": [
+          "upstream-origin:libvips:8.18.7-r1"
+        ]
+      }
+    }
+  ],
+  "update": {
+    "enabled": false
+  },
+  "test": {
+    "pipeline": [
+      {
+        "runs": "vips --version\nvipsheader --version\nvipsthumbnail --version\n"
+      },
+      {
+        "uses": "test/tw/ldd-check"
+      },
+      {
+        "name": "Create a test PNG image",
+        "runs": "# Create a 100x100 black PNG image using the vips CLI\nvips black /tmp/test.png 100 100\ntest -f /tmp/test.png\n"
+      },
+      {
+        "name": "Read image metadata with vipsheader",
+        "runs": "vipsheader -a /tmp/test.png | grep -F \"width: 100\"\nvipsheader -a /tmp/test.png | grep -F \"height: 100\"\n"
+      },
+      {
+        "name": "Convert PNG to JPEG",
+        "runs": "vips jpegsave /tmp/test.png /tmp/test.jpg\ntest -f /tmp/test.jpg\nvipsheader -a /tmp/test.jpg | grep -F \"width: 100\"\n"
+      },
+      {
+        "name": "Resize image with vipsthumbnail",
+        "runs": "vipsthumbnail /tmp/test.png --size 50x50 -o /tmp/thumb.png\ntest -f /tmp/thumb.png\nvipsheader -f width /tmp/thumb.png | grep -F \"50\"\n"
+      },
+      {
+        "name": "Crop image with vips extract_area",
+        "runs": "vips extract_area /tmp/test.png /tmp/crop.png 0 0 40 40\ntest -f /tmp/crop.png\nvipsheader -f width /tmp/crop.png | grep -F \"40\"\nvipsheader -f height /tmp/crop.png | grep -F \"40\"\n"
+      },
+      {
+        "name": "Invert image colours",
+        "runs": "vips invert /tmp/test.png /tmp/inverted.png\ntest -f /tmp/inverted.png\n"
+      },
+      {
+        "name": "Retained formats work and unused loaders are absent",
+        "runs": "set -eu\nwork=$(mktemp -d)\ntrap 'rm -rf \"$work\"' EXIT\nvips black \"$work/source.png\" 32 24 --bands 3\nfor format in jpg png webp; do\n    vips copy \"$work/source.png\" \"$work/input.$format\"\n    vipsthumbnail \"$work/input.$format\" --size 16x16 -o \"$work/thumb-$format.png\"\n    test \"$(vipsheader -f width \"$work/thumb-$format.png\")\" = 16\n    test \"$(vipsheader -f height \"$work/thumb-$format.png\")\" = 12\ndone\nprintf '%s' R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7 | base64 -d > \"$work/input.gif\"\nvips copy \"$work/input.gif\" \"$work/gif.png\"\ntest \"$(vipsheader -f width \"$work/gif.png\")\" = 1\nvips icc_transform \"$work/source.png\" \"$work/colour.png\" srgb\ntest \"$(vipsheader -f width \"$work/colour.png\")\" = 32\nvips -l > \"$work/operations\"\nfor operation in jpegload pngload webpload gifload icc_transform autorot; do\n    grep -F \"$operation\" \"$work/operations\"\ndone\nfor operation in heifload svgload tiffload pdfload magickload jp2kload jxlload openslideload; do\n    if grep -F \"$operation\" \"$work/operations\"; then\n        echo \"unexpected loader: $operation\" >&2\n        exit 1\n    fi\ndone\necho 'PASS: JPEG/PNG/WebP/GIF thumbnails, colour conversion and omitted loaders'\n"
+      }
+    ]
+  }
+}

@@ -10,7 +10,7 @@
 package:
   name: limesurvey
   version: 7.5.1
-  epoch: 2
+  epoch: 3
   description: Online survey tool
   copyright:
     - license: GPL-2.0-or-later

@@ -12,7 +12,7 @@
 package:
   name: open-webui
   version: "0.12.4"
-  epoch: 0
+  epoch: 1
   description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
   copyright:
     - license: LicenseRef-Open-WebUI
@@ -59,7 +59,7 @@ pipeline:
   # whole application, as the slim build, proves it. Bytecode is compiled
   # here: the machine's image is read-only.
   - runs: |
-      python3.12 minimal-requirements.py requirements-slim.txt
+      werewolf-tools/package-helper --action requirements
       uv venv --python /usr/bin/python3.12 /usr/lib/open-webui
       export VIRTUAL_ENV=/usr/lib/open-webui
       uv pip install --exclude-newer 2026-10-25T11:09:14Z \
@@ -69,7 +69,7 @@ pipeline:
       # LangSmith supports uncompressed traces; its declared zstandard dependency
       # is optional in code and not needed by document splitting.
       uv pip uninstall zstandard
-      python3.12 optional-metadata.py /usr/lib/open-webui/lib/python3.12/site-packages
+      werewolf-tools/package-helper --action metadata --root /usr/lib/open-webui/lib/python3.12/site-packages
       patch --batch --fuzz=0 -p1 -d /usr/lib/open-webui/lib/python3.12/site-packages < optional-features.patch
       d=$(mktemp -d)
       DATA_DIR=$d STATIC_DIR=$d/static USE_SLIM_DOCKER=true WEBUI_SECRET_KEY=build \

@@ -14,8 +14,7 @@
     "minimized_reason": "Omit PEAR, phpdbg, Apache integration, CGI, Phar, unused extensions, readline, XPM and documentation.",
     "pledge_reason": "Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.",
     "evidence": [
-      "package.py",
-      "tests/test_derivation.py"
+      "overlay.yaml"
     ]
   },
   "wolfi": {
@@ -28,16 +27,14 @@
         "what": "Omit PEAR, phpdbg, Apache integration, CGI, Phar, unused extensions, readline, XPM and documentation.",
         "why": "Keep the CLI/FPM runtime and extensions required by maintained application forms.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       },
       {
         "what": "Refuse effective-root initialization and gate native loading, execution, deserialization, inline/writable code and optional OS operations with capability allowances.",
         "why": "Deny dangerous runtime operations by default and make exceptions explicit in the read-only root.",
         "evidence": [
-          "package.py",
-          "tests/test_derivation.py"
+          "overlay.yaml"
         ]
       }
     ],
