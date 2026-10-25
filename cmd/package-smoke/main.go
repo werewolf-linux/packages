@@ -179,7 +179,7 @@ spec = importlib.util.spec_from_file_location('smoke_runner', sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.ROOT = pathlib.Path(sys.argv[2])
-module.CAPABILITIES += ('sys_admin', 'net_admin', 'setpcap')
+module.CAPABILITIES = tuple(dict.fromkeys(module.CAPABILITIES + ('sys_admin', 'net_admin', 'setpcap')))
 module.main()
 `
 	tools := filepath.Join(directory, "build/tools")
@@ -220,7 +220,7 @@ func smokeCommand(runs string) string {
 	// as their owner, then run every package command in the non-root sandbox.
 	return "chmod 755 / /home/build\n" +
 		"exec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
-		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
+		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --ro-bind /proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
 }
