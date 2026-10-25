@@ -182,20 +182,26 @@ module.ROOT = pathlib.Path(sys.argv[2])
 module.CAPABILITIES += ('sys_admin',)
 module.main()
 `
-	cmd := exec.CommandContext(ctx, "python3", "-c", code, filepath.Join(root, "scripts/setup-runner.py"), directory)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", noop, err
-	}
 	tools := filepath.Join(directory, "build/tools")
 	cleanup := func() error {
+		profile := filepath.Join(tools, "bwrap.apparmor")
+		if _, err := os.Stat(profile); os.IsNotExist(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(cleanupCtx, "/usr/sbin/apparmor_parser", "--remove", filepath.Join(tools, "bwrap.apparmor"))
+		cmd := exec.CommandContext(cleanupCtx, "/usr/sbin/apparmor_parser", "--remove", profile)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("remove smoke launcher profile: %w: %s", err, output)
 		}
 		return nil
+	}
+	cmd := exec.CommandContext(ctx, "python3", "-c", code, filepath.Join(root, "scripts/setup-runner.py"), directory)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", noop, errors.Join(err, cleanup())
 	}
 	return tools, cleanup, nil
 }
