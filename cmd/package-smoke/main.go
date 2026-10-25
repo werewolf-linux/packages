@@ -17,9 +17,10 @@ import (
 )
 
 type spec struct {
-	Packages []string `json:"packages"`
-	Runs     string   `json:"runs"`
-	Allow    []string `json:"allow,omitempty"`
+	Packages       []string `json:"packages"`
+	Runs           string   `json:"runs"`
+	Allow          []string `json:"allow,omitempty"`
+	PreserveMtimes []string `json:"preserve_mtimes,omitempty"`
 }
 
 func main() {
@@ -121,6 +122,10 @@ func check(name, arch string) error {
 	if err != nil {
 		return err
 	}
+	setup, err := restoreMtimes(apks, s.PreserveMtimes)
+	if err != nil {
+		return err
+	}
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
@@ -130,7 +135,7 @@ func check(name, arch string) error {
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
-			"pipeline": []map[string]string{{"runs": smokeCommand(strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version))}},
+			"pipeline": []map[string]string{{"runs": setup + smokeCommand(strings.ReplaceAll(s.Runs, "${{package.version}}", meta.Version))}},
 		},
 	}
 	data, err = yaml.Marshal(config)

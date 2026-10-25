@@ -8,6 +8,21 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from zipfile import ZipFile
+
+
+# An optimized server records provider mtimes during kc.sh build. Check the
+# installed APK before starting services so packaging drift identifies the JAR.
+installed = Path('/usr/lib/keycloak')
+with ZipFile(installed / 'lib/quarkus/generated-bytecode.jar') as archive:
+    properties = dict(line.split('=', 1) for line in archive.read(
+        'META-INF/keycloak-persisted.properties').decode().splitlines()
+        if line.startswith('kc.provider.file.'))
+for provider in (installed / 'providers').glob('*.jar'):
+    key = 'kc.provider.file.' + provider.name + '.last-modified'
+    recorded = properties[key]
+    actual = str(provider.stat().st_mtime_ns // 1_000_000)
+    assert recorded == actual, f'{provider.name}: build mtime={recorded}, installed mtime={actual}'
 
 
 def request(url, data=None, token=None, form=False):
