@@ -92,10 +92,6 @@ func check(name, arch string) error {
 	if err != nil {
 		return err
 	}
-	// Keep the scratch parent traversable for installed-package probes.
-	if err := os.Chmod(dir, 0o755); err != nil {
-		return err
-	}
 	// Test roots can be gigabytes. A runner's /tmp may be a small tmpfs.
 	if err := os.Setenv("TMPDIR", dir); err != nil {
 		return err
@@ -128,7 +124,9 @@ func check(name, arch string) error {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
+			// Melange needs its normal setup identity and capabilities to reach
+			// runner-owned paths. smokeCommand drops both inside the runtime.
+			"environment": map[string]any{"paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
