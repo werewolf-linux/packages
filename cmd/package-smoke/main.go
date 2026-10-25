@@ -92,6 +92,10 @@ func check(name, arch string) error {
 	if err != nil {
 		return err
 	}
+	// Keep the scratch parent traversable for installed-package probes.
+	if err := os.Chmod(dir, 0o755); err != nil {
+		return err
+	}
 	// Test roots can be gigabytes. A runner's /tmp may be a small tmpfs.
 	if err := os.Setenv("TMPDIR", dir); err != nil {
 		return err
