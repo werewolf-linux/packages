@@ -128,7 +128,9 @@ func check(name, arch string) error {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
+			// ci-root already owns the fixture. Even run-as "0" asks Melange
+			// for another user namespace before it can reach the private guest.
+			"environment": map[string]any{"paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
