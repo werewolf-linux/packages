@@ -1,5 +1,9 @@
 #!/bin/sh
 set -eu
+if [ "$(id -u)" -eq 0 ]; then
+    id pgtest >/dev/null 2>&1 || useradd -M -s /bin/sh pgtest
+    exec su -p -s /bin/sh pgtest -c "exec sh '$0'"
+fi
 bindir=$(pg_config --bindir)
 export PATH=$bindir:$PATH
 # Verify both sides of authentication: libpq must not retain GSSAPI/LDAP either.
@@ -10,15 +14,13 @@ for binary in "$bindir/postgres" /usr/lib/libpq.so.5; do
     fi
 done
 pg_config --configure | grep -- '--with-llvm'
-id pgtest >/dev/null 2>&1 || useradd -M -s /bin/sh pgtest
 work=$(mktemp -d)
-trap 'su -p -s /bin/sh pgtest -c "pg_ctl -D $work/data -m immediate stop" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
-chown pgtest "$work"
+export HOME=$work
+trap 'pg_ctl -D "$work/data" -m immediate stop >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 export PGHOST=$work PGUSER=pgtest PGDATABASE=postgres PGPORT=55432
-su -p -s /bin/sh pgtest -c "initdb -D $work/data --no-locale --encoding=UTF8 --auth-local=peer --auth-host=scram-sha-256"
+initdb -D "$work/data" --no-locale --encoding=UTF8 --auth-local=peer --auth-host=scram-sha-256
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$work/server.key" -out "$work/server.crt" -days 1 -subj /CN=localhost -addext subjectAltName=DNS:localhost
 chmod 600 "$work/server.key"
-chown pgtest "$work/server.key" "$work/server.crt"
 cat >> "$work/data/postgresql.conf" <<EOF
 unix_socket_directories = '$work'
 port = 55432
@@ -27,8 +29,8 @@ ssl = on
 ssl_cert_file = '$work/server.crt'
 ssl_key_file = '$work/server.key'
 EOF
-su -p -s /bin/sh pgtest -c "pg_ctl -D $work/data -l $work/server.log -w start"
-su -p -s /bin/sh pgtest -c "psql -v ON_ERROR_STOP=1" <<'SQL'
+pg_ctl -D "$work/data" -l "$work/server.log" -w start
+psql -v ON_ERROR_STOP=1 <<'SQL'
 ALTER ROLE pgtest PASSWORD 'consumer-test-password';
 CREATE EXTENSION pg_trgm;
 CREATE EXTENSION pgcrypto;
@@ -44,7 +46,7 @@ END $$;
 SQL
 export PGPASSWORD=consumer-test-password
 # TLS hostname verification plus password authentication, as application drivers use.
-export PGHOST=localhost PGSSLMODE=verify-full PGSSLROOTCERT=$work/server.crt
+export PGHOST=localhost PGHOSTADDR=127.0.0.1 PGSSLMODE=verify-full PGSSLROOTCERT=$work/server.crt
 [ "$(psql -At -c "SELECT body->>'count' FROM documents")" = 3 ]
 psql -At -c 'SET jit_above_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT sum(i) FROM generate_series(1,10000) AS i' > "$work/jit.json"
 grep '"JIT"' "$work/jit.json"

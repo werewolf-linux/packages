@@ -1,6 +1,7 @@
 """Latest stable PostgreSQL from Wolfi's recipe, without optional authentication."""
 from copy import deepcopy
 from pathlib import Path
+import json
 import re
 from derive import fetch
 
@@ -32,14 +33,35 @@ def full_version(lock):
 
 
 def context(pkg, destination):
-    pass
+    retarget_directories(pkg, destination / 'per-version-dirs.patch')
+
+
+def prepared(pkg, destination):
+    retarget_directories(pkg, destination / 'src/Makefile.global.in')
+
+
+def retarget_directories(pkg, path):
+    # Keep the reviewed Wolfi patch intact in captured inputs, but apply it
+    # to the effective major when upstream advances beyond that baseline.
+    lock = json.loads((pkg.inputs / 'upstream.lock.json').read_text())
+    baseline = re.fullmatch(r'postgresql-([0-9]+)\.yaml', lock['recipe'])
+    if baseline is None:
+        raise ValueError('Review changed PostgreSQL patch identity')
+    old, new = baseline[1], lock['version'].split('.')[0]
+    text = path.read_text()
+    for before, after in [('/usr/lib/postgresql' + old, '/usr/lib/postgresql' + new),
+                          ('$(pkgincludedir)/' + old + '/server', '$(pkgincludedir)/' + new + '/server')]:
+        if text.count(before) != 1:
+            raise ValueError('Review changed PostgreSQL versioned directories')
+        text = text.replace(before, after)
+    path.write_text(text)
 
 
 def upstream_patches(config):
     patches = config['pipeline'][1]['with']['patches'].split()
     if patches != ['per-version-dirs.patch', 'ssl-groups-fips-tolerant-default.patch']:
         raise ValueError('Review changed PostgreSQL patches')
-    return ['ssl-groups-fips-tolerant-default.patch']
+    return patches
 
 
 def derive(pkg, config, lock):
@@ -68,8 +90,8 @@ def derive(pkg, config, lock):
     if steps[2]['with'] != {'opts':'$CONFIGURE_FLAGS --with-perl'}:
         raise ValueError('Review changed PostgreSQL configure step')
     steps[2]['with']['opts'] = '$CONFIGURE_FLAGS --without-perl --without-python --without-tcl'
-    # Only one major is shipped, so use PostgreSQL's standard extension and
-    # header directories; pg-gvm and PGXS then share the same installation.
+    # Preserve Wolfi's extension ABI paths for consumers such as pgvector,
+    # while the APK names remain stable across major releases.
     steps[1]['with']['patches'] = '\n'.join(upstream_patches(config)) + '\n'
     steps[0] = fetch(lock['source_commit'], SOURCES)
     config['pipeline'] = [s for s in steps if s.get('name') != PLPERL]
@@ -78,6 +100,11 @@ def derive(pkg, config, lock):
     config['subpackages'] = [s for s in config['subpackages'] if s['name'] not in REMOVED_SUBPACKAGES]
     config.pop('data')
     config['package']['name'] = 'postgresql'
+    transforms = config['var-transforms']
+    if transforms[0] != {'from':'${{package.name}}', 'match':'-', 'replace':'', 'to':'mangled-package-name'}:
+        raise ValueError('Review changed PostgreSQL directory transform')
+    transforms[0] = {'from':'${{package.version}}', 'match':r'^(\d+).*',
+                     'replace':'postgresql$1', 'to':'mangled-package-name'}
     config['package']['epoch'] = 1000 * lock['revision'] + lock['epoch']
     runtime = config['package']['dependencies']['runtime']
     if runtime.count('ecpg=${{package.full-version}}') != 1:
@@ -93,6 +120,16 @@ def derive(pkg, config, lock):
         if isinstance(value, dict): return {k:names(v) for k,v in value.items()}
         return value
     config = names(config)
+    client = next(s for s in config['subpackages'] if s['name'] == '${{package.name}}-client')
+    if client['test']['pipeline'] != [{'uses':'test/virtualpackage', 'with':{
+            'virtual-pkg-name':'postgresql-client', 'real-pkg-name':'${{subpkg.name}}'}}]:
+        raise ValueError('Review changed PostgreSQL client identity test')
+    # The client is now a real unversioned package, so test its installed
+    # identity and executable instead of asserting its name remains virtual.
+    client['test']['pipeline'] = [{'name':'Unversioned PostgreSQL client identity', 'runs':
+        'test "$(apk list --installed postgresql-client 2>/dev/null | awk \'{print $1}\')" = '
+        '"postgresql-client-${{package.full-version}}"\n'
+        'psql --version | grep -F "${{package.version}}"\n'}]
     for section in [config['package']] + config['subpackages']:
         deps = section.get('dependencies', {})
         deps.pop('provider-priority', None)
