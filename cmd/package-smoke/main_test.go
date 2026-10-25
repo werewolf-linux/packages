@@ -60,6 +60,7 @@ func TestSmokeCommandPreservesShellLiterals(t *testing.T) {
 	for name, script := range map[string]string{
 		"bwrap": "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n",
 		"id":    "#!/bin/sh\necho 1000\n",
+		"chmod": "#!/bin/sh\ntest \"$*\" = '755 /'\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)

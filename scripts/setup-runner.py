@@ -9,13 +9,13 @@ import subprocess
 
 ROOT = Path(__file__).absolute().parents[1]
 PROFILE = Path('/etc/apparmor.d/bwrap-userns-restrict')
-CAPABILITIES = ('sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override')
+CAPABILITIES = ('sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override', 'sys_admin', 'net_admin')
 
 
 def check_guest(executable):
     # Probe inside a read-only host mount with a private writable /tmp.
     # Account creation opens mode-000 shadow files; nginx changes cache owners.
-    code = '''import os, pathlib, tempfile
+    code = '''import os, pathlib, subprocess, tempfile
 os.chroot('/')
 with tempfile.TemporaryDirectory() as directory:
     path = pathlib.Path(directory) / 'permissions'
@@ -25,12 +25,20 @@ with tempfile.TemporaryDirectory() as directory:
         assert stream.read() == b'probe'
     os.chown(path, 65532, 65532)
     assert path.stat().st_uid == 65532 and path.stat().st_gid == 65532
+# Runtime smoke tests make a nested read-only mount, then drop capabilities.
+subprocess.run(['/usr/bin/bwrap', '--unshare-user', '--unshare-pid', '--unshare-net',
+                '--ro-bind', '/', '/', '--dev', '/dev', '--ro-bind', '/proc', '/proc',
+                '--uid', '1000', '--gid', '1000', '--cap-drop', 'ALL', '--',
+                '/usr/bin/python3', '-c',
+                'import os; assert os.getuid() == 1000; '
+                'assert "CapEff:\\t0000000000000000" in open("/proc/self/status").read()'],
+               check=True, timeout=15)
 '''
     subprocess.run([str(executable), '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc',
                     '--tmpfs', '/tmp', '--unshare-pid', '--cap-add', 'CAP_SYS_CHROOT',
                     '--cap-add', 'CAP_CHOWN', '--cap-add', 'CAP_DAC_OVERRIDE',
                     '--', '/usr/bin/python3', '-c', code], check=True, timeout=30)
-    print('setup-runner: guest chroot, shadow-file access and ownership changes passed')
+    print('setup-runner: guest file operations and unprivileged nested runtime passed')
 
 
 def profile(template, executable):

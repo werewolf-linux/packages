@@ -124,8 +124,7 @@ func check(name, arch string) error {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"capabilities": map[string]any{"drop": []string{"ALL"}},
-			"environment": map[string]any{"accounts": map[string]any{"run-as": "1000"}, "paths": mutations, "contents": map[string]any{
+			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
@@ -148,8 +147,10 @@ func check(name, arch string) error {
 // namespace makes the runtime and fixtures read-only, with scratch in /tmp.
 func smokeCommand(runs string) string {
 	runs = "test \"$(id -u)\" -ne 0\n" + runs
-	return "exec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
-		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
+	// Melange's root-owned guest starts at mode 0700. Set up its mount as root;
+	// the nested runtime below switches UID and drops every capability.
+	return "chmod 755 /\nexec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
+		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --ro-bind /proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
 }

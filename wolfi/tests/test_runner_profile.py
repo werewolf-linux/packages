@@ -51,7 +51,7 @@ class RunnerProfile(unittest.TestCase):
         name = re.search(r'^profile (\S+) "', result, re.M)[1]
         self.assertIn('profile ' + name + ' "' + str(executable.resolve()) + '"', result)
         child = result.split('profile ' + name + '_child flags=', 1)[1]
-        self.assertEqual({'sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override'},
+        self.assertEqual({'sys_chroot', 'setuid', 'setgid', 'chown', 'dac_override', 'sys_admin', 'net_admin'},
                          set(re.findall(r'allow capability (\w+),', child)))
         self.assertNotIn('allow capability,', child)
         self.assertNotIn('unconfined', result)
