@@ -1,6 +1,9 @@
 from copy import deepcopy
 from pathlib import Path
+import json
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 import yaml
 
@@ -27,20 +30,21 @@ class PostgreSQL(unittest.TestCase):
         derived = self.derive()
         self.assertEqual('postgresql', derived['package']['name'])
         self.assertEqual('18.6', derived['package']['version'])
-        self.assertEqual(2006, derived['package']['epoch'])
+        self.assertEqual(1000 * PKG.policy['revision'] + 6, derived['package']['epoch'])
         names = packages.output_names(derived)
         self.assertTrue({'postgresql','postgresql-client','postgresql-contrib','postgresql-dev','libpq'} <= names)
         self.assertFalse(any('17' in name or '18' in name or 'plperl' in name or 'oci-entrypoint' in name for name in names))
         self.assertNotIn('ecpg=${{package.full-version}}',derived['package']['dependencies']['runtime'])
-        client = next(s for s in derived['subpackages'] if s['name'] == '${{package.name}}-client')
-        self.assertNotIn('test', client)
-        self.assertNotIn('postgresql-client=${{package.full-version}}', client['dependencies']['provides'])
         for step in BASELINE['test']['pipeline']:
             if step.get('name') != PKG.hooks.KERBEROS:
                 self.assertIn(step, derived['test']['pipeline'])
         self.assertEqual(PKG.hooks.PROBED, derived['test']['pipeline'][-1]['name'])
-        self.assertEqual(['per-version-dirs.patch', 'ssl-groups-fips-tolerant-default.patch'],
-                         derived['pipeline'][1]['with']['patches'].split())
+        self.assertEqual(['per-version-dirs.patch','ssl-groups-fips-tolerant-default.patch'],PKG.hooks.upstream_patches(BASELINE))
+        transform = derived['var-transforms'][0]
+        self.assertEqual('${{package.version}}', transform['from'])
+        self.assertEqual('postgresql$1', transform['replace'])
+        client=next(s for s in derived['subpackages'] if s['name']=='${{package.name}}-client')
+        self.assertEqual('Unversioned PostgreSQL client identity',client['test']['pipeline'][0]['name'])
 
     def test_omits_optional_authentication_but_keeps_jit_icu_xml_and_compression(self):
         derived = self.derive()
@@ -56,23 +60,37 @@ class PostgreSQL(unittest.TestCase):
         before=deepcopy(BASELINE)
         derived=self.derive('18.7')
         self.assertEqual('18.7',derived['package']['version'])
-        self.assertEqual(2000,derived['package']['epoch'])
+        self.assertEqual(1000 * PKG.policy['revision'],derived['package']['epoch'])
         self.assertEqual(before,BASELINE)
         self.assertIn('upstream-origin:postgresql-18:18.7-r0',derived['package']['dependencies']['provides'])
 
-    def test_disposable_package_test_keeps_checks_that_fit_one_mapped_uid(self):
+    def test_versioned_extension_paths_follow_a_new_major_in_build_and_prepared_source(self):
+        self.assertEqual('19.1',self.derive('19.1')['package']['version'])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'upstream.lock.json').write_text(json.dumps({'recipe':'postgresql-18.yaml','version':'19.1'}))
+            pkg = SimpleNamespace(inputs=root)
+            text = 'override pkglibdir := /usr/lib/postgresql18\nincludedir_server = $(pkgincludedir)/18/server\n'
+            (root/'per-version-dirs.patch').write_text(text)
+            (root/'src').mkdir()
+            (root/'src/Makefile.global.in').write_text(text)
+            PKG.hooks.context(pkg,root)
+            PKG.hooks.prepared(pkg,root)
+            expected = text.replace('postgresql18','postgresql19').replace('/18/server','/19/server')
+            self.assertEqual(expected,(root/'per-version-dirs.patch').read_text())
+            self.assertEqual(expected,(root/'src/Makefile.global.in').read_text())
+
+    def test_shadow_setup_is_only_in_the_disposable_test_environment(self):
         derived=self.derive()
         tested=PKG.hooks.test_recipe(deepcopy(derived),'http://localhost')
-        self.assertEqual([s.get('name') for s in tested['test']['pipeline']],
-                         [None, 'Test if PostgreSQL binaries are present and runnable', PKG.hooks.PROBED])
-        self.assertEqual(['postgresql-dev', 'postgresql-contrib'],
-                         tested['test']['pipeline'][-1]['needs']['packages'])
-        self.assertNotIn('shadow', tested['test']['environment']['contents']['packages'])
-        self.assertNotIn('sudo-rs', tested['test']['environment']['contents']['packages'])
-        changed=deepcopy(derived)
-        changed['test']['pipeline'][-2]['name']='Unexpected upstream lifecycle test'
-        with self.assertRaisesRegex(ValueError, 'Review changed PostgreSQL database lifecycle tests'):
-            PKG.hooks.test_recipe(changed,'http://localhost')
+        self.assertEqual('Initialize test account databases',tested['test']['pipeline'][0]['name'])
+        self.assertNotIn('Initialize test account databases',[s.get('name') for s in derived['pipeline']])
+        lifecycle=tested['test']['pipeline'][-1]
+        self.assertEqual('Database lifecycle and consumer tests',lifecycle['name'])
+        for step in derived['test']['pipeline']:
+            if step.get('name')=='Test database creation' or step.get('name')==PKG.hooks.PROBED:
+                self.assertIn(step['runs'],lifecycle['runs'])
+        self.assertIn('openssl',lifecycle['needs']['packages'])
 
 
 if __name__=='__main__':unittest.main()
