@@ -124,10 +124,9 @@ func check(name, arch string) error {
 	config := map[string]any{
 		"package": map[string]any{"name": meta.Name, "version": meta.Version, "epoch": meta.Epoch, "description": "Native package smoke test"},
 		"test": map[string]any{
-			"capabilities": map[string]any{"drop": []string{"ALL"}},
-			// Melange's private guest root belongs to namespace UID 0. Keep setup
-			// under that owner; smokeCommand drops to UID 1000 for the runtime.
-			"environment": map[string]any{"accounts": map[string]any{"run-as": "0"}, "paths": mutations, "contents": map[string]any{
+			// Melange needs its normal setup identity and capabilities to reach
+			// runner-owned paths. smokeCommand drops both inside the runtime.
+			"environment": map[string]any{"paths": mutations, "contents": map[string]any{
 				"repositories": []string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"},
 				"packages":     packages,
 			}},
