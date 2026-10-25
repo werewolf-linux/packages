@@ -5,9 +5,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -32,7 +34,7 @@ func main() {
 	}
 }
 
-func check(name, arch string) error {
+func check(name, arch string) (result error) {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -117,6 +119,18 @@ func check(name, arch string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+	launcher, cleanup, err := smokeLauncher(ctx, root, dir)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, cleanup()) }()
+	if launcher != "" {
+		path := os.Getenv("PATH")
+		if err := os.Setenv("PATH", launcher+string(os.PathListSeparator)+path); err != nil {
+			return err
+		}
+		defer os.Setenv("PATH", path)
+	}
 	index := append([]string{"index", "--arch", arch, "--output", filepath.Join(repository, arch, "APKINDEX.tar.gz")}, apks...)
 	if err := update.RunCommand(ctx, root, "melange", index...); err != nil {
 		return err
@@ -146,6 +160,44 @@ func check(name, arch string) error {
 		return err
 	}
 	return update.RunCommand(ctx, root, "melange", "test", path, meta.Name, "--arch", arch, "--runner", "bubblewrap", "--ignore-signatures", "--source-dir", filepath.Join(root, "tests/smoke"), "--timeout", "10m")
+}
+
+// Ubuntu's build profile intentionally denies namespace administration to
+// child programs. The smoke launcher needs it to create its second, read-only
+// sandbox. Load a separate profile for that launcher and remove it afterwards;
+// every package command still runs as UID 1000 with all capabilities dropped.
+func smokeLauncher(ctx context.Context, root, scratch string) (string, func() error, error) {
+	noop := func() error { return nil }
+	if _, err := os.Stat("/etc/apparmor.d/bwrap-userns-restrict"); os.IsNotExist(err) {
+		return "", noop, nil
+	} else if err != nil {
+		return "", noop, err
+	}
+	directory := filepath.Join(scratch, "launcher")
+	code := `import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location('smoke_runner', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.ROOT = pathlib.Path(sys.argv[2])
+module.CAPABILITIES += ('sys_admin',)
+module.main()
+`
+	cmd := exec.CommandContext(ctx, "python3", "-c", code, filepath.Join(root, "scripts/setup-runner.py"), directory)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", noop, err
+	}
+	tools := filepath.Join(directory, "build/tools")
+	cleanup := func() error {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(cleanupCtx, "/usr/sbin/apparmor_parser", "--remove", filepath.Join(tools, "bwrap.apparmor"))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("remove smoke launcher profile: %w: %s", err, output)
+		}
+		return nil
+	}
+	return tools, cleanup, nil
 }
 
 // Installed scripts must run from a read-only filesystem, as they do in an
