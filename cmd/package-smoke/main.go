@@ -149,8 +149,10 @@ func check(name, arch string) error {
 // namespace makes the runtime and fixtures read-only, with scratch in /tmp.
 func smokeCommand(runs string) string {
 	runs = "test \"$(id -u)\" -ne 0\n" + runs
-	return "exec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
-		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --proc /proc " +
+	// Melange's root-owned guest starts at mode 0700. Set up its mount as root;
+	// the nested runtime below switches UID and drops every capability.
+	return "chmod 755 /\nexec bwrap --unshare-user --unshare-pid --unshare-net --die-with-parent " +
+		"--ro-bind / / --ro-bind /home/build /home/build --dev /dev --ro-bind /proc /proc " +
 		"--tmpfs /tmp --uid 1000 --gid 1000 --cap-drop ALL -- /bin/sh -ec '" +
 		strings.ReplaceAll(runs, "'", "'\"'\"'") + "'"
 }
