@@ -1,11 +1,11 @@
 {
-  "version": "1.43.5.11029-6bf8af3f0",
+  "version": "1.43.5.11079-b3b13e506",
   "codec_set": "a336ba9-16a9aaf440ee9a92b75f070b",
   "architectures": {
     "aarch64": {
       "deb": {
-        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_arm64.deb",
-        "sha256": "b289c218db9c4efa81effab8efb82ca9aba5576f58e95aeb7c485b07db41ec1b"
+        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11079-b3b13e506_arm64.deb",
+        "sha256": "8af36b17f886e344140a8b47e4e2ef653f31c786d2eaa7387442f5b606200717"
       },
       "codecs": [
         {
@@ -54,8 +54,8 @@
     },
     "x86_64": {
       "deb": {
-        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_amd64.deb",
-        "sha256": "562edf9456be338a24182f837fe5d532d7e75ba7b3d5f6bea2503083e77622e1"
+        "url": "https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11079-b3b13e506_amd64.deb",
+        "sha256": "74e9a71c97e06d6e925cc4398279141fd838ee9df446f90e769614fa2c87a206"
       },
       "codecs": [
         {

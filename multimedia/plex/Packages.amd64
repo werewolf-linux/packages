@@ -1,15 +1,15 @@
 Package: plexmediaserver
-Version: 1.43.5.11029-6bf8af3f0
+Version: 1.43.5.11079-b3b13e506
 Architecture: amd64
 Maintainer: Plex Inc <noreply@plex.tv>
-Installed-Size: 218113
+Installed-Size: 218092
 Homepage: https://plex.tv
 Priority: optional
 Section: video
-Filename: pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_amd64.deb
-Size: 83273586
-SHA256: 562edf9456be338a24182f837fe5d532d7e75ba7b3d5f6bea2503083e77622e1
-SHA1: d69022f07036600432a7580bc655c49991948f0a
-MD5sum: be4f1d8ae34b477bc6b175a731a34332
+Filename: pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11079-b3b13e506_amd64.deb
+Size: 83265934
+SHA256: 74e9a71c97e06d6e925cc4398279141fd838ee9df446f90e769614fa2c87a206
+SHA1: a0a0b8fa92aeea65128af07b7c6cffc994ab8795
+MD5sum: 402278d2839220c24ae9f60766dedaf1
 Description: Plex organizes all of your personal media so you can easily access and enjoy it.
 

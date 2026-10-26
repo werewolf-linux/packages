@@ -3,8 +3,8 @@
 # Werewolf's plex form, not a replacement libc or a binary patch.
 package:
   name: plexmediaserver
-  version: 1.43.5.11029
-  epoch: 5
+  version: 1.43.5.11079
+  epoch: 0
   description: Plex Media Server with build-time codec dependencies
   # The vendor tree carries its private musl ABI and Python Script Host.
   # Resource-script shebangs must not pull an unrelated system Python 2.
@@ -28,8 +28,8 @@ pipeline:
   - if: ${{build.arch}} == 'aarch64'
     uses: fetch
     with:
-      uri: https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_arm64.deb
-      expected-sha256: b289c218db9c4efa81effab8efb82ca9aba5576f58e95aeb7c485b07db41ec1b
+      uri: https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11079-b3b13e506_arm64.deb
+      expected-sha256: 8af36b17f886e344140a8b47e4e2ef653f31c786d2eaa7387442f5b606200717
       extract: false
 
   - if: ${{build.arch}} == 'aarch64'
@@ -77,8 +77,8 @@ pipeline:
   - if: ${{build.arch}} == 'x86_64'
     uses: fetch
     with:
-      uri: https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11029-6bf8af3f0_amd64.deb
-      expected-sha256: 562edf9456be338a24182f837fe5d532d7e75ba7b3d5f6bea2503083e77622e1
+      uri: https://repo.plex.tv/deb/pool/main/p/plexmediaserver/plexmediaserver_1.43.5.11079-b3b13e506_amd64.deb
+      expected-sha256: 74e9a71c97e06d6e925cc4398279141fd838ee9df446f90e769614fa2c87a206
       extract: false
 
   - if: ${{build.arch}} == 'x86_64'
@@ -159,5 +159,5 @@ test:
         - busybox
   pipeline:
     - runs: |
-        /usr/lib/plexmediaserver/"Plex Media Server" --version | grep -Fx 'v1.43.5.11029-6bf8af3f0'
+        /usr/lib/plexmediaserver/"Plex Media Server" --version | grep -Fx 'v1.43.5.11079-b3b13e506'
         /usr/lib/plexmediaserver/isolated/"Plex Transcoder" -version
