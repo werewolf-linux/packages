@@ -98,7 +98,8 @@ work. These defaults complement the service's kernel restrictions.
 
 ## How it works
 
-Every ten minutes `wolfi-refresh.yml` takes one Wolfi snapshot and, for each package:
+Every ten minutes, one run at a time, `wolfi-refresh.yml` takes one Wolfi snapshot and,
+for each package:
 
 1. **Capture** (`package refresh`): resolve the latest upstream
    stable release using the shared Go updater, then capture a suitable Wolfi recipe,

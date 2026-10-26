@@ -21,6 +21,12 @@ on:
     branches: [main]
 permissions:
   contents: read
+# One run at a time. A run that would start behind a long build waits, and a
+# newer one replaces it; either way it discovers after the running one has
+# published, so nothing builds twice. Recovery runs keep their own group.
+concurrency:
+  group: wolfi-refresh-${{ github.ref }}-${{ inputs.recover_run }}
+  cancel-in-progress: false
 defaults:
   run:
     working-directory: wolfi
