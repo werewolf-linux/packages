@@ -135,22 +135,30 @@ func TestSmokeCommandPreservesShellLiterals(t *testing.T) {
 	// Only emulate the mount command here; native smoke tests verify the
 	// actual UID, capability sets, mount flags and interpreter restrictions.
 	for name, script := range map[string]string{
-		"bwrap": "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n",
-		"id":    "#!/bin/sh\necho 1000\n",
-		"chmod": "#!/bin/sh\ntest \"$*\" = '755 /'\n",
-		"awk":   "#!/bin/sh\nexit 0\n",
+		"bwrap":   "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n",
+		"unshare": "#!/bin/sh\nwhile [ \"${1#--}\" != \"$1\" ]; do shift; done\nexec \"$@\"\n",
+		"setpriv": "#!/bin/sh\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n",
+		"mount":   "#!/bin/sh\nexit 0\n",
+		"ip":      "#!/bin/sh\ntest \"$*\" = 'link set lo up'\n",
+		"id":      "#!/bin/sh\necho 1000\n",
+		"chmod":   "#!/bin/sh\ntest \"$*\" = '755 /'\n",
+		"awk":     "#!/bin/sh\nexit 0\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	cmd := exec.Command("sh", "-ec", smokeCommand("printf '%s\\n' \"it's literal\" '$HOME' '`uname`'", "bubblewrap"))
-	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"))
-	got, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("%v: %s", err, got)
-	}
-	if string(got) != "it's literal\n$HOME\n`uname`\n" {
-		t.Fatalf("commands were changed: %q", got)
+	for _, runner := range []string{"bubblewrap", "qemu"} {
+		t.Run(runner, func(t *testing.T) {
+			cmd := exec.Command("sh", "-ec", smokeCommand("printf '%s\\n' \"it's literal\" '$HOME' '`uname`'", runner))
+			cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"))
+			got, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%v: %s", err, got)
+			}
+			if string(got) != "it's literal\n$HOME\n`uname`\n" {
+				t.Fatalf("commands were changed: %q", got)
+			}
+		})
 	}
 }

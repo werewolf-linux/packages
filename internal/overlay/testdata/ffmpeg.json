@@ -2,7 +2,7 @@
   "package": {
     "name": "ffmpeg-9.0",
     "version": "9.0.2",
-    "epoch": 4005,
+    "epoch": 4006,
     "description": "ffmpeg multimedia library",
     "copyright": [
       {
@@ -12,7 +12,7 @@
     "dependencies": {
       "provides": [
         "ffmpeg=${{package.full-version}}",
-        "upstream-origin:ffmpeg-9.0:9.0.2-r5",
+        "upstream-origin:ffmpeg-9.0:9.0.2-r6",
         "ffmpeg-hardened=${{package.full-version}}"
       ],
       "provider-priority": 5,
@@ -86,6 +86,12 @@
       "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/FFmpeg/FFmpeg.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 946fcce07b6dcd0331c8cc609192aeff5e1924f8; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 946fcce07b6dcd0331c8cc609192aeff5e1924f8\n      git -c core.hooksPath=/dev/null checkout -q --detach 946fcce07b6dcd0331c8cc609192aeff5e1924f8\n      exit 0\n    fi\n  done\ndone\necho \"946fcce07b6dcd0331c8cc609192aeff5e1924f8: every source failed, three times\" >&2\nexit 1\n"
     },
     {
+      "uses": "patch",
+      "with": {
+        "patches": "fate-seek-hls-pin-threads.patch"
+      }
+    },
+    {
       "runs": "./configure \\\n  --prefix=/usr \\\n  --libdir=/usr/lib \\\n  --enable-shared \\\n  --enable-libx264 \\\n  --enable-libx265 \\\n  --enable-libaom \\\n  --enable-libtheora \\\n  --enable-gpl \\\n  --enable-version3 \\\n  --disable-openssl \\\n  --enable-libmp3lame \\\n  --enable-libopencore-amrnb \\\n  --disable-ffplay \\\n  --enable-libdav1d \\\n  --disable-libharfbuzz \\\n  --enable-libopus \\\n  --enable-libsnappy \\\n  --disable-libsrt \\\n  --disable-libssh \\\n  --enable-libsvtav1 \\\n  --enable-libvorbis \\\n  --enable-libvpx \\\n  --enable-libwebp \\\n  --disable-libxml2 \\\n  --enable-lzma \\\n  --disable-libfontconfig \\\n  --disable-libfreetype \\\n  --enable-libopenjpeg \\\n  --enable-libspeex \\\n  --enable-libsoxr \\\n  --disable-libzmq --disable-autodetect --disable-network --disable-protocols --enable-protocol=file,pipe --disable-indevs --enable-indev=lavfi --disable-outdevs --enable-zlib --enable-bzlib\n"
     },
     {
@@ -126,7 +132,7 @@
       "dependencies": {
         "provides": [
           "${{range.key}}=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
         ],
         "provider-priority": 5
       },
@@ -154,7 +160,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-static=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
         ]
       },
       "pipeline": [
@@ -186,7 +192,7 @@
         ],
         "provides": [
           "ffmpeg-dev=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
         ]
       },
       "pipeline": [
@@ -220,7 +226,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-doc=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
         ]
       },
       "pipeline": [
@@ -248,7 +254,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-qt-faststart=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r5"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
         ]
       },
       "description": "Utility for optimizing MP4 files for HTTP streaming",

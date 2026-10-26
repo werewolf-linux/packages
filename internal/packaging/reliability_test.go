@@ -124,7 +124,7 @@ func TestRunnerProfileStaysConfined(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, rule := range []string{"sys_chroot", "setuid", "setgid", "chown", "dac_override", "sys_admin", "setfcap", "net_admin", "setpcap"} {
+	for _, rule := range []string{"sys_chroot", "setuid", "setgid", "chown", "dac_override", "sys_admin", "setfcap", "net_admin", "net_bind_service", "setpcap"} {
 		if !strings.Contains(result, "allow capability "+rule+",") {
 			t.Errorf("missing %s", rule)
 		}

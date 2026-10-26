@@ -1,0 +1,18 @@
+Werewolf: context refreshed against source a8c72b842423f0774f542d3c2197247c3dd28d74; code changes unchanged.
+
+diff --git a/entropy.c b/entropy.c
+--- a/entropy.c
++++ b/entropy.c
+@@ -67,12 +67,6 @@
+ 	if (ssh_libcrypto_init() != 1)
+ 		fatal("libcrypto failed to initialize.");
+ 
+-	if (!ssh_compatible_openssl(OPENSSL_VERSION_NUMBER,
+-	    OpenSSL_version_num()))
+-		fatal("OpenSSL version mismatch. Built against %lx, you "
+-		    "have %lx", (u_long)OPENSSL_VERSION_NUMBER,
+-		    OpenSSL_version_num());
+-
+ #ifndef OPENSSL_PRNG_ONLY
+ 	if (RAND_status() == 1)
+ 		debug3("RNG is ready, skipping seeding");

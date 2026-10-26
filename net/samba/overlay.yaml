@@ -4,6 +4,10 @@ sources:
 - https://github.com/samba-team/samba.git
 - https://git.samba.org/samba.git
 description-suffix: ' (Werewolf: no PAM)'
+upstream-patches:
+  tinfo.patch:
+    sha256: f8d028dafd2106d30391c59e9cc264bb0e1774eee5ecc8ddf584816c0c860269
+    source: upstream-patches/tinfo.patch
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:

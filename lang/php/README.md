@@ -2,6 +2,12 @@
 
 Wolfi's newest stable PHP recipe with compiled runtime restrictions; currently `php-8.5`.
 
+PCRE2 JIT, OPcache JIT and copying executable code into huge pages are compiled
+out (`--without-pcre-jit --disable-opcache-jit --disable-huge-code-pages`). CLI
+and FPM work under Memory-Deny-Write-Execute (MDWE), including regex matching
+and shared-memory OPcache bytecode caching. Configuration cannot restore these
+features. Werewolf enforces MDWE for PHP even when another service needs JIT.
+
 The CLI omits readline and GD omits XPM. These app forms need neither interactive
 line editing nor XPM images, so their readline/terminal and XPM/X11 runtime
 dependencies are unnecessary. Other GD image formats remain enabled. Curl support
@@ -99,5 +105,43 @@ Omit Apache/mod_php, CGI, phpdbg, PEAR/PECL, docs and extensions
 Phar cannot be restored by an allowance; ship unpacked dependencies. Optional FFI
 and SQLite3 guards do not add those extensions to the package.
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
-Retained Wolfi tests plus [probes](tests/probe.sh) verify grants and refusals.
+Retained Wolfi tests plus [probes](tests/probe.sh) verify grants and refusals,
+and run CLI and a persistent FPM worker under MDWE with regex and OPcache enabled.
 [Build instructions](../../wolfi/README.md#building-locally); patches: PHP-3.01.
+
+## Further attack-surface choices
+
+The last decade's PHP bugs repeatedly involve native parsers, stream wrappers,
+deserialization and request lifecycle state. The broadly compatible reductions
+are already part of this package: omit CGI/mod_php/phpdbg, PEAR and Phar; leave
+unused extensions uninstalled; gate native loading, process execution and
+upload-progress callbacks; and authenticate every compiled source descriptor.
+JIT and executable huge-page copying are now omitted too.
+
+Useful application settings, with their compatibility boundaries:
+
+| Setting | Benefit and boundary |
+|---|---|
+| `session.upload_progress.enabled=0` | Avoid pre-script session handling; ordinary uploads still work. Enable only with the separate progress allowance and a demonstrated need. |
+| `zend.exception_ignore_args=1`, `display_errors=0`, `display_startup_errors=0`, `log_errors=1` | Keep arguments and error details out of HTTP responses; diagnostics remain in logs. These are production disclosure controls, not memory-safety fixes. |
+| `session.use_strict_mode=1`, `session.use_only_cookies=1` | Reduce session fixation and URL-carried IDs; test custom session handlers and session-sharing applications. |
+| `session.cookie_httponly=1`, `session.cookie_samesite=Lax` | Protect browser sessions; cross-site login/embedding flows may need another SameSite policy. Set `session.cookie_secure=1` only for HTTPS deployments. |
+| Finite `max_input_vars`, `max_input_nesting_level`, `max_multipart_body_parts`, `max_file_uploads` | Bound parser complexity independently of byte size; choose per application, since large forms and imports need higher limits. |
+
+Do not globally disable URL fopen, `php://`, filters, iconv, XML, fileinfo, EXIF,
+GD or ZIP to claim compatibility with popular applications. These are used for
+HTTP clients, request bodies, encoding, documents, uploads and media. Install
+only the extensions each form needs. `allow_url_fopen=0` is suitable for an
+application that uses cURL exclusively, but does not block cURL or all SSRF.
+`open_basedir` is not a native-code security boundary; Werewolf uses Landlock.
+Disabling assertions or short tags does not address the native parser bugs.
+
+Historical rationale: PHP's [2018 Phar metadata findings and PHP 8 change](https://wiki.php.net/rfc/phar_stop_autoloading_metadata),
+the [PHP 7 security changelog](https://www.php.net/ChangeLog-7.php)
+(including FPM CVE-2019-11043 and image/serialization bugs), the
+[PHP 8 security changelog](https://www.php.net/ChangeLog-8.php)
+(including CGI CVE-2024-4577), and the
+[2026 OOM/session advisories](https://www.php.net/archive/2026.php#2026-10-21-1).
+See also PHP's [session security guidance](https://www.php.net/manual/en/session.security.ini.php).
+These examples motivate removing unused features; they are not a claim that
+one INI setting prevents every vulnerability in a subsystem.

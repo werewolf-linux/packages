@@ -15,6 +15,7 @@ checks:
   - uses=git-checkout
   - uses=autoconf/configure
   - uses=autoconf/make
+  - uses=upstream-tests/make-check
   - uses=autoconf/make-install
   - uses=strip
 - path: [subpackages]

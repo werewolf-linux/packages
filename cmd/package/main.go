@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/werewolf-linux/packages/internal/packaging"
 	"github.com/werewolf-linux/packages/internal/plex"
@@ -24,6 +25,11 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if len(os.Args) > 1 && os.Args[1] == "runner-probe" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if err := run(ctx, os.Args[1:]); err != nil {
 		slog.Error("package command failed", "error", err)
@@ -40,7 +46,7 @@ func run(ctx context.Context, args []string) error {
 		return probe.Command(ctx, args[1:])
 	}
 	if command == "runner-probe" {
-		return packaging.RunnerProbe()
+		return packaging.RunnerProbe(ctx)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	root := flags.String("root", ".", "repository root")

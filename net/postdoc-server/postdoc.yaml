@@ -8,7 +8,7 @@
 package:
   name: postdoc
   version: "0.2.0_git20261025"
-  epoch: 1
+  epoch: 2
   description: Worker and server coordination for the Atomdrift analysis fleet
   copyright:
     - license: Apache-2.0
@@ -41,6 +41,7 @@ pipeline:
   # Cargo's own git, not libgit2, fetches the engines: it follows the
   # environment's CA bundle and proxy as the rest of the build does.
   - runs: |
+      werewolf-tools/package-helper --action scan-api
       export CARGO_NET_GIT_FETCH_WITH_CLI=true
       cargo auditable build --release --locked --no-default-features --features cleave-breadcrumbs
       cargo tree --locked --no-default-features --features cleave-breadcrumbs --edges normal --format '{p} {f}' > /tmp/runtime-features

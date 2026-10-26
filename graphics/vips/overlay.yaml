@@ -15,6 +15,7 @@ checks:
   - uses=git-checkout
   - uses=meson/configure
   - uses=meson/compile
+  - uses=upstream-tests/meson-test
   - uses=meson/install
   - uses=strip
 - path: [subpackages]

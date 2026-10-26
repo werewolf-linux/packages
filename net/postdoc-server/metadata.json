@@ -19,6 +19,11 @@
     "recipes": [],
     "changes": [
       {
+        "what": "Use scan's public StoredReport.hits API for finding projection.",
+        "why": "The pinned scan dependency removed engine::collect_hits; keep the same finding attribution through its replacement API.",
+        "evidence": ["postdoc.yaml", "packaging/changes.yaml"]
+      },
+      {
         "what": "postdoc for werewolf's postdoc-server form, as Wolfi would package it: built by melange in Wolfi's environment with Wolfi's Rust, from a commit on main, since postdoc tags no releases. Its engines (cleave, scan, isomer) come from git at the commits Cargo.lock pins. The allocator is the jemalloc linked into the binary, as on every host of the fleet. A new commit is a new version and expected-commit; howl rebuilds when this file changes.",
         "why": "Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.",
         "evidence": [

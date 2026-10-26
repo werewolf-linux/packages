@@ -2,7 +2,7 @@
   "package": {
     "name": "libvips",
     "version": "8.18.7",
-    "epoch": 3001,
+    "epoch": 3002,
     "description": "A fast image processing library with low memory needs",
     "copyright": [
       {
@@ -19,7 +19,7 @@
     },
     "dependencies": {
       "provides": [
-        "upstream-origin:libvips:8.18.7-r1",
+        "upstream-origin:libvips:8.18.7-r2",
         "libvips-hardened=${{package.full-version}}"
       ]
     }
@@ -62,6 +62,9 @@
       "uses": "meson/compile"
     },
     {
+      "uses": "upstream-tests/meson-test"
+    },
+    {
       "uses": "meson/install"
     },
     {
@@ -92,7 +95,7 @@
       },
       "dependencies": {
         "provides": [
-          "upstream-origin:libvips:8.18.7-r1"
+          "upstream-origin:libvips:8.18.7-r2"
         ]
       }
     }

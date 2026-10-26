@@ -90,6 +90,47 @@ grep -F '"group":"exec"' "$work/err" | grep -F '"operation":"system"'
 grep -F '"group":"native"' "$work/err" | grep -F '"operation":"dl"'
 test "$(grep -c '"operation":"system"' "$work/err")" = 2
 
+# Both SAPIs must retain regex and bytecode caching under kernel-enforced MDWE,
+# even when argv tries to enable the features omitted at configure time.
+cp "$(dirname "$probe")/no-jit.php" "$work/no-jit.php"
+printf '%s\n' '<?php return 42;' > "$work/no-jit-child.php"
+cc -O2 -Wall -Wextra -Werror "$(dirname "$probe")/mdwe.c" -o "$work/mdwe"
+expect 'CLI regex and OPcache work under MDWE' ok "$work/mdwe" "$php" \
+    -d pcre.jit=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=16M \
+    -d opcache.huge_code_pages=1 -d opcache.enable_cli=1 \
+    -d opcache.file_update_protection=0 "$work/no-jit.php"
+cat > "$work/fpm.conf" <<FPM
+[global]
+error_log = $work/fpm.log
+daemonize = no
+[mdwe]
+user = root
+group = root
+listen = $work/fpm.sock
+pm = static
+pm.max_children = 1
+FPM
+# Root is confined to the build guest and requires its existing test-only marker.
+"$work/mdwe" php-fpm --nodaemonize --force-stderr --allow-to-run-as-root \
+    --fpm-config "$work/fpm.conf" -d opcache.lockfile_path="$work" \
+    -d pcre.jit=1 -d opcache.jit=tracing -d opcache.jit_buffer_size=16M \
+    -d opcache.huge_code_pages=1 -d opcache.file_update_protection=0 \
+    >"$work/fpm-server.log" 2>&1 &
+server_pid=$!
+ready=false
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if [ -S "$work/fpm.sock" ]; then ready=true; break; fi
+    sleep 0.1
+done
+[ "$ready" = true ] || { cat "$work/fpm-server.log" >&2; exit 1; }
+for attempt in 1 2; do
+    expect 'FPM regex and OPcache work under MDWE across requests' ok \
+        "$php" "$(dirname "$probe")/fpm-request.php" "$work/fpm.sock" "$work/no-jit.php"
+done
+kill "$server_pid"
+wait "$server_pid" 2>/dev/null || true
+server_pid=
+
 # inline: -r gives code, refused unless php:inline.
 refuse '-r is refused' php:inline "$php" -r 'echo 1;'
 grant inline

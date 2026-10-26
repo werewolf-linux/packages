@@ -10,6 +10,10 @@ test-unpinned:
 - busybox
 - busybox-full
 - busybox-static
+upstream-patches:
+  CVE-2024-58251-2.patch:
+    sha256: 0d984c0eb2ffebe8b3b8ed0d16cb08293ce36241a814058b30c303a29d6a6594
+    source: upstream-patches/CVE-2024-58251-2.patch
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:

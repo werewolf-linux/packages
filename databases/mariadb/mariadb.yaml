@@ -173,19 +173,50 @@ subpackages:
     pipeline:
       - uses: split/dev
     test:
+      environment:
+        contents:
+          # Wolfi's newer versioned packages also provide these names.
+          packages: ["${{package.name}}-dev=${{package.full-version}}"]
       pipeline:
-        - uses: test/pkgconf
-        - uses: test/tw/ldd-check
-          with:
-            # Auto detection uses '--packages=mariadb-<version>, which is incorrect
-            packages: ${{package.name}}-dev
+        # Strict getopt ordering requires apk's direct applet entry point.
+        - &dependency-check
+          needs:
+            packages: [busybox, apk-tools, ldd-check]
+          runs: |
+            ln -s "$(command -v apk)" /tmp/apk_info
+            sed 's|apk info |/tmp/apk_info |g' "$(command -v ldd-check)" > /tmp/ldd-check
+            sh /tmp/ldd-check --packages="$(basename '${{targets.contextdir}}')"
+        - needs:
+            packages: [pkgconf]
+          runs: |
+            /tmp/apk_info -qL ${{package.name}}-dev | while read -r path; do
+              case "$path" in
+                *.pc) name=${path##*/}; pkgconf --exists "${name%.pc}" ;;
+              esac
+            done
 
   - name: "${{package.name}}-doc"
     pipeline:
       - uses: split/manpages
     test:
+      environment:
+        contents:
+          packages: ["${{package.name}}-doc=${{package.full-version}}"]
       pipeline:
-        - uses: test/docs
+        - needs:
+            packages: [busybox, apk-tools, groff]
+          runs: |
+            ln -s "$(command -v apk)" /tmp/apk_info
+            /tmp/apk_info -qL ${{package.name}}-doc > /tmp/doc-files
+            grep '^usr/share/man/.*\.[1-9]\(.gz\)\?$' /tmp/doc-files > /tmp/man-pages
+            cd /usr/share/man
+            while read -r path; do
+              case "$path" in
+                *.gz) gzip -dc "/$path" ;;
+                *) cat "/$path" ;;
+              esac | /usr/bin/preconv -e UTF-8 | /usr/bin/tbl |
+                /usr/bin/troff -Tutf8 -mandoc | /usr/bin/grotty > /dev/null
+            done < /tmp/man-pages
 
   - name: "${{package.name}}-bench"
     pipeline:
@@ -216,19 +247,19 @@ subpackages:
             "${{targets.destdir}}"/usr/bin/mysqldumpslow \
             "${{targets.subpkgdir}}"/usr/bin/
     test:
+      environment:
+        contents:
+          packages: ["${{package.name}}-dump=${{package.full-version}}"]
       pipeline:
-        - uses: test/tw/ver-check
-          with:
-            bins: |
-              mariadb-dump
-              mysqldump
-        - uses: test/tw/help-check
-          with:
-            bins: |
-              mariadb-dump
-              mysqldump
-              mariadb-dumpslow
-              mysqldumpslow
+        - needs:
+            packages: [busybox]
+          runs: |
+            for command in mariadb-dump mysqldump; do
+              "$command" --version | grep -F '${{package.version}}'
+            done
+            for command in mariadb-dump mysqldump mariadb-dumpslow mysqldumpslow; do
+              "$command" --help
+            done
 
   - name: "${{package.name}}-client"
     pipeline:
@@ -249,8 +280,11 @@ subpackages:
           mkdir -p "${{targets.subpkgdir}}"/usr
           mv "${{targets.destdir}}"/usr/mariadb-test "${{targets.subpkgdir}}"/usr/
     test:
+      environment:
+        contents:
+          packages: ["${{package.name}}-test=${{package.full-version}}"]
       pipeline:
-        - uses: test/tw/ldd-check
+        - *dependency-check
 
 update:
   enabled: true
@@ -263,14 +297,15 @@ test:
   environment:
     contents:
       packages:
-        - ${{package.name}}-client
+        - "${{package.name}}=${{package.full-version}}"
+        - "${{package.name}}-client=${{package.full-version}}"
     environment:
       DBDATA: /var/lib/mysql
       MYSQL_TEST_DB: test_db
       MYSQL_TEST_USER: test_user
       MYSQL_TEST_PASS: test_pass
   pipeline:
-    - uses: test/tw/ldd-check
+    - *dependency-check
     - name: No PAM plugin or setuid helper, and nothing loads libpam
       runs: |
         for path in /usr/lib/mariadb/plugin/auth_pam.so /usr/lib/mariadb/plugin/auth_pam_v1.so \

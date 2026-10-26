@@ -240,6 +240,7 @@ func RunnerProfile(template, executable string) (string, error) {
     allow capability sys_admin,
     allow capability setfcap,
     allow capability net_admin,
+    allow capability net_bind_service,
     allow capability setpcap,`},
 		{"include if exists <local/bwrap-userns-restrict>", ""}, {"include if exists <local/unpriv_bwrap>", ""},
 	}
@@ -320,7 +321,7 @@ func SetupRunner(ctx context.Context, root string) error {
 
 // RunnerProbe exercises the operations Melange's guest needs. It is called only
 // by an explicit CLI subcommand inside a confined bubblewrap process.
-func RunnerProbe() error {
+func RunnerProbe(ctx context.Context) error {
 	if err := syscall.Chroot("/"); err != nil {
 		return err
 	}
@@ -360,8 +361,6 @@ func RunnerProbe() error {
 		return fmt.Errorf("guest ownership change failed")
 	}
 	// Exercise the nested mount and privilege drop used by native smoke tests.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 	if err := Run(ctx, "/", "/usr/bin/bwrap", "--unshare-user", "--unshare-pid", "--unshare-net",
 		"--ro-bind", "/", "/", "--dev", "/dev", "--ro-bind", "/proc", "/proc",
 		"--uid", "1000", "--gid", "1000", "--cap-drop", "ALL", "--", "/bin/sh", "-ec",

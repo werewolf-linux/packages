@@ -14,6 +14,7 @@ checks:
 - path: [pipeline]
   shape:
   - uses=git-checkout
+  - uses=patch
   - runs
   - uses=autoconf/make
   - uses=upstream-tests/ffmpeg-fate
@@ -27,7 +28,12 @@ checks:
   - name=${{package.name}}-dev
   - name=${{package.name}}-doc
   - name=${{package.name}}-qt-faststart
-- path: [pipeline, '1', runs]
+- path: [pipeline, uses=patch]
+  expect:
+    uses: patch
+    with:
+      patches: fate-seek-hls-pin-threads.patch
+- path: [pipeline, '2', runs]
   expect: |
     ./configure \
       --prefix=/usr \
@@ -82,7 +88,7 @@ edits:
   - zlib-dev
   - bzip2-dev
   - xz-dev
-- path: [pipeline, '1', runs]
+- path: [pipeline, '2', runs]
   replace:
   - old: |2
         --enable-libzmq

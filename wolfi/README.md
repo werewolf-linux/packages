@@ -127,8 +127,10 @@ own migration; adding this feed does not replace them.
 
 A step that stops a package opens an issue labelled `drift` and `package/NAME`, with the
 version and what failed: a patch that no longer applies quotes patch's output. A patch
-that needed fuzz still ships, and opens an advisory `fuzz` issue to refresh it. Issues
-close when the step passes again. One package's failure holds back no other.
+that needed fuzz still ships and records a warning in the logs. Issues are reserved
+for failed package operations and close when the step passes again. Successful
+discovery also closes older advisory `fuzz` issues. One package's failure holds back
+no other.
 
 ## Building locally
 

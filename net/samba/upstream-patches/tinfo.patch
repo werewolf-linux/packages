@@ -1,0 +1,13 @@
+Werewolf: context refreshed against source 02e8e3f93f4af787bcb3389cbff9e22e74567eb2; code changes unchanged.
+
+diff --git a/source3/utils/wscript_build b/source3/utils/wscript_build
+--- a/source3/utils/wscript_build
++++ b/source3/utils/wscript_build
+@@ -162,6 +162,7 @@
+                             regedit_hexedit.c regedit_list.c""",
+                   deps='''
+                   ncurses
++                  tinfo
+                   menu
+                   panel
+                   form

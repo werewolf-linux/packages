@@ -1,0 +1,8 @@
+# Remove when upstream uses StoredReport's public finding projection.
+actions:
+  scan-api:
+    files:
+    - path: src/judge.rs
+      replace:
+      - old: scan::engine::collect_hits(report, purl.as_deref())
+        new: report.hits(purl.as_deref())

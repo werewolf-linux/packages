@@ -346,6 +346,9 @@ func Capture(ctx context.Context, pkg Package, checkout string) (Inputs, error) 
 	if _, err := overlay.Derive(pkg.Spec, recipe, lock.Lock, pkg.Directory, vars); err != nil {
 		return lock, fmt.Errorf("effective recipe: %w", err)
 	}
+	if err := copyUpstreamPatches(pkg, filepath.Join(candidate, "upstream"), ""); err != nil {
+		return lock, err
+	}
 	lock.SHA256, lock.Mode, err = hashFiles(candidate, func(string) bool { return false })
 	if err != nil {
 		return lock, err
@@ -478,6 +481,9 @@ func Derive(pkg Package) (*yaml.Node, error) {
 		return nil, err
 	}
 	if err := copyTree(filepath.Join(pkg.Build, "inputs/upstream"), context); err != nil {
+		return nil, err
+	}
+	if err := copyUpstreamPatches(pkg, filepath.Join(pkg.Build, "inputs/upstream"), context); err != nil {
 		return nil, err
 	}
 	for source, target := range pkg.Spec.Context {
@@ -649,7 +655,11 @@ attempts:
 			if !filepath.IsLocal(name) {
 				return fmt.Errorf("unsafe upstream patch: %s", name)
 			}
-			if err := applyPatch(ctx, pkg, destination, filepath.Join(pkg.Build, "inputs/upstream", name), "Wolfi's "+name); err != nil {
+			path, err := upstreamPatch(pkg, filepath.Join(pkg.Build, "inputs/upstream"), name)
+			if err != nil {
+				return err
+			}
+			if err := applyPatch(ctx, pkg, destination, path, "Wolfi's "+name); err != nil {
 				return err
 			}
 		}

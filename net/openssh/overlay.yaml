@@ -6,6 +6,10 @@ description-suffix: ' (Werewolf: no PAM, SELinux, zlib or PKCS#11)'
 patches: patches
 context:
   patches: patches
+upstream-patches:
+  no-version-check.patch:
+    sha256: 8b9598fd81f99d938dbbf833e755a4bd3c6885b9b06faec4f767ad0866b906bf
+    source: upstream-patches/no-version-check.patch
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:

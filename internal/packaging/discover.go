@@ -43,7 +43,6 @@ func Discover(ctx context.Context, packages []Package, checkout string, github b
 			return result, err
 		}
 		failed := false
-		var all strings.Builder
 		for _, step := range []struct{ command, kind string }{{"refresh", "refresh"}, {"derive", "derivation"}, {"prepare", "patches"}} {
 			args := []string{step.command, "--root", pkg.Root, "--package", pkg.Name}
 			if step.command == "refresh" {
@@ -57,7 +56,6 @@ func Discover(ctx context.Context, packages []Package, checkout string, github b
 			if err := writeFile(filepath.Join(pkg.Build, step.kind+".log"), log.Bytes(), 0644); err != nil {
 				return result, err
 			}
-			all.Write(log.Bytes())
 			if runErr == nil {
 				continue
 			}
@@ -75,15 +73,8 @@ func Discover(ctx context.Context, packages []Package, checkout string, github b
 			continue
 		}
 		if github {
-			if err := resolveDrift(ctx, pkg, false); err != nil {
+			if err := resolveDrift(ctx, pkg); err != nil {
 				slog.Warn("cannot close resolved drift", "package", pkg.Name, "error", err)
-			}
-			if strings.Contains(all.String(), `"msg":"patch applied with fuzz"`) {
-				if err := driftIssue(ctx, pkg, "fuzz", all.String()); err != nil {
-					slog.Warn("cannot report patch fuzz", "package", pkg.Name, "error", err)
-				}
-			} else if err := resolveDrift(ctx, pkg, true); err != nil {
-				slog.Warn("cannot close resolved patch fuzz", "package", pkg.Name, "error", err)
 			}
 		}
 		if err := Archive(filepath.Join(pkg.Build, "inputs"), filepath.Join(pkg.Root, "wolfi/build/bundles", pkg.Name+".tar.gz")); err != nil {
@@ -126,7 +117,7 @@ type drift struct {
 }
 
 func driftIssues(ctx context.Context, pkg Package) ([]drift, error) {
-	for _, label := range []struct{ name, color, description string }{{"drift", "B60205", "A release no longer builds with these protections"}, {"fuzz", "FBCA04", "A patch applies only with fuzz; refresh it"}, {"package/" + pkg.Name, "1D76DB", pkg.Path}} {
+	for _, label := range []struct{ name, color, description string }{{"drift", "B60205", "A release no longer builds with these protections"}, {"package/" + pkg.Name, "1D76DB", pkg.Path}} {
 		if _, err := output(ctx, pkg.Root, "gh", "label", "create", label.name, "--color", label.color, "--force", "--description", label.description); err != nil {
 			return nil, err
 		}
@@ -161,7 +152,7 @@ func driftIssue(ctx context.Context, pkg Package, kind, log string) error {
 		version = fmt.Sprintf("%s %s-r%d", pkg.Spec.Title, lock.Version, lock.Epoch)
 		facts = fmt.Sprintf("- Wolfi recipe: `%s` at `%s`\n- Effective source: `%s`\n", lock.Recipe, lock.WolfiCommit, lock.SourceCommit)
 	}
-	reason := map[string]string{"refresh": "capturing the recipe stopped", "derivation": "the derivation stopped", "patches": "a patch no longer applies", "fuzz": "a patch applies only with fuzz"}[kind]
+	reason := map[string]string{"refresh": "capturing the recipe stopped", "derivation": "the derivation stopped", "patches": "a patch no longer applies"}[kind]
 	if reason == "" {
 		return fmt.Errorf("unknown drift kind")
 	}
@@ -213,14 +204,11 @@ func driftIssue(ctx context.Context, pkg Package, kind, log string) error {
 		return err
 	}
 	args := []string{"issue", "create", "--title", title, "--body-file", path, "--label", "drift", "--label", "package/" + pkg.Name}
-	if kind == "fuzz" {
-		args = append(args, "--label", "fuzz")
-	}
 	_, err = output(ctx, pkg.Root, "gh", args...)
 	return err
 }
 
-func resolveDrift(ctx context.Context, pkg Package, fuzz bool) error {
+func resolveDrift(ctx context.Context, pkg Package) error {
 	issues, err := driftIssues(ctx, pkg)
 	if err != nil {
 		return err
@@ -230,12 +218,9 @@ func resolveDrift(ctx context.Context, pkg Package, fuzz bool) error {
 		for _, label := range issue.Labels {
 			isFuzz = isFuzz || label.Name == "fuzz"
 		}
-		if isFuzz != fuzz {
-			continue
-		}
-		message := "The package builds with these protections again."
-		if fuzz {
-			message = "Every patch applies exactly again."
+		message := "Package capture, derivation and patch preparation succeeded."
+		if isFuzz {
+			message = "Package discovery succeeded. Patch fuzz remains in the logs; issues are reserved for failed package operations."
 		}
 		if _, err := output(ctx, pkg.Root, "gh", "issue", "close", strconv.FormatInt(issue.Number, 10), "--comment", message); err != nil {
 			return err

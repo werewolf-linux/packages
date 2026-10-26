@@ -52,11 +52,13 @@ pauses. A mismatched commit stops at once; branch tips never replace the pin.
 
 **Patches** apply with GNU patch, `-p1 --forward --fuzz=2`, as Wolfi applies its own: on
 the host by `package prepare`, then in the build by one shared step `package verify` requires
-unchanged. Fuzz still builds and files an advisory issue; a failure stops the package.
+unchanged. Fuzz still builds and logs a warning; a failure stops the package.
 
-**Issues** (`package discover --github`) are labelled `drift`, `package/NAME` and their kind: `refresh`,
-`derivation`, `patches` or `fuzz`. Each names the Wolfi version and quotes the output. A
-hidden marker finds the open issue, so a new failure comments on it.
+**Issues** (`package discover --github`) are opened only for failed operations and
+labelled `drift` and `package/NAME`. Each names the Wolfi version, identifies the
+failed step (`refresh`, `derivation` or `patches`), and quotes the output. A hidden
+marker identifies repeated failures. Successful discovery closes resolved failure
+issues and retires older advisory `fuzz` issues, even if fuzz remains in the logs.
 
 **Builds** (`wolfi-build.yml`) run Melange in bubblewrap on `ubuntu-26.04` and
 `ubuntu-26.04-arm`. Ubuntu's AppArmor child profile denies the `sys_chroot` APK's

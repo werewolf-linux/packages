@@ -20,30 +20,37 @@ import (
 
 // Spec describes one package's changes to its Wolfi recipe.
 type Spec struct {
-	Title                 string            `yaml:"title"`
-	Sources               []string          `yaml:"sources"`
-	EpochMultiplier       int               `yaml:"epoch-multiplier,omitempty"`
-	StreamParts           int               `yaml:"stream-parts,omitempty"`
-	DescriptionSuffix     string            `yaml:"description-suffix,omitempty"`
-	Patches               string            `yaml:"patches,omitempty"`
-	UpstreamPatchPrefix   string            `yaml:"upstream-patch-prefix,omitempty"`
-	PatchWorkingDirectory string            `yaml:"patch-working-directory,omitempty"`
-	Context               map[string]string `yaml:"context,omitempty"`
-	Prepared              map[string]string `yaml:"prepared,omitempty"`
-	ContextEdits          []transform.File  `yaml:"context-edits,omitempty"`
-	PreparedEdits         []transform.File  `yaml:"prepared-edits,omitempty"`
-	MinKernel             string            `yaml:"min-kernel,omitempty"`
-	TestUnpinned          []string          `yaml:"test-unpinned,omitempty"`
-	TestPackages          []string          `yaml:"test-packages,omitempty"`
-	OriginMainOnly        bool              `yaml:"origin-main-only,omitempty"`
-	StableProvides        string            `yaml:"stable-provides,omitempty"`
-	ResultsSuffix         string            `yaml:"results-suffix,omitempty"`
-	TestSetup             yaml.Node         `yaml:"test-setup,omitempty"`
-	SuiteSetup            yaml.Node         `yaml:"suite-setup,omitempty"`
-	Checks                []Edit            `yaml:"checks"`
-	ReleaseEdits          []Edit            `yaml:"release-edits,omitempty"`
-	Edits                 []Edit            `yaml:"edits"`
-	TestEdits             []Edit            `yaml:"test-edits,omitempty"`
+	Title                 string                   `yaml:"title"`
+	Sources               []string                 `yaml:"sources"`
+	EpochMultiplier       int                      `yaml:"epoch-multiplier,omitempty"`
+	StreamParts           int                      `yaml:"stream-parts,omitempty"`
+	DescriptionSuffix     string                   `yaml:"description-suffix,omitempty"`
+	Patches               string                   `yaml:"patches,omitempty"`
+	UpstreamPatchPrefix   string                   `yaml:"upstream-patch-prefix,omitempty"`
+	UpstreamPatches       map[string]UpstreamPatch `yaml:"upstream-patches,omitempty"`
+	PatchWorkingDirectory string                   `yaml:"patch-working-directory,omitempty"`
+	Context               map[string]string        `yaml:"context,omitempty"`
+	Prepared              map[string]string        `yaml:"prepared,omitempty"`
+	ContextEdits          []transform.File         `yaml:"context-edits,omitempty"`
+	PreparedEdits         []transform.File         `yaml:"prepared-edits,omitempty"`
+	MinKernel             string                   `yaml:"min-kernel,omitempty"`
+	TestUnpinned          []string                 `yaml:"test-unpinned,omitempty"`
+	TestPackages          []string                 `yaml:"test-packages,omitempty"`
+	OriginMainOnly        bool                     `yaml:"origin-main-only,omitempty"`
+	StableProvides        string                   `yaml:"stable-provides,omitempty"`
+	ResultsSuffix         string                   `yaml:"results-suffix,omitempty"`
+	TestSetup             yaml.Node                `yaml:"test-setup,omitempty"`
+	SuiteSetup            yaml.Node                `yaml:"suite-setup,omitempty"`
+	Checks                []Edit                   `yaml:"checks"`
+	ReleaseEdits          []Edit                   `yaml:"release-edits,omitempty"`
+	Edits                 []Edit                   `yaml:"edits"`
+	TestEdits             []Edit                   `yaml:"test-edits,omitempty"`
+}
+
+// UpstreamPatch refreshes a captured Wolfi patch after checking its identity.
+type UpstreamPatch struct {
+	SHA256 string `yaml:"sha256"`
+	Source string `yaml:"source"`
 }
 
 // Edit names a mapping key, sequence index, or unique field=value selector at

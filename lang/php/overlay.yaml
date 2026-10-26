@@ -223,6 +223,9 @@ edits:
     new: |2
         --enable-cli \
         --disable-cgi \
+        --without-pcre-jit \
+        --disable-opcache-jit \
+        --disable-huge-code-pages \
 - path: [pipeline]
   append:
   - name: Allow every group in the build guest
@@ -282,6 +285,7 @@ edits:
   remove:
   - ${{package.name}}-tidy
   append:
+  - ${{package.name}}-fpm
   - ${{package.name}}-pcntl
   - ${{package.name}}-posix
   - ${{package.name}}-pdo
@@ -301,6 +305,12 @@ edits:
       ${file:tests/probe.sh}WEREWOLF_PROBE_SH
       cat > /tmp/capabilities.php <<'WEREWOLF_PROBE_CAPABILITIES'
       ${file:tests/capabilities.php}WEREWOLF_PROBE_CAPABILITIES
+      cat > /tmp/no-jit.php <<'WEREWOLF_NO_JIT_PHP'
+      ${file:tests/no-jit.php}WEREWOLF_NO_JIT_PHP
+      cat > /tmp/mdwe.c <<'WEREWOLF_MDWE_C'
+      ${file:tests/mdwe.c}WEREWOLF_MDWE_C
+      cat > /tmp/fpm-request.php <<'WEREWOLF_FPM_REQUEST'
+      ${file:tests/fpm-request.php}WEREWOLF_FPM_REQUEST
       sh /tmp/probe.sh /tmp/probe.php
 - path: [test, pipeline, uses=test/php-tidy]
   delete: true

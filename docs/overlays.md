@@ -73,6 +73,20 @@ Replacement entries have `old`, `new`, and an optional positive `count`.
 `patches` names the copied patch directory. Its `series` must list every numbered
 patch once, with the required provenance headers.
 
+To refresh the context of a Wolfi patch, keep the refreshed file under the package's
+`upstream-patches/` directory and declare the captured file's original SHA-256:
+
+```yaml
+upstream-patches:
+  example.patch:
+    sha256: ORIGINAL_WOLFI_PATCH_SHA256
+    source: upstream-patches/example.patch
+```
+
+Capture stops for review if Wolfi changes the original patch. Captured inputs stay
+unchanged; derivation copies the refresh into the build context, and preparation
+uses the same file. Preserve the patch's code changes when refreshing context.
+
 `context-edits` and `prepared-edits` apply guarded file replacements after copying
 the build context or preparing source. They use the same file fields as
 `packaging/changes.yaml`, with overlay version substitutions available. Captured

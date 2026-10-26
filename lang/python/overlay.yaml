@@ -7,6 +7,10 @@ description-suffix: ' (Werewolf fixed hardening policy)'
 patches: werewolf/patches
 context:
   patches: werewolf/patches
+upstream-patches:
+  gh-127301.patch:
+    sha256: c8d1a2595599d0dc08d62964d2977c13ef0fd71f86400854b17e10e0a341dae4
+    source: upstream-patches/gh-127301.patch
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:

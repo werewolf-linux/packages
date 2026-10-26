@@ -7,6 +7,10 @@ description-suffix: ' (Werewolf fixed hardening policy)'
 patches: werewolf/patches
 context:
   patches: werewolf/patches
+upstream-patches:
+  JDK-8312267.patch:
+    sha256: ee05a2b2235e3c32e6ab0dcce14411637817d12c0717629a811c0350cd9a0c32
+    source: upstream-patches/JDK-8312267.patch
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:
