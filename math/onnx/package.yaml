@@ -6,8 +6,8 @@ update:
 melange:
   package:
     name: py3.15-onnxruntime
-    version: 1.31.0
-    epoch: 5
+    version: "1.31.1"
+    epoch: 0
     description: CPU ONNX Runtime built for hardened Python 3.15
     copyright:
       - license: MIT
@@ -45,7 +45,7 @@ melange:
       with:
         repository: https://github.com/microsoft/onnxruntime
         tag: v${{package.version}}
-        expected-commit: 402979ac1bef89dcd55add41eaa7277c407599eb
+        expected-commit: "6af1a932e2286d5c58166085d24c68783033edee"
     - runs: |
         # Clang preserves Wolfi hardening while avoiding GCC's constexpr
         # function-pointer comparison failure in Abseil (abseil-cpp#1634).

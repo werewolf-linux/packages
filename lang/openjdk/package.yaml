@@ -104,6 +104,10 @@ wolfi:
             mkdir -p /etc/runtime-hardening
             : > /etc/runtime-hardening/build-root
             chmod 600 /etc/runtime-hardening/build-root
+            # The build runs its own tools with the JDK it builds, from the
+            # writable build tree.
+            mkdir -p /etc/runtime-hardening/allow/all/java
+            : > /etc/runtime-hardening/allow/all/java/writable-source
       before: "3"
     - path: [subpackages, 'name=${{package.name}}-oci-entrypoint-compat']
       delete: true

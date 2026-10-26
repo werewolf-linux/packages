@@ -10,7 +10,7 @@ melange:
   package:
     name: minecraft
     version: 26.3
-    epoch: 5
+    epoch: 6
     description: Minecraft Java Edition server
     copyright:
       - license: LicenseRef-Minecraft-EULA
@@ -28,8 +28,26 @@ melange:
         uri: https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar
         expected-sha256: d052f14d7a173734fba553711e5b570162e2f2a313267ee31a21b975a679be64
         extract: false
+    # server.jar is Mojang's bundler, which would unpack these jars onto a
+    # writable mount at every start and load them from there. They are
+    # unpacked here, each checked against the bundler's own list, so the
+    # server loads its code from the read-only image.
     - runs: |
-        install -Dm644 server.jar ${{targets.destdir}}/usr/lib/minecraft/server.jar
+        dest=${{targets.destdir}}/usr/lib/minecraft
+        mkdir -p bundle "$dest"
+        unzip -q -d bundle server.jar 'META-INF/*'
+        tab=$(printf '\t')
+        cp=
+        for kind in versions libraries; do
+          # The lists end without a newline; read their last line too.
+          while IFS=$tab read -r sum id path || [ -n "$sum" ]; do
+            echo "$sum  bundle/META-INF/$kind/$path" | sha256sum -c -s
+            install -Dm644 "bundle/META-INF/$kind/$path" "$dest/$kind/$path"
+            cp="$cp:/usr/lib/minecraft/$kind/$path"
+          done <"bundle/META-INF/$kind.list"
+        done
+        # java @/usr/lib/minecraft/java.args nogui starts the server.
+        printf -- '-cp\n%s\n%s\n' "${cp#:}" "$(cat bundle/META-INF/main-class)" >"$dest/java.args"
   test:
     environment:
       accounts:
@@ -42,11 +60,20 @@ melange:
         runs: |
           work=$(mktemp -d)
           cd "$work"
-          java -jar /usr/lib/minecraft/server.jar --help >/tmp/minecraft-help 2>&1 || { cat /tmp/minecraft-help; exit 1; }
+          java @/usr/lib/minecraft/java.args --help >/tmp/minecraft-help 2>&1 || { cat /tmp/minecraft-help; exit 1; }
           grep -F 'nogui' /tmp/minecraft-help
+          # Nothing was unpacked: the code is the package's.
+          test ! -e "$work/libraries"
+          test ! -e "$work/versions"
 changes:
   - what: Minecraft's Java server for werewolf's minecraft form. Mojang publishes the jar; this recipe pins the release fetched on 2026-10-11, 26.3. Nothing in the form notices when a newer one is published. The manifest that would say so is https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
     evidence:
       - package.yaml
+  - what: Install the jars Mojang's bundler carries, checked against its list, and start the server from them.
+    why: Load the server's code from the read-only image rather than from jars the bundler unpacks onto a writable mount at every start.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.

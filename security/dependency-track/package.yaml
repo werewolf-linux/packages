@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
+update:
+  github:
+    identifier: DependencyTrack/dependency-track
+melange:
+  # Dependency-Track's bundled server (API and frontend), unpacked: its jar is
+  # an executable WAR that Jetty would unpack onto a writable mount at every
+  # start and load from there. Started from this directory, Alpine's launcher
+  # hands Jetty the directory, which it serves in place, from the read-only
+  # image. Wolfi's dependency-track-bundled is the jar, on OpenJDK 21.
+  package:
+    name: dependency-track
+    version: 4.14.6
+    epoch: 0
+    description: OWASP Dependency-Track, unpacked, on hardened OpenJDK 27
+    copyright:
+      - license: Apache-2.0
+    dependencies:
+      runtime:
+        - openjdk-27-jre>=27.0.0-r2002
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
+        - ca-certificates-bundle
+  pipeline:
+    # The release's own jar; its SHA-256 is the one the release notes list.
+    - uses: fetch
+      with:
+        uri: https://github.com/DependencyTrack/dependency-track/releases/download/${{package.version}}/dependency-track-bundled.jar
+        expected-sha256: 421f4cb919f8e19babd13a0fe6380000fcf4938ae31009503eb34dcf65146753
+        extract: false
+    - runs: |
+        dest=${{targets.destdir}}/usr/share/java/dependency-track/webapp
+        mkdir -p "$dest"
+        unzip -q -d "$dest" dependency-track-bundled.jar
+  test:
+    pipeline:
+      - name: The launcher and the web application are unpacked
+        runs: |
+          set -eu
+          webapp=/usr/share/java/dependency-track/webapp
+          test -f "$webapp/alpine/embedded/EmbeddedJettyServer.class"
+          test -d "$webapp/WEB-INF/classes"
+          test "$(ls "$webapp"/WEB-INF/lib/*.jar | wc -l)" -gt 100
+changes:
+  - what: Dependency-Track's bundled server, unpacked, on hardened OpenJDK 27. Wolfi's dependency-track-bundled is the executable WAR on OpenJDK 21, which Jetty unpacks onto a writable mount at every start.
+    why: Load the server's code from the read-only image, on the hardened runtime, and follow upstream releases.
+    evidence:
+      - package.yaml
+replaces:
+  - dependency-track.yaml
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true
