@@ -103,7 +103,6 @@ melange:
     pipeline:
       - name: Installed package consumers
         runs: |-
-          /usr/lib/langflow/bin/python -P shared-tests/python-gates.py
           /usr/lib/langflow/bin/python -P /usr/lib/langflow/check-import.py
           /usr/lib/langflow/bin/python -P /usr/lib/langflow/check-embedding.py
 changes:

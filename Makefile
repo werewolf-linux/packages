@@ -15,7 +15,7 @@ $(ports): $(sources)
 	mkdir -p $(dir $@)
 	$(GO) -C Werewolf build -o $@ ./cmd/package
 
-.PHONY: tools metadata build check test test-packages lint updates refresh discover verify derive render prepare
+.PHONY: tools metadata build check test test-packages clean lint updates refresh discover verify derive render prepare
 
 tools: $(ports)
 
@@ -37,6 +37,9 @@ test: tools
 
 test-packages: metadata
 	$(ports) test $(select) --build --report Werewolf/.work/tests/$(ARCH).json
+
+clean: tools
+	$(ports) clean $(select)
 
 lint: tools
 	$(ports) schema --dest Werewolf/package.schema.json --offline

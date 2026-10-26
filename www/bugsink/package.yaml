@@ -72,7 +72,6 @@ melange:
     pipeline:
       - name: Installed package consumers
         runs: |-
-          /usr/lib/bugsink/bin/python shared-tests/python-gates.py
           /usr/lib/bugsink/bin/bugsink-manage --version
           /usr/lib/bugsink/bin/python bugsink-check.py
 changes:

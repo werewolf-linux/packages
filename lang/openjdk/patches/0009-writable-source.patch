@@ -1,0 +1,58 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Load classes only from read-only mounts unless allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/java.base/share/classes/jdk/internal/loader/URLClassPath.java b/src/java.base/share/classes/jdk/internal/loader/URLClassPath.java
+--- a/src/java.base/share/classes/jdk/internal/loader/URLClassPath.java
++++ b/src/java.base/share/classes/jdk/internal/loader/URLClassPath.java
+@@ -454,6 +454,7 @@
+      * Returns the Loader for the specified base URL.
+      */
+     private Loader getLoader(final URL url) throws IOException {
++        checkSource(url);
+         String protocol = url.getProtocol();  // lower cased in URL
+         String file = url.getFile();
+         if (file != null && file.endsWith("/")) {
+@@ -474,6 +475,40 @@
+         }
+     }
+ 
++    /*
++     * Werewolf: code comes from read-only mounts, the image's. A class path
++     * entry on a writable mount, or anything but a local file, needs
++     * java:writable-source; refused, it is skipped as a missing one is.
++     */
++    private static void checkSource(URL url) throws IOException {
++        if (jdk.internal.misc.WerewolfAllowance.allowed("writable-source")) {
++            return;
++        }
++        URL source = url;
++        String file = url.getFile();
++        if ("jar".equals(url.getProtocol())) {
++            int bang = file.indexOf("!/");
++            @SuppressWarnings("deprecation")
++            URL nested = new URL(bang < 0 ? file : file.substring(0, bang));
++            source = nested;
++        }
++        boolean readOnly = false;
++        if ("file".equals(source.getProtocol())) {
++            String path = source.getFile().replace('/', File.separatorChar);
++            try {
++                readOnly = java.nio.file.Files.getFileStore(
++                        java.nio.file.Path.of(ParseUtil.decode(path))).isReadOnly();
++            } catch (IllegalArgumentException e) {
++                throw new IOException(e);
++            }
++        }
++        if (!readOnly) {
++            jdk.internal.misc.WerewolfAllowance.denied("writable-source", "URLClassPath",
++                    url.toString());
++            throw new IOException("refused: the image must grant java:writable-source: " + url);
++        }
++    }
++
+     private static final JavaNetURLAccess JNUA
+             = SharedSecrets.getJavaNetURLAccess();
+ 

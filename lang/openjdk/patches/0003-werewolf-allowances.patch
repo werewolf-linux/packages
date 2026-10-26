@@ -35,7 +35,7 @@ new file mode 100644
 +
 +    private WerewolfAllowance() { }
 +
-+    /** Whether the image allows group: deserialize or native. */
++    /** Whether the image allows group: deserialize, native or unmap. */
 +    public static boolean allowed(String group) {
 +        Boolean found = FOUND.get(group);
 +        if (found == null) {

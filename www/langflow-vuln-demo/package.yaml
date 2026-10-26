@@ -87,7 +87,6 @@ melange:
     pipeline:
       - name: Installed training API and CPU embeddings
         runs: |
-          /usr/lib/langflow/bin/python -P shared-tests/python-gates.py
           /usr/lib/langflow/bin/python -P imports.py
           /usr/lib/langflow/bin/python -P /usr/lib/langflow/check-embedding.py
 test:

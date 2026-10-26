@@ -14,21 +14,23 @@ apk add openjdk-27-jre@hardened openjdk-27-default-jvm@hardened
 Run `java -jar /usr/lib/app/app.jar` as a non-root user. Werewolf's normal JVM JIT
 needs top-level `allow: [jit]`. Add `allow: [java:native]` to the existing service
 for native libraries, or create `/etc/runtime-hardening/allow/SERVICE/java/native`
-on Wolfi. The namespace is `java`, not `openjdk`.
+on Wolfi. Code loads only from read-only mounts unless the service has `java:writable-source`. The namespace is `java`, not `openjdk`.
 See [grant scope and restart instructions](../../Werewolf/docs/usage.md#grant-an-allowance).
 
 ## Patches
 
 | Patch | One-line change | Allowance / policy |
 |---|---|---|
-| [0001](patches/0001-ignore-environment-options.patch) | Ignore `_JAVA_OPTIONS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS` and `JDK_ALTERNATE_VM`. | Always denied |
+| [0001](patches/0001-ignore-environment-options.patch) | Ignore `JDK_ALTERNATE_VM`: the environment never picks the VM. | Always denied |
 | [0002](patches/0002-disable-attach-by-default.patch) | Default `DisableAttachMechanism` to true. | Target JVM flag `-XX:-DisableAttachMechanism` |
 | [0003](patches/0003-werewolf-allowances.patch) | Read and cache regular allowance files from the service or `all` namespace. | Always on |
 | [0004](patches/0004-deserialization-refused.patch) | Reject nonprimitive classes checked by `ObjectInputStream`, regardless of serialization filters. | `deserialize` |
-| [0005](patches/0005-unsafe-memory-access-denied.patch) | Deny `sun.misc.Unsafe` memory access regardless of the requested Unsafe mode. | `native` |
+| [0005](patches/0005-unsafe-memory-access-denied.patch) | Deny `sun.misc.Unsafe` memory access regardless of the requested Unsafe mode. | `native`; `unmap` takes back `invokeCleaner` alone |
 | [0006](patches/0006-native-access-denied.patch) | Deny illegal JNI/FFM native access and ignore command-line native grants. | `native`; JAR manifest native grants still work |
 | [0007](patches/0007-refuse-effective-root.patch) | Refuse effective UID 0 at VM creation, including `JNI_CreateJavaVM`. | Always denied |
 | [0008](patches/0008-log-denials-to-stderr.patch) | Emit JSON denial records directly to stderr. | Always on |
+| [0009](patches/0009-writable-source.patch) | Load classes, JARs and agents only from read-only mounts; refuse class path sources that are not local files. | `writable-source` |
+| [0010](patches/0010-command-hooks-exec.patch) | Refuse `-XX:OnError` and `-XX:OnOutOfMemoryError`, which run shell commands. | `exec` |
 
 `native` restores upstream native-access controls; `--enable-native-access`,
 `--illegal-native-access` and `--sun-misc-unsafe-memory-access` then apply normally.
@@ -43,11 +45,12 @@ Use [stderr denial records](../../Werewolf/docs/usage.md#debug-a-refusal) to ide
 | Symptom | Fix |
 |---|---|
 | `InvalidClassException` while reading Java serialization | Grant `java:deserialize`, then retain application serialization filters. RMI/JMX remoting may need this too. |
-| Unsafe memory operation denied | Grant `java:native`; an argv option or native-access manifest alone does not unlock Unsafe. |
+| Unsafe memory operation denied | Grant `java:native`; an argv option or native-access manifest alone does not unlock Unsafe. For `invokeCleaner` alone, which releases mapped files (Kafka's indexes), grant the narrower `java:unmap`. |
 | JNI/FFM restricted method denied despite `--enable-native-access` | Grant `java:native`, then set the required JVM native-access options; inspect the log's target module/method. |
 | Netty/Kryo/Chronicle/Kafka/zstd-jni native path fails | Confirm the denied operation; grant `java:native` if that path is required. |
 | `jcmd`, `jstack`, `jmap` or attach agent cannot attach | Restart the target with `-XX:-DisableAttachMechanism`; check UID and OS attach permissions. |
-| JVM options in environment have no effect | Put options on argv or in an explicit `@argfile`. There is no `java:environment` grant. |
+| Class or JAR not found, with a `writable-source` denial | Keep code on the read-only image. Grant `java:writable-source` only to a service that unpacks its own code onto a writable mount. |
+| VM refuses `-XX:OnError` or `-XX:OnOutOfMemoryError` | Prefer `-XX:+ExitOnOutOfMemoryError`; grant `java:exec` if a hook is required. |
 | Alternate VM environment setting ignored | Use explicit `-XXaltjvm=PATH` if required; the argv mechanism remains. |
 | Startup refuses root | Drop effective UID before VM creation; no production allowance exists. |
 | Executable-memory failure on Werewolf | Check top-level `jit` and kernel policy; `java:native` does not enable JIT mappings. |
@@ -60,9 +63,11 @@ Some exception text names the obsolete `/etc/werewolf/allow/java` path; use
 `CLASSPATH` still applies without `-cp`/`-jar`; set the class path explicitly.
 `JDK_AOT_VM_OPTIONS` still applies with `-XX:AOTMode=create`; `_JAVA_LAUNCHER_DEBUG`
 still traces the launcher. The headless build omits splash-screen support.
-`inline`/`writable-source` names accepted by forms have no Java enforcement yet:
-jshell, writable classes/JARs, generated classes and custom loaders remain available.
-Process execution remains subject to OS/Werewolf policy, without a Java `exec` gate.
+The JRE has no `inline` paths: jshell and the source launcher (`java File.java`) are
+the JDK's, a build tool's. Classes a program defines from bytes (generated classes,
+custom loaders) remain available; `writable-source` covers class path entries, JARs
+and agents. Process execution remains subject to OS/Werewolf policy; `exec` gates the
+VM's own command hooks.
 
 Keep Wolfi's commit, patches, toolchain, JDK/JRE builds and JIT. Add
 `--enable-headless-only` to omit desktop windows and X11 integration; retain

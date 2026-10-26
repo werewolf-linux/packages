@@ -6,3 +6,5 @@
 0006-native-access-denied.patch
 0007-refuse-effective-root.patch
 0008-log-denials-to-stderr.patch
+0009-writable-source.patch
+0010-command-hooks-exec.patch

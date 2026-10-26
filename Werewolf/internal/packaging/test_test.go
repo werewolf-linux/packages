@@ -16,6 +16,7 @@ func TestPackageSuitesKeepRunningAndReportEveryFailure(t *testing.T) {
 set -eu
 test -z "${GH_TOKEN:-}"
 test -z "${AWS_SECRET_ACCESS_KEY:-}"
+mkdir "$TMPDIR/guest"
 stage=$1
 shift
 name=
@@ -54,6 +55,10 @@ test "$name" != broken
 		if err != nil || !strings.Contains(string(log), "test "+result.Package) {
 			t.Fatalf("missing package log: %+v: %v", result, err)
 		}
+		roots, err := filepath.Glob(filepath.Join(filepath.Dir(result.Log), ".test-*"))
+		if err != nil || len(roots) != 0 {
+			t.Fatalf("test scratch retained for %s: %v: %v", result.Package, roots, err)
+		}
 	}
 }
 
@@ -75,7 +80,7 @@ func TestBuildScratchIsRemovedOnlyOnSuccess(t *testing.T) {
 		if success {
 			script = `mkdir "$TMPDIR/guest"`
 		}
-		err := runBuild(t.Context(), directory, "/bin/sh", []string{"TMPDIR=" + directory}, []string{"-ec", script})
+		err := RunMelange(t.Context(), directory, "/bin/sh", []string{"TMPDIR=" + directory}, []string{"-ec", script})
 		if (err == nil) != success {
 			t.Fatalf("success=%v: %v", success, err)
 		}

@@ -7,11 +7,23 @@ Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
 diff --git a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
 --- a/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
 +++ b/src/jdk.unsupported/share/classes/sun/misc/Unsafe.java
-@@ -1853,6 +1853,11 @@
+@@ -1739,7 +1739,10 @@
+     public void invokeCleaner(java.nio.ByteBuffer directBuffer) {
+         if (!directBuffer.isDirect())
+             throw new IllegalArgumentException("Not a direct buffer");
+-        beforeMemoryAccess();
++        // Werewolf: releasing a buffer reads and writes none of its memory, so
++        // java:unmap grants this alone, short of java:native.
++        if (!jdk.internal.misc.WerewolfAllowance.allowed("unmap"))
++            beforeMemoryAccess();
+         theInternalUnsafe.invokeCleaner(directBuffer);
+     }
+ 
+@@ -1853,6 +1856,11 @@
           * Return the value.
           */
          static MemoryAccessOption value() {
-+            // Werewolf: denied unless the image allows java:unsafe, whatever
++            // Werewolf: denied unless the image allows java:native, whatever
 +            // --sun-misc-unsafe-memory-access says.
 +            if (!jdk.internal.misc.WerewolfAllowance.allowed("native")) {
 +                return MemoryAccessOption.DENY;

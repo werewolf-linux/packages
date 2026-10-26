@@ -133,17 +133,30 @@ wolfi:
   suite-setup:
     name: Permit effective root only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 14
+  revision: 15
   family: openjdk-
 changes:
   - what: Omit jmods, demos and the OCI entrypoint.
     why: Keep the runtime and supported development packages without unused distribution artifacts.
     evidence:
       - package.yaml
-  - what: Ignore environment-controlled startup options, refuse effective-root initialization and restrict native access and object deserialization.
+  - what: Refuse effective-root initialization and the environment's choice of VM, and restrict native access and object deserialization.
     why: Enforce runtime policy within the JVM so application-controlled relaunches cannot discard it.
     evidence:
       - package.yaml
+  - what: Load code only from read-only mounts unless writable-source is granted, gate the VM's command hooks with exec, and read JVM options from the environment again.
+    why: Refuse planted classes, JARs and agents wherever they are named, while the environment configures the VM as argv does and lifts no protection.
+    evidence:
+      - patches/0001-ignore-environment-options.patch
+      - patches/0009-writable-source.patch
+      - patches/0010-command-hooks-exec.patch
+      - tests/probe.sh
+  - what: Grant Unsafe.invokeCleaner alone through the unmap group.
+    why: Let servers such as Kafka release mapped files without the whole native group, as freeing a buffer reads and writes none of its memory.
+    evidence:
+      - patches/0005-unsafe-memory-access-denied.patch
+      - tests/Probe.java
+      - tests/probe.sh
   - what: Build headless-only with explicit fontconfig dependency.
     why: Remove desktop-window support while preserving server font and image rendering.
     evidence:

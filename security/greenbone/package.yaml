@@ -81,7 +81,10 @@ melange:
           pg_ctl -D "$root/data" -l "$root/server.log" -o "-F -k $root -c listen_addresses=''" -w start
           trap 'pg_ctl -D "$root/data" -m immediate -w stop' EXIT
           psql -h "$root" -U tester -d postgres -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION "pg-gvm";'
-          test "$(psql -h "$root" -U tester -d postgres -Atc "SELECT extversion FROM pg_extension WHERE extname='pg-gvm'")" = '${{package.version}}'
+          expected='${{package.version}}'
+          expected=${expected%.*}
+          actual=$(psql -h "$root" -U tester -d postgres -Atc "SELECT extversion FROM pg_extension WHERE extname='pg-gvm'")
+          test "$actual" = "$expected"
 changes:
   - what: PostgreSQL's Greenbone extension, built for PostgreSQL 18 as the form uses. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

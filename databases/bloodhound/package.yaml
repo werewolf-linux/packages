@@ -63,7 +63,7 @@ melange:
     pipeline:
       - name: Installed Neo4j administration classes
         runs: |
-          java -cp '/var/lib/neo4j/lib/*' org.neo4j.commandline.admin.AdminTool --help >/tmp/neo4j-help 2>&1 || { cat /tmp/neo4j-help; exit 1; }
+          java -cp '/var/lib/neo4j/lib/*' org.neo4j.cli.AdminTool --help >/tmp/neo4j-help 2>&1 || { cat /tmp/neo4j-help; exit 1; }
           grep -F 'neo4j-admin' /tmp/neo4j-help
           test -s /usr/lib/jna/${{build.arch}}/libjnidispatch.so
 changes:

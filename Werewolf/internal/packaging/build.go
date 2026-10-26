@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -189,7 +190,18 @@ func buildEnv(extra map[string]string) []string {
 	return env
 }
 
-func runBuild(ctx context.Context, root, tool string, env []string, args []string) error {
+// RunMelange scopes guest scratch to one invocation. Failed builds retain their
+// roots for diagnosis; tests always release theirs, with diagnostics in test.log.
+func RunMelange(ctx context.Context, root, tool string, env []string, args []string) (result error) {
+	// Bubblewrap mounts only existing cache directories. Without this, npm,
+	// Go and compiler caches silently live in the disposable guest filesystem.
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--cache-dir" || args[i] == "--apk-cache-dir" {
+			if err := os.MkdirAll(args[i+1], 0755); err != nil {
+				return err
+			}
+		}
+	}
 	// Melange leaves guest roots under TMPDIR, even after successful suites.
 	// Scope each invocation so successful runs release that disk space.
 	var scratch string
@@ -205,6 +217,11 @@ func runBuild(ctx context.Context, root, tool string, env []string, args []strin
 			break
 		}
 	}
+	defer func() {
+		if scratch != "" && (result == nil || (len(args) > 0 && args[0] == "test")) {
+			result = errors.Join(result, os.RemoveAll(scratch))
+		}
+	}()
 	cmd := exec.CommandContext(ctx, tool, args...)
 	cmd.Dir = root
 	cmd.Env = env
@@ -212,9 +229,6 @@ func runBuild(ctx context.Context, root, tool string, env []string, args []strin
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", tool, err)
-	}
-	if scratch != "" {
-		return os.RemoveAll(scratch)
 	}
 	return nil
 }
@@ -353,8 +367,8 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, ru
 			}
 		}
 		args := append([]string{"build", filepath.Join(pkg.Build, pkg.Name+".yaml")}, common...)
-		args = append(args, "--source-dir", filepath.Join(pkg.Build, "context"), "--namespace", "werewolf", "--pipeline-dir", pipelines, "--repository-append", "https://packages.wolfi.dev/os", "--keyring-append", wolfiKey, "--signing-key", filepath.Join(engine, "Werewolf/.work/keys/werewolf-packages.rsa"), "--cache-dir", filepath.Join(scratch, "cache"), "--out-dir", packages)
-		if err := runBuild(ctx, engine, tool, env, args); err != nil {
+		args = append(args, "--source-dir", filepath.Join(pkg.Build, "context"), "--namespace", "werewolf", "--pipeline-dir", pipelines, "--repository-append", "https://packages.wolfi.dev/os", "--keyring-append", wolfiKey, "--signing-key", filepath.Join(engine, "Werewolf/.work/keys/werewolf-packages.rsa"), "--cache-dir", filepath.Join(scratch, "cache"), "--apk-cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/apk"), "--out-dir", packages)
+		if err := RunMelange(ctx, engine, tool, env, args); err != nil {
 			return err
 		}
 	}
@@ -387,6 +401,12 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, ru
 		}
 	}()
 	repository := "http://" + listener.Addr().String()
+	cache := filepath.Join(pkg.Root, "Werewolf/.work/cache/apk")
+	defer func() {
+		if err := CleanRepositoryCache(cache, repository); err != nil {
+			slog.Warn("remove temporary repository cache", "error", err)
+		}
+	}()
 	inside := repository
 	if runner == "qemu" {
 		inside = "http://10.0.2.2:" + strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
@@ -410,7 +430,7 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, ru
 	entry := overlay.Field(config, "package")
 	fullVersion := overlay.Value(entry, "version") + "-r" + overlay.Value(entry, "epoch")
 	args := append([]string{"test", testRecipe}, common...)
-	args = append(args, "--source-dir", testContext, "--pipeline-dirs", pipelines)
+	args = append(args, "--source-dir", testContext, "--pipeline-dirs", pipelines, "--apk-cache-dir", cache)
 	for _, name := range names {
 		unpinned := false
 		for _, pattern := range pkg.Spec.TestUnpinned {
@@ -432,7 +452,7 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, ru
 		args = append(args, "--test-package-append", name)
 	}
 	args = append(args, "--repository-append", repository, "--repository-append", "https://packages.wolfi.dev/os", "--keyring-append", filepath.Join(engine, "Werewolf/.work/keys/werewolf-packages.rsa.pub"), "--keyring-append", wolfiKey)
-	return runBuild(ctx, engine, tool, env, args)
+	return RunMelange(ctx, engine, tool, env, args)
 }
 
 func wolfiResources(spec *overlay.Spec) (string, string) {
@@ -569,7 +589,7 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 		return err
 	}
 	args := []string{"build", recipe, "--runner", "bubblewrap", "--arch", arch, "--source-dir", directory, "--out-dir", out, "--cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/melange"), "--apk-cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/apk"), "--generate-index=false", "--namespace", "werewolf", "--git-commit", commit, "--cpu", env("MELANGE_CPU", strconv.Itoa(runtime.NumCPU())), "--memory", env("MELANGE_MEMORY", "8Gi"), "--timeout", "5h"}
-	if err := runBuild(ctx, pkg.Root, tool, buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": strconv.FormatInt(date, 10)}), args); err != nil {
+	if err := RunMelange(ctx, pkg.Root, tool, buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": strconv.FormatInt(date, 10)}), args); err != nil {
 		return err
 	}
 	hashes := map[string]string{}

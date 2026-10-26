@@ -94,7 +94,7 @@ func testPackage(ctx context.Context, pkg Package, options TestOptions, tool str
 		return err
 	}
 	defer log.Close()
-	run := func(stage string) error {
+	run := func(stage string) (runErr error) {
 		result.Stage = stage
 		slog.Info("running package tests", "package", pkg.Name, "stage", stage)
 		args := []string{stage, "--root", pkg.Root, "--package", pkg.Name, "--arch", options.Arch}
@@ -110,6 +110,11 @@ func testPackage(ctx context.Context, pkg Package, options TestOptions, tool str
 		if err != nil {
 			return err
 		}
+		defer func() {
+			if runErr == nil || stage == "test" {
+				runErr = errors.Join(runErr, os.RemoveAll(scratch))
+			}
+		}()
 		command.Env = buildEnv(map[string]string{"TMPDIR": scratch})
 		for _, key := range []string{"MELANGE", "MELANGE_CPU", "MELANGE_MEMORY"} {
 			if value, ok := os.LookupEnv(key); ok {
@@ -121,7 +126,7 @@ func testPackage(ctx context.Context, pkg Package, options TestOptions, tool str
 		if err := command.Run(); err != nil {
 			return fmt.Errorf("%s failed; see %s: %w", stage, result.Log, err)
 		}
-		return os.RemoveAll(scratch)
+		return nil
 	}
 	if options.Build {
 		result.Stage = "build"

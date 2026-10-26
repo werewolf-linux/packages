@@ -233,8 +233,16 @@ suite fails. `--report FILE` saves every selected context, including pending or
 cancelled work, and updates it after each package. Each context has a `test.log`
 under the logs directory reported by `package paths`. `--json` emits the final
 report to standard output. Build and test subprocesses receive no publication
-credentials. Successful batch runner roots are removed; failed roots remain
-available for diagnosis. `make test` runs the framework and contributor checks.
+credentials. Test guest roots and cached copies from temporary repositories are
+removed after each suite, including failures. Remote APK downloads stay in the
+shared cache for reuse; logs and generated test recipes remain for diagnosis.
+Failed build roots are retained. `make test` runs the framework and contributor checks.
+
+Run `make clean` (or `package clean`) to remove runner scratch, generated test
+workspaces and shared download caches. `PACKAGE`, `CATEGORY` and `ARCH` select
+which package scratch is removed; download caches are shared and always cleared.
+Built APKs, captured inputs, source checkouts, signing keys, reports and logs are
+retained. Cleanup refuses to run while a package build or test command is active.
 
 `test.confined: true` runs shell probes as UID 1000 with no capabilities, read-only
 runtime and fixtures, and writable `/tmp`. Build/test allowances belong only to this

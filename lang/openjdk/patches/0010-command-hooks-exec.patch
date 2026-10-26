@@ -1,0 +1,81 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Refuse the VM command hooks unless exec is allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/hotspot/share/runtime/runtime_hardening_allow.h b/src/hotspot/share/runtime/runtime_hardening_allow.h
+new file mode 100644
+--- /dev/null
++++ b/src/hotspot/share/runtime/runtime_hardening_allow.h
+@@ -0,0 +1,40 @@
++/* Whether the image grants RUNTIME:GROUP, as jdk.internal.misc.WerewolfAllowance
++ * decides for Java code: a regular file, never a link, at
++ * BASE/<ns>/RUNTIME/GROUP, where <ns> is the last element of the first line of
++ * /proc/self/cgroup, which the supervisor sets and the process cannot change,
++ * or at BASE/all/RUNTIME/GROUP. argv and the environment grant nothing. */
++#ifndef RUNTIME_HARDENING_ALLOW_H
++#define RUNTIME_HARDENING_ALLOW_H
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++#ifndef RUNTIME_HARDENING_ALLOW_BASE
++#define RUNTIME_HARDENING_ALLOW_BASE "/etc/runtime-hardening/allow"
++#endif
++
++static inline int rh_allow_file(const char *ns, const char *runtime, const char *group) {
++    char path[512];
++    struct stat st;
++    int n = snprintf(path, sizeof(path), "%s/%s/%s/%s",
++                     RUNTIME_HARDENING_ALLOW_BASE, ns, runtime, group);
++    if (n < 0 || (size_t)n >= sizeof(path)) return 0;
++    return lstat(path, &st) == 0 && S_ISREG(st.st_mode);
++}
++
++static inline int runtime_hardening_allowed(const char *runtime, const char *group) {
++    char line[512], *slash;
++    ssize_t n = -1;
++    int fd = open("/proc/self/cgroup", O_RDONLY | O_CLOEXEC);
++    if (fd >= 0) { n = read(fd, line, sizeof(line) - 1); close(fd); }
++    if (n > 0) {
++        line[n] = '\0';
++        line[strcspn(line, "\n")] = '\0';
++        slash = strrchr(line, '/');
++        if (slash != NULL && slash[1] != '\0' && rh_allow_file(slash + 1, runtime, group))
++            return 1;
++    }
++    return rh_allow_file("all", runtime, group);
++}
++#endif
+diff --git a/src/hotspot/share/runtime/threads.cpp b/src/hotspot/share/runtime/threads.cpp
+--- a/src/hotspot/share/runtime/threads.cpp
++++ b/src/hotspot/share/runtime/threads.cpp
+@@ -65,6 +65,7 @@
+ #include "prims/jvmtiEnvBase.hpp"
+ #include "runtime_hardening_root.h"
+ #include "runtime_hardening_log.h"
++#include "runtime_hardening_allow.h"
+ #include "runtime/arguments.hpp"
+ #include "runtime/fieldDescriptor.inline.hpp"
+ #include "runtime/flags/jvmFlagLimit.hpp"
+@@ -502,6 +503,18 @@
+   jint parse_result = Arguments::parse(args);
+   if (parse_result != JNI_OK) return parse_result;
+ 
++  // Werewolf: the VM's own command hooks run a shell; only an image granting
++  // java:exec keeps them, whether argv or the environment set them.
++  const bool on_error = OnError != nullptr && OnError[0] != '\0';
++  const bool on_oome = OnOutOfMemoryError != nullptr && OnOutOfMemoryError[0] != '\0';
++  if ((on_error || on_oome) && !runtime_hardening_allowed("java", "exec")) {
++    runtime_hardening_denied("java", "exec", on_error ? "-XX:OnError" : "-XX:OnOutOfMemoryError",
++                             on_error ? OnError : OnOutOfMemoryError);
++    fprintf(stderr, "java: -XX:OnError and -XX:OnOutOfMemoryError need java:exec\n");
++    *canTryAgain = false;
++    return JNI_ERR;
++  }
++
+   // Initialize NMT right after argument parsing to keep the pre-NMT-init window small.
+   MemTracker::initialize();
+ 

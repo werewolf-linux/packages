@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
+update:
+  github:
+    identifier: apache/kafka
+    use-tag: true
+melange:
+  # Only the broker's jars and configuration, on hardened OpenJDK 27. Wolfi's
+  # kafka-4.3 also depends on Bash and OpenJDK 21, and ships the shell
+  # launchers; none belongs in this package or its runtime deps.
+  package:
+    name: kafka
+    version: 4.4.0
+    epoch: 0
+    description: Apache Kafka, directly launched with hardened OpenJDK 27
+    copyright:
+      - license: Apache-2.0
+    dependencies:
+      runtime:
+        - openjdk-27-jre>=27.0.0-r2002
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
+        - ca-certificates-bundle
+  pipeline:
+    # Apache's signed binary release (Scala 2.13, the only one 4.x publishes).
+    - uses: fetch
+      with:
+        uri: https://archive.apache.org/dist/kafka/${{package.version}}/kafka_2.13-${{package.version}}.tgz
+        expected-sha256: 5d46df16e8dbd228fed83c3e6fc4306916cf3d9156184a7fc2462e9ad9711a7d
+        strip-components: 1
+    - runs: |
+        dest=${{targets.destdir}}/usr/lib/kafka
+        mkdir -p "$dest"
+        # The shell launchers in bin/ and the site-docs stay out: java runs
+        # kafka.Kafka and the tools' classes directly.
+        cp -a libs config licenses LICENSE NOTICE "$dest/"
+  test:
+    pipeline:
+      - name: The broker and its tools run on hardened OpenJDK 27
+        runs: |
+          set -eu
+          test ! -e /usr/lib/kafka/bin
+          java -cp '/usr/lib/kafka/libs/*' kafka.Kafka --version | grep -qx '4\.4\.0.*'
+          java -cp '/usr/lib/kafka/libs/*' org.apache.kafka.tools.TopicCommand --version | grep -qx '4\.4\.0.*'
+          test -s /usr/lib/kafka/config/tools-log4j2.yaml
+changes:
+  - what: Only the broker's jars and configuration, on hardened OpenJDK 27. Wolfi's kafka-4.3 also depends on Bash and OpenJDK 21, and ships the shell launchers; none belongs in this package or its runtime deps.
+    why: Run Kafka on the hardened runtime, without a second, unhardened JVM or a shell.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
+replaces:
+  - kafka-4.3.yaml
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true

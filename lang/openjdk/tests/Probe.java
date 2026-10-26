@@ -23,6 +23,7 @@ public class Probe {
                 + "\",\"deserialize\":\"" + deserialize(Integer.valueOf(7))
                 + "\",\"primitive_array\":\"" + deserialize(new int[] {7})
                 + "\",\"unsafe\":\"" + unsafe()
+                + "\",\"unmap\":\"" + unmap()
                 + "\",\"native\":\"" + nativeAccess() + "\"}");
     }
 
@@ -47,6 +48,19 @@ public class Probe {
         sun.misc.Unsafe unsafe = (sun.misc.Unsafe) field.get(null);
         try {
             unsafe.freeMemory(unsafe.allocateMemory(8));
+            return "allowed";
+        } catch (UnsupportedOperationException e) {
+            return "refused";
+        }
+    }
+
+    // Freeing a direct buffer touches none of its memory: java:unmap's alone.
+    static String unmap() throws Exception {
+        Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        sun.misc.Unsafe unsafe = (sun.misc.Unsafe) field.get(null);
+        try {
+            unsafe.invokeCleaner(java.nio.ByteBuffer.allocateDirect(8));
             return "allowed";
         } catch (UnsupportedOperationException e) {
             return "refused";

@@ -44,7 +44,7 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: package COMMAND [flags]\ncommands: new, schema, render, paths, test, checks, catalog, check, plan, release-plan, updates, refresh, discover, derive, verify, prepare, build, fixture, install-melange, setup-runner, signing-key, provenance, stage, publish, feed, status, recover, probe")
+		return errors.New("usage: package COMMAND [flags]\ncommands: new, schema, render, paths, test, clean, checks, catalog, check, plan, release-plan, updates, refresh, discover, derive, verify, prepare, build, fixture, install-melange, setup-runner, signing-key, provenance, stage, publish, feed, status, recover, probe")
 	}
 	command := args[0]
 	if command == "probe" {
@@ -101,6 +101,13 @@ func run(ctx context.Context, args []string) error {
 	absolute, err := catalog.RepositoryRoot(*root)
 	if err != nil {
 		return err
+	}
+	if command == "test" || command == "build" {
+		unlock, err := packaging.WorkLock(absolute, false)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
 	switch command {
 	case "schema":
@@ -252,6 +259,9 @@ func run(ctx context.Context, args []string) error {
 		}
 		_, err = os.Stdout.Write(data)
 		return err
+	}
+	if command == "clean" {
+		return packaging.Clean(absolute, chosen, *arch)
 	}
 	if command == "test" {
 		if flags.NArg() != 0 {

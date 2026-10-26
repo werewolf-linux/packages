@@ -17,7 +17,7 @@ melange:
   package:
     name: n8n
     version: 2.44.7
-    epoch: 3
+    epoch: 4
     description: n8n workflow automation on hardened Node.js
     copyright:
       - license: LicenseRef-Sustainable-Use
@@ -39,6 +39,7 @@ melange:
         - busybox
         - ca-certificates-bundle
         - build-base
+        - ccache
         # isolated-vm links the shared libraries in Node's build configuration.
         - brotli-dev
         - c-ares-dev
@@ -60,14 +61,31 @@ melange:
         extract: false
     - runs: |
         # Build native addons for the same Node major as the hardened runtime.
-        npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+        npm ci --omit=dev --ignore-scripts --prefer-offline --no-audit --no-fund
         node prune-optional.cjs
         node port-node.cjs
-        (cd node_modules/sqlite3 && node-gyp rebuild --nodedir=/usr)
-        (cd node_modules/isolated-vm && node-gyp rebuild --nodedir=/usr)
+        # Bound parallel C++ compilation to fit the standard 8 GiB builder.
+        # Melange persists /var/cache/melange between bubblewrap builds.
+        export CC="ccache gcc" CXX="ccache g++"
+        export CCACHE_DIR=/var/cache/melange/ccache/n8n CCACHE_MAXSIZE=256M
+        # Fresh guests change compiler mtimes; identify compilers by content.
+        export CCACHE_COMPILERCHECK=content
+        jobs=$(nproc)
+        if [ "$jobs" -gt 4 ]; then jobs=4; fi
+        (cd node_modules/sqlite3 && node-gyp rebuild --nodedir=/usr --jobs="$jobs")
+        (cd node_modules/isolated-vm && node-gyp rebuild --nodedir=/usr --jobs="$jobs")
+        ccache --show-stats
         test -s node_modules/sqlite3/build/Release/node_sqlite3.node
         test -s node_modules/isolated-vm/build/Release/isolated_vm.node
         node --no-node-snapshot -e 'const ivm = require("isolated-vm"); const isolate = new ivm.Isolate({memoryLimit: 16}); isolate.dispose();'
+        # Keep the runtime bindings, not object files, generated SQLite source,
+        # static archives or node-gyp metadata. Retain each binding's load path.
+        for addon in sqlite3 isolated-vm; do
+          binding=node_modules/$addon/build/Release
+          find "$binding" -maxdepth 1 -name '*.node' -exec strip --strip-unneeded {} +
+          find node_modules/$addon/build -mindepth 1 -maxdepth 1 ! -name Release -exec rm -rf {} +
+          find "$binding" -mindepth 1 -maxdepth 1 ! -name '*.node' -exec rm -rf {} +
+        done
         dest=${{targets.destdir}}/usr/lib/n8n
         mkdir -p "$dest"
         # Move the installed tree: exporting a second source copy doubles
@@ -78,7 +96,7 @@ melange:
         tar -xzf ${{vars.launcher-commit}} -C launcher --strip-components=1
         # The launcher otherwise binds its private health endpoint on all interfaces.
         sed -i 's/fmt.Sprintf(":%s", port)/fmt.Sprintf("127.0.0.1:%s", port)/' launcher/internal/http/healthcheck_server.go
-        (cd launcher && CGO_ENABLED=0 go build -buildmode=pie -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
+        (cd launcher && CGO_ENABLED=0 GOCACHE=/var/cache/melange/go-build go build -buildmode=pie -mod=readonly -trimpath -ldflags='-s -w' -o "$dest/task-runner-launcher" ./cmd/launcher)
         cp task-runners.json "$dest/"
         install -Dm644 launcher/LICENSE.md "$dest/licenses/task-runner-launcher.LICENSE.md"
         install -Dm644 launcher/LICENSE_EE.md "$dest/licenses/task-runner-launcher.LICENSE_EE.md"
@@ -89,14 +107,16 @@ melange:
           node /usr/lib/n8n/node_modules/n8n/bin/n8n --version | grep -F '${{package.version}}'
           node --no-node-snapshot n8n-check.cjs
 checks:
-  - name: Optional native dependency pruning
+  - name: Production dependency pruning
     working-directory: tests
     runs: go test prune_test.go
 changes:
-  - what: Package the npm release with a pinned dependency lock; omit optional native profilers and watchers while retaining workflow backends.
-    why: Prune optional native profilers and watchers while retaining workflow backends and pinned dependency locks.
+  - what: Package the locked npm release; remove optional profilers, watchers, third-party source maps, TypeScript declarations, unused platform binaries and native compiler outputs.
+    why: Reduce package size and build I/O while retaining workflow backends, editor assets and first-party diagnostics. Compile native addons with bounded parallelism and a 256 MB compiler cache.
     evidence:
       - package.yaml
+      - port-node.cjs
+      - prune-optional.cjs
     claims:
       - minimized
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.

@@ -4,6 +4,7 @@ package smoke
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,7 +25,7 @@ type spec struct {
 	PreserveMtimes []string `json:"preserve_mtimes,omitempty"`
 }
 
-func Check(ctx context.Context, name, arch, runner string) error {
+func Check(ctx context.Context, name, arch, runner string) (result error) {
 	if runner == "" {
 		runner = "qemu"
 		if runtime.GOOS == "linux" {
@@ -114,6 +115,8 @@ func Check(ctx context.Context, name, arch, runner string) error {
 		}
 	}
 	repository := filepath.Join(dir, "repository")
+	cache := filepath.Join(root, "Werewolf/.work/cache/apk")
+	defer func() { result = errors.Join(result, packaging.CleanRepositoryCache(cache, repository)) }()
 	if err := os.MkdirAll(filepath.Join(repository, arch), 0o755); err != nil {
 		return err
 	}
@@ -243,7 +246,7 @@ func Check(ctx context.Context, name, arch, runner string) error {
 			}
 		}
 	}
-	args := []string{"test", path, "--arch", arch, "--runner", runner, "--ignore-signatures", "--source-dir", fixtures, "--cpu", "2", "--memory", "4Gi", "--timeout", "10m"}
+	args := []string{"test", path, "--arch", arch, "--runner", runner, "--ignore-signatures", "--source-dir", fixtures, "--cpu", "2", "--memory", "4Gi", "--timeout", "10m", "--apk-cache-dir", cache}
 	names, err := overlay.OutputNames(config)
 	if err != nil {
 		return err
@@ -251,7 +254,7 @@ func Check(ctx context.Context, name, arch, runner string) error {
 	for _, name := range names {
 		args = append(args, "--test-package-append", name+"="+version)
 	}
-	return update.RunCommand(ctx, root, tool, args...)
+	return packaging.RunMelange(ctx, root, tool, os.Environ(), args)
 
 }
 

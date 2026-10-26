@@ -16,7 +16,7 @@ Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with
 |---|---|---|
 | [glibc](../../devel/glibc/README.md) | newest `glibc-2.*` | libc ignores its environment, no loader injection |
 | [php](../../lang/php/README.md) | newest `php-8.*` | no PEAR/Phar; execution, uploads and optional OS/diagnostic features require allowances |
-| [openjdk](../../lang/openjdk/README.md) | newest `openjdk-*` | object deserialization and native access restricted; see manifest exception |
+| [openjdk](../../lang/openjdk/README.md) | newest `openjdk-*` | object deserialization and native access restricted; code only from read-only mounts; see manifest exception |
 | [python](../../lang/python/README.md) | newest `python-3.*` | no user site; environment, ctypes, pickle globals, inline and writable main scripts gated |
 | [node](../../lang/node/README.md) | newest `nodejs-*` | no npm, inspector or SEA; exec, native, inline and writable modules require allowances |
 | [curl](../../net/curl/README.md) | `curl` | HTTP(S) only; no Brotli, Zstd, HTTP/2/3, proxy, SSH, LDAP or Kerberos libraries |
@@ -75,9 +75,9 @@ actual execution paths. Current differences remain explicit:
 |---|---|---|---|---|
 | Effective-root startup refusal | yes | yes | yes | yes |
 | `native` | ctypes | `dl`, SQLite loaders, optional FFI | Unsafe, JNI, FFM | addons, FFI, WASI, native loaders |
-| `exec` runtime floor | leash only | yes | leash only | yes, including package scripts |
-| `inline` | argv/stdin | argv/stdin, eval, generated streams | deferred | argv/stdin, worker eval, data-URL code |
-| `writable-source` | main script | compiled files | deferred | ordinary main/dependency code, disk cache |
+| `exec` runtime floor | leash only | yes | VM command hooks; leash otherwise | yes, including package scripts |
+| `inline` | argv/stdin | argv/stdin, eval, generated streams | none in the JRE (jshell and the source launcher are the JDK's) | argv/stdin, worker eval, data-URL code |
+| `writable-source` | main script | compiled files | class path entries, JARs and agents | ordinary main/dependency code, disk cache |
 | `deserialize` | pickle globals | `unserialize()` objects | ObjectInputStream | no equivalent object-gadget API |
 | `upload` | no runtime upload API | multipart parsing and upload moves | no runtime upload API | no runtime upload API |
 | `upload-progress` | no equivalent | session upload-progress callbacks | no equivalent | no equivalent |
