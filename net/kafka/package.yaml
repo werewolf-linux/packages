@@ -45,8 +45,8 @@ melange:
         runs: |
           set -eu
           test ! -e /usr/lib/kafka/bin
-          java -cp '/usr/lib/kafka/libs/*' kafka.Kafka --version | grep -qx '4\.4\.0.*'
-          java -cp '/usr/lib/kafka/libs/*' org.apache.kafka.tools.TopicCommand --version | grep -qx '4\.4\.0.*'
+          /usr/lib/jvm/java-27-openjdk/bin/java -cp '/usr/lib/kafka/libs/*' kafka.Kafka --version | grep -qx '4\.4\.0.*'
+          /usr/lib/jvm/java-27-openjdk/bin/java -cp '/usr/lib/kafka/libs/*' org.apache.kafka.tools.TopicCommand --version | grep -qx '4\.4\.0.*'
           test -s /usr/lib/kafka/config/tools-log4j2.yaml
 changes:
   - what: Only the broker's jars and configuration, on hardened OpenJDK 27. Wolfi's kafka-4.3 also depends on Bash and OpenJDK 21, and ships the shell launchers; none belongs in this package or its runtime deps.
