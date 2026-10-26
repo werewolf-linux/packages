@@ -20,6 +20,10 @@ import (
 
 // Spec describes one package's changes to its Wolfi recipe.
 type Spec struct {
+	Resources struct {
+		CPU    string `yaml:"cpu"`
+		Memory string `yaml:"memory"`
+	} `yaml:"resources,omitempty"`
 	Title                 string                   `yaml:"title"`
 	Sources               []string                 `yaml:"sources"`
 	EpochMultiplier       int                      `yaml:"epoch-multiplier,omitempty"`

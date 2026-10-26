@@ -53,6 +53,15 @@
       "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/libvips/libvips.git; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 24ad4d042940e6bf99a68871ba886ca8847c9c82; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 24ad4d042940e6bf99a68871ba886ca8847c9c82\n      git -c core.hooksPath=/dev/null checkout -q --detach 24ad4d042940e6bf99a68871ba886ca8847c9c82\n      exit 0\n    fi\n  done\ndone\necho \"24ad4d042940e6bf99a68871ba886ca8847c9c82: every source failed, three times\" >&2\nexit 1\n"
     },
     {
+      "name": "Apply Werewolf policy patches",
+      "needs": {
+        "packages": [
+          "patch"
+        ]
+      },
+      "runs": "while IFS= read -r name; do\n  patch -p1 --forward --batch --fuzz=2 --no-backup-if-mismatch -i \"werewolf/patches/$name\" || exit 1\ndone < werewolf/patches/series\n"
+    },
+    {
       "uses": "meson/configure",
       "with": {
         "opts": "-Dauto_features=disabled -Dheif=disabled -Dmodules=disabled -Dexif=enabled -Djpeg=enabled -Dpng=enabled -Dwebp=enabled -Dlcms=enabled -Dzlib=enabled -Dnsgif=true -Dppm=false -Danalyze=false -Dradiance=false -Dcplusplus=false -Ddeprecated=false -Dexamples=false -Ddocs=false"
@@ -137,7 +146,7 @@
       },
       {
         "name": "Retained formats work and unused loaders are absent",
-        "runs": "set -eu\nwork=$(mktemp -d)\ntrap 'rm -rf \"$work\"' EXIT\nvips black \"$work/source.png\" 32 24 --bands 3\nfor format in jpg png webp; do\n    vips copy \"$work/source.png\" \"$work/input.$format\"\n    vipsthumbnail \"$work/input.$format\" --size 16x16 -o \"$work/thumb-$format.png\"\n    test \"$(vipsheader -f width \"$work/thumb-$format.png\")\" = 16\n    test \"$(vipsheader -f height \"$work/thumb-$format.png\")\" = 12\ndone\nprintf '%s' R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7 | base64 -d > \"$work/input.gif\"\nvips copy \"$work/input.gif\" \"$work/gif.png\"\ntest \"$(vipsheader -f width \"$work/gif.png\")\" = 1\nvips icc_transform \"$work/source.png\" \"$work/colour.png\" srgb\ntest \"$(vipsheader -f width \"$work/colour.png\")\" = 32\nvips -l > \"$work/operations\"\nfor operation in jpegload pngload webpload gifload icc_transform autorot; do\n    grep -F \"$operation\" \"$work/operations\"\ndone\nfor operation in heifload svgload tiffload pdfload magickload jp2kload jxlload openslideload; do\n    if grep -F \"$operation\" \"$work/operations\"; then\n        echo \"unexpected loader: $operation\" >&2\n        exit 1\n    fi\ndone\necho 'PASS: JPEG/PNG/WebP/GIF thumbnails, colour conversion and omitted loaders'\n"
+        "runs": "set -eu\nwork=$(mktemp -d)\ntrap 'rm -rf \"$work\"' EXIT\nvips black \"$work/source.png\" 32 24 --bands 3\nfor format in jpg png webp; do\n    vips copy \"$work/source.png\" \"$work/input.$format\"\n    vipsthumbnail \"$work/input.$format\" --size 16x16 -o \"$work/thumb-$format.png\"\n    test \"$(vipsheader -f width \"$work/thumb-$format.png\")\" = 16\n    test \"$(vipsheader -f height \"$work/thumb-$format.png\")\" = 12\ndone\nprintf '%s' R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7 | base64 -d > \"$work/input.gif\"\nvips copy \"$work/input.gif\" \"$work/gif.png\"\ntest \"$(vipsheader -f width \"$work/gif.png\")\" = 1\nvips icc_transform \"$work/source.png\" \"$work/colour.png\" srgb\ntest \"$(vipsheader -f width \"$work/colour.png\")\" = 32\nvips -l > \"$work/operations\"\nfor operation in jpegload pngload webpload gifload icc_transform autorot; do\n    grep -F \"$operation\" \"$work/operations\"\ndone\nfor operation in heifload svgload tiffload pdfload magickload jp2kload jxlload openslideload ppmload radload analyzeload; do\n    if grep -F \"$operation\" \"$work/operations\"; then\n        echo \"unexpected loader: $operation\" >&2\n        exit 1\n    fi\ndone\necho 'PASS: JPEG/PNG/WebP/GIF thumbnails, colour conversion and omitted loaders'\n"
       }
     ]
   }

@@ -2,6 +2,9 @@
 title: libvips
 sources:
 - https://github.com/libvips/libvips.git
+patches: werewolf/patches
+context:
+  patches: werewolf/patches
 checks:
 - path: [pipeline, uses=git-checkout]
   expect:

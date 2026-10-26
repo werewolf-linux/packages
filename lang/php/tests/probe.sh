@@ -90,6 +90,10 @@ grep -F '"group":"exec"' "$work/err" | grep -F '"operation":"system"'
 grep -F '"group":"native"' "$work/err" | grep -F '"operation":"dl"'
 test "$(grep -c '"operation":"system"' "$work/err")" = 2
 
+# phpdbg is enabled by default upstream; omitting its subpackage alone is insufficient.
+test ! -e /usr/bin/phpdbg
+test ! -e /usr/bin/phpdbg8.5
+
 # Both SAPIs must retain regex and bytecode caching under kernel-enforced MDWE,
 # even when argv tries to enable the features omitted at configure time.
 cp "$(dirname "$probe")/no-jit.php" "$work/no-jit.php"

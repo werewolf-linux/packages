@@ -220,7 +220,6 @@
           "contents": {
             "packages": [
               "binutils",
-              "python3",
               "wolfi-base",
               "ver-check",
               "bash-binsh"
@@ -238,7 +237,7 @@
           },
           {
             "name": "Test wget can download a file",
-            "runs": "# Create test content for HTTP server\nmkdir -p /tmp/www\necho \"wget test content\" > /tmp/www/test.txt\n\n# Start Python HTTP server\ncd /tmp/www\npython3 -m http.server 8888 > /tmp/httpd.log 2>&1 &\nSERVER_PID=$!\n\n# Wait for server to be ready\nsleep 2\n\n# Test wget download\nwget -O /tmp/downloaded.txt http://127.0.0.1:8888/test.txt\n\n# Verify downloaded content\nif ! grep -F \"wget test content\" /tmp/downloaded.txt; then\n  echo \"FAIL: wget did not download expected content\"\n  cat /tmp/downloaded.txt\n  kill \"$SERVER_PID\"\n  exit 1\nfi\n\necho \"PASS: wget successfully downloaded file\"\n\n# Cleanup\nkill \"$SERVER_PID\"\n"
+            "runs": "#!/bin/sh\nset -eu\nwork=$(mktemp -d)\nserver=\ntrap 'test -z \"$server\" || kill \"$server\" 2>/dev/null || true; rm -rf \"$work\"' EXIT\nprintf '%s\\n' 'wget test content' > \"$work/expected\"\n# Serve one real HTTP response with BusyBox itself. No unrelated Python\n# runtime or threaded server is needed to test the wget applet.\n{\n    printf 'HTTP/1.0 200 OK\\r\\nContent-Length: %s\\r\\nConnection: close\\r\\n\\r\\n' \"$(wc -c < \"$work/expected\")\"\n    cat \"$work/expected\"\n} | /usr/bin/busybox nc -l -p 8888 -w 10 > \"$work/request\" 2> \"$work/server.log\" &\nserver=$!\nsleep 1\nif ! /usr/bin/busybox wget -T 10 -O \"$work/downloaded\" http://127.0.0.1:8888/test.txt; then\n    cat \"$work/server.log\"\n    exit 1\nfi\nwait \"$server\"\nserver=\ncmp \"$work/expected\" \"$work/downloaded\"\ngrep -F 'GET /test.txt ' \"$work/request\"\necho 'PASS: wget successfully downloaded the local HTTP response'\n"
           },
           {
             "name": "Test nc can make network connections",

@@ -223,6 +223,7 @@ edits:
     new: |2
         --enable-cli \
         --disable-cgi \
+        --disable-phpdbg \
         --without-pcre-jit \
         --disable-opcache-jit \
         --disable-huge-code-pages \

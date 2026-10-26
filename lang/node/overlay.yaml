@@ -1,5 +1,9 @@
 # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
 title: Node.js
+# Keep V8's large compiler processes within the build guest's memory budget.
+resources:
+  cpu: "2"
+  memory: 16Gi
 sources:
 - https://github.com/nodejs/node.git
 description-suffix: ' (Werewolf fixed hardening policy)'

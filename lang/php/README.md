@@ -8,7 +8,8 @@ and FPM work under Memory-Deny-Write-Execute (MDWE), including regex matching
 and shared-memory OPcache bytecode caching. Configuration cannot restore these
 features. Werewolf enforces MDWE for PHP even when another service needs JIT.
 
-The CLI omits readline and GD omits XPM. These app forms need neither interactive
+The debugger is explicitly disabled with `--disable-phpdbg` (upstream enables
+it by default); normal CLI and FPM remain. The CLI omits readline and GD omits XPM. These app forms need neither interactive
 line editing nor XPM images, so their readline/terminal and XPM/X11 runtime
 dependencies are unnecessary. Other GD image formats remain enabled. Curl support
 uses the HTTP(S)-only libcurl from this repository once that package is published.

@@ -10,6 +10,31 @@ import (
 	"github.com/werewolf-linux/packages/internal/update"
 )
 
+func TestWolfiResourcesUsePackageDefaultsAndExplicitOverrides(t *testing.T) {
+	node, err := overlay.Read("../../lang/node/overlay.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, cpu, memory, wantCPU, wantMemory string
+		spec                                   *overlay.Spec
+	}{
+		{"default", "", "", "4", "8Gi", &overlay.Spec{}},
+		{"Node", "", "", "2", "16Gi", node},
+		{"CPU override", "1", "", "1", "16Gi", node},
+		{"memory override", "", "24Gi", "2", "24Gi", node},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MELANGE_CPU", tc.cpu)
+			t.Setenv("MELANGE_MEMORY", tc.memory)
+			cpu, memory := wolfiResources(tc.spec)
+			if cpu != tc.wantCPU || memory != tc.wantMemory {
+				t.Fatalf("resources = %s CPU, %s memory; want %s CPU, %s memory", cpu, memory, tc.wantCPU, tc.wantMemory)
+			}
+		})
+	}
+}
+
 func TestPackageTestsUseCapturedCheckoutVariables(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {

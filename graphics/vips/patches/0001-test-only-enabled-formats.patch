@@ -1,0 +1,34 @@
+SPDX-License-Identifier: LGPL-2.1-or-later
+Subject: [PATCH] Test optional PPM and Radiance formats only when configured
+Upstream-Status: Pending
+Reference: https://github.com/libvips/libvips/blob/24ad4d042940e6bf99a68871ba886ca8847c9c82/test/test_formats.sh
+
+Match the existing feature guards for the other optional format loaders.
+Keep the retained-format tests and the rest of the upstream suite enabled.
+
+diff --git a/test/test_formats.sh b/test/test_formats.sh
+--- a/test/test_formats.sh
++++ b/test/test_formats.sh
+@@ -145,15 +145,19 @@
+ if test_supported webpload; then
+ 	test_format $image webp 90
+ fi
+-test_format $image ppm 0
+-test_format $image pfm 0
++if test_supported ppmload; then
++	test_format $image ppm 0
++	test_format $image pfm 0
++fi
+ if test_supported fitsload; then
+ 	test_format $image fits 0
+ fi
+ 
+ # csv can only do mono
+ test_format $mono csv 0
+-test_format $rad hdr 0
++if test_supported radload; then
++	test_format $rad hdr 0
++fi
+ 
+ # cmyk jpg is a special path
+ if test_supported jpegload; then

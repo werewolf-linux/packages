@@ -248,7 +248,8 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	}
 	defer syscall.Flock(int(gate.Fd()), syscall.LOCK_UN)
 	env := buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": strconv.FormatInt(lock.SourceDateEpoch, 10)})
-	manifest := map[string]any{"package": pkg.Name, "runner": runner, "arch": arch, "melange_version": version, "source_date_epoch": lock.SourceDateEpoch}
+	cpu, memory := wolfiResources(pkg.Spec)
+	manifest := map[string]any{"package": pkg.Name, "runner": runner, "arch": arch, "melange_version": version, "source_date_epoch": lock.SourceDateEpoch, "cpu": cpu, "memory": memory}
 	if runner == "qemu" {
 		kernel, initramfs, err := Guest(ctx, pkg.Root, arch, tool)
 		if err != nil {
@@ -299,13 +300,6 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	}
 	if err := writeJSON(filepath.Join(packages, filename), manifest); err != nil {
 		return err
-	}
-	cpu, memory := os.Getenv("MELANGE_CPU"), os.Getenv("MELANGE_MEMORY")
-	if cpu == "" {
-		cpu = "4"
-	}
-	if memory == "" {
-		memory = "8Gi"
 	}
 	common := []string{"--runner", runner, "--arch", arch, "--cpu", cpu, "--memory", memory}
 	pipelines := filepath.Join(pkg.Build, "inputs/pipelines")
@@ -404,6 +398,17 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	}
 	args = append(args, "--repository-append", repository, "--repository-append", "https://packages.wolfi.dev/os", "--keyring-append", filepath.Join(engine, "build/keys/werewolf-packages.rsa.pub"), "--keyring-append", wolfiKey)
 	return runBuild(ctx, engine, tool, env, args)
+}
+
+func wolfiResources(spec *overlay.Spec) (string, string) {
+	cpu, memory := "4", "8Gi"
+	if spec.Resources.CPU != "" {
+		cpu = spec.Resources.CPU
+	}
+	if spec.Resources.Memory != "" {
+		memory = spec.Resources.Memory
+	}
+	return env("MELANGE_CPU", cpu), env("MELANGE_MEMORY", memory)
 }
 
 func wolfiTestRecipe(pkg Package, recipe *yaml.Node, lock Inputs, repository string) (*yaml.Node, error) {

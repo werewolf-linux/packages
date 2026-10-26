@@ -17,7 +17,7 @@ vips -l > "$work/operations"
 for operation in jpegload pngload webpload gifload icc_transform autorot; do
     grep -F "$operation" "$work/operations"
 done
-for operation in heifload svgload tiffload pdfload magickload jp2kload jxlload openslideload; do
+for operation in heifload svgload tiffload pdfload magickload jp2kload jxlload openslideload ppmload radload analyzeload; do
     if grep -F "$operation" "$work/operations"; then
         echo "unexpected loader: $operation" >&2
         exit 1

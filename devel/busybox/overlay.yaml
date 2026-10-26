@@ -274,3 +274,36 @@ edits:
 # The test harness needs /bin/sh; BusyBox no longer installs that link.
 - path: [subpackages, name=busybox-static, test, environment, contents, packages]
   append: [bash-binsh]
+# Keep the upstream download assertion with a local, single-connection fixture.
+- path: [subpackages, name=busybox-full, test, environment, contents, packages]
+  remove: [python3]
+- path: [subpackages, name=busybox-full, test, pipeline, name=Test wget can download a file, runs]
+  expect: |
+    # Create test content for HTTP server
+    mkdir -p /tmp/www
+    echo "wget test content" > /tmp/www/test.txt
+
+    # Start Python HTTP server
+    cd /tmp/www
+    python3 -m http.server 8888 > /tmp/httpd.log 2>&1 &
+    SERVER_PID=$!
+
+    # Wait for server to be ready
+    sleep 2
+
+    # Test wget download
+    wget -O /tmp/downloaded.txt http://127.0.0.1:8888/test.txt
+
+    # Verify downloaded content
+    if ! grep -F "wget test content" /tmp/downloaded.txt; then
+      echo "FAIL: wget did not download expected content"
+      cat /tmp/downloaded.txt
+      kill "$SERVER_PID"
+      exit 1
+    fi
+
+    echo "PASS: wget successfully downloaded file"
+
+    # Cleanup
+    kill "$SERVER_PID"
+  set: ${file:tests/wget.sh}
