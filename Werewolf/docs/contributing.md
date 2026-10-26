@@ -19,6 +19,12 @@ native recipe. Explicitly capture Wolfi inputs with `package discover --package 
 before building. Build and test both architectures before publication. Service
 confinement remains declared in Werewolf forms.
 
+Use `make test-packages PACKAGE=NAME` for one package's Melange suite,
+`make test-packages CATEGORY=www` for a category, or `make test-packages` for the
+whole tree. These build missing APKs, keep per-package logs and save a report in
+`Werewolf/.work/tests/`. Run them in the native Linux builder environment; Wolfi
+inputs must be captured first.
+
 Bump `melange.package.epoch` for changed direct-recipe build inputs at the same
 upstream version, or `wolfi.revision` for a derivation. Published APK identities are
 immutable. Preserve source pins, original licenses and signing checks.

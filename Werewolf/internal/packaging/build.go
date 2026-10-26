@@ -190,6 +190,21 @@ func buildEnv(extra map[string]string) []string {
 }
 
 func runBuild(ctx context.Context, root, tool string, env []string, args []string) error {
+	// Melange leaves guest roots under TMPDIR, even after successful suites.
+	// Scope each invocation so successful runs release that disk space.
+	var scratch string
+	for i, entry := range env {
+		if directory, ok := strings.CutPrefix(entry, "TMPDIR="); ok {
+			var err error
+			scratch, err = os.MkdirTemp(directory, "run-")
+			if err != nil {
+				return err
+			}
+			env = slices.Clone(env)
+			env[i] = "TMPDIR=" + scratch
+			break
+		}
+	}
 	cmd := exec.CommandContext(ctx, tool, args...)
 	cmd.Dir = root
 	cmd.Env = env
@@ -198,11 +213,14 @@ func runBuild(ctx context.Context, root, tool string, env []string, args []strin
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", tool, err)
 	}
+	if scratch != "" {
+		return os.RemoveAll(scratch)
+	}
 	return nil
 }
 
 // BuildWolfi builds and tests one derived recipe with signed local packages.
-func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) error {
+func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, runner string) error {
 	if !slices.Contains(Arches, arch) {
 		return fmt.Errorf("unsupported architecture %q", arch)
 	}
@@ -234,11 +252,16 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	if _, err := SigningKey(engine, false); err != nil {
 		return err
 	}
-	runner := "qemu"
-	if runtime.GOOS == "linux" {
-		if _, err := exec.LookPath("bwrap"); err == nil {
-			runner = "bubblewrap"
+	if runner == "" {
+		runner = "qemu"
+		if runtime.GOOS == "linux" {
+			if _, err := exec.LookPath("bwrap"); err == nil {
+				runner = "bubblewrap"
+			}
 		}
+	}
+	if runner != "qemu" && runner != "bubblewrap" {
+		return fmt.Errorf("unsupported Melange runner: %s", runner)
 	}
 	scratch := filepath.Join(pkg.Build, "runner")
 	if err := os.MkdirAll(scratch, 0755); err != nil {

@@ -10,7 +10,7 @@ melange:
   package:
     name: minecraft
     version: 26.3
-    epoch: 4
+    epoch: 5
     description: Minecraft Java Edition server
     copyright:
       - license: LicenseRef-Minecraft-EULA
@@ -30,6 +30,20 @@ melange:
         extract: false
     - runs: |
         install -Dm644 server.jar ${{targets.destdir}}/usr/lib/minecraft/server.jar
+  test:
+    environment:
+      accounts:
+        run-as: "1000"
+      contents:
+        packages:
+          - openjdk-27-default-jvm
+    pipeline:
+      - name: Installed server launcher
+        runs: |
+          work=$(mktemp -d)
+          cd "$work"
+          java -jar /usr/lib/minecraft/server.jar --help >/tmp/minecraft-help 2>&1 || { cat /tmp/minecraft-help; exit 1; }
+          grep -F 'nogui' /tmp/minecraft-help
 changes:
   - what: Minecraft's Java server for werewolf's minecraft form. Mojang publishes the jar; this recipe pins the release fetched on 2026-10-11, 26.3. Nothing in the form notices when a newer one is published. The manifest that would say so is https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

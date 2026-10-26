@@ -15,7 +15,7 @@ melange:
   package:
     name: opensearch
     version: 3.9.0
-    epoch: 4
+    epoch: 5
     description: Open source distributed and RESTful search engine, with its security plugin
     copyright:
       - license: Apache-2.0
@@ -109,6 +109,19 @@ melange:
         $home/lib/*
         org.opensearch.bootstrap.OpenSearch
         EOF
+  test:
+    environment:
+      accounts:
+        run-as: "1000"
+      contents:
+        packages:
+          - openjdk-27-default-jvm
+    pipeline:
+      - name: Installed OpenSearch classes and security plugin
+        runs: |
+          java -cp '/usr/share/opensearch/lib/*' org.opensearch.Version | grep -F '${{package.version}}'
+          test -s /usr/share/opensearch/native/libjnidispatch.so
+          grep -F 'version=${{package.version}}.0' /usr/share/opensearch/plugins/opensearch-security/plugin-descriptor.properties
 changes:
   - what: 'OpenSearch for werewolf''s opensearch form: upstream''s minimal release for each arch, pinned by sha256, without its bundled JDK (the form runs the jre form''s Java) or its bin/ scripts, which are bash, and with JNA''s library unpacked from its jar; the security plugin from Maven Central, without its tools and demo configuration, laid in plugins/ as opensearch-plugin would. Beside them, java.args: what bin/opensearch would pass java (its launcher''s system options, jvm.options and the classpath), but the heap, which the service sizes to its memory. Wolfi''s opensearch-3 stopped at 3.6.0 and brings bash and busybox.'
     why: Maintain the server without bash, busybox or a bundled JVM.

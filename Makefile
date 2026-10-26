@@ -1,6 +1,7 @@
 GO ?= go
 WEREWOLF ?=
 PACKAGE ?=
+CATEGORY ?=
 ARCH ?= $(shell uname -m | sed 's/arm64/aarch64/;s/amd64/x86_64/')
 MELANGE ?= $(firstword $(wildcard $(CURDIR)/Werewolf/.work/tools/melange) melange)
 export MELANGE
@@ -8,13 +9,13 @@ export MELANGE
 
 ports := $(CURDIR)/Werewolf/.work/tools/package
 sources := $(shell find Werewolf/cmd/package Werewolf/internal -type f \( -name '*.go' -o -name '*.tmpl' \)) Werewolf/go.mod Werewolf/go.sum
-select = --package '$(PACKAGE)' --arch '$(ARCH)' $(if $(WOLFI),--wolfi '$(abspath $(WOLFI))')
+select = --package '$(PACKAGE)' --category '$(CATEGORY)' --arch '$(ARCH)' $(if $(WOLFI),--wolfi '$(abspath $(WOLFI))')
 
 $(ports): $(sources)
 	mkdir -p $(dir $@)
 	$(GO) -C Werewolf build -o $@ ./cmd/package
 
-.PHONY: tools metadata build check test lint updates refresh discover verify derive render prepare
+.PHONY: tools metadata build check test test-packages lint updates refresh discover verify derive render prepare
 
 tools: $(ports)
 
@@ -33,6 +34,9 @@ prepare: metadata
 test: tools
 	$(GO) -C Werewolf test ./...
 	$(ports) checks
+
+test-packages: metadata
+	$(ports) test $(select) --build --report Werewolf/.work/tests/$(ARCH).json
 
 lint: tools
 	$(ports) schema --dest Werewolf/package.schema.json --offline

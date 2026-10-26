@@ -669,7 +669,7 @@ wolfi:
   test-setup:
     name: Adapt apk test tooling to strict option ordering
     runs: ${template:tests/apk-adapter.sh}
-  revision: 22
+  revision: 23
   max-fail-per-mille: 55
   family: glibc-
 changes:

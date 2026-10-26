@@ -12,7 +12,7 @@ import (
 // Command exposes the same probes to native development and build guests.
 func Command(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("probe requires glibc, glibc-locales, glibc-compare, glibc-benchmark or keycloak")
+		return fmt.Errorf("probe requires curl, glibc, glibc-locales, glibc-compare, glibc-benchmark or keycloak")
 	}
 	if args[0] == "json-check" {
 		if len(args) < 2 {
@@ -45,6 +45,17 @@ func Command(ctx context.Context, args []string) error {
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	switch args[0] {
+	case "curl":
+		var options CurlOptions
+		flags.StringVar(&options.Binary, "binary", "", "installed curl executable")
+		flags.BoolVar(&options.Musl, "musl", false, "require the private musl linkage")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 || options.Binary == "" {
+			return fmt.Errorf("curl requires --binary and no positional arguments")
+		}
+		return Curl(ctx, options)
 	case "glibc":
 		var options GlibcOptions
 		flags.StringVar(&options.Build, "build", "", "built glibc directory")

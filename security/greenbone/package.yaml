@@ -15,7 +15,7 @@ melange:
   package:
     name: pg-gvm
     version: 22.6.18
-    epoch: 8
+    epoch: 9
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later
@@ -65,6 +65,23 @@ melange:
           "${{targets.destdir}}/usr/lib/pkgconfig" \
           "${{targets.destdir}}/run"
     - uses: strip
+  test:
+    environment:
+      accounts:
+        run-as: "1000"
+      contents:
+        packages:
+          - postgresql~18
+          - postgresql-client~18
+    pipeline:
+      - name: Installed PostgreSQL extension
+        runs: |
+          root=$(mktemp -d)
+          initdb -D "$root/data" -U tester --auth=trust --no-locale
+          pg_ctl -D "$root/data" -l "$root/server.log" -o "-F -k $root -c listen_addresses=''" -w start
+          trap 'pg_ctl -D "$root/data" -m immediate -w stop' EXIT
+          psql -h "$root" -U tester -d postgres -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION "pg-gvm";'
+          test "$(psql -h "$root" -U tester -d postgres -Atc "SELECT extversion FROM pg_extension WHERE extname='pg-gvm'")" = '${{package.version}}'
 changes:
   - what: PostgreSQL's Greenbone extension, built for PostgreSQL 18 as the form uses. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

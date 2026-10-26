@@ -10,7 +10,7 @@ melange:
   package:
     name: solr
     version: 10.0.0
-    epoch: 5
+    epoch: 6
     description: Apache Solr, directly launched with hardened OpenJDK 27
     copyright:
       - license: Apache-2.0
@@ -40,6 +40,17 @@ melange:
         # The shell launchers, Docker entrypoints and bundled examples stay out.
         CGO_ENABLED=0 go build -buildmode=pie -trimpath -ldflags='-s -w' -o "$dest/setup" setup.go
         install -m644 log4j2.xml "$dest/log4j2.xml"
+  test:
+    pipeline:
+      - name: Installed bootstrap preserves existing configuration
+        runs: |
+          /usr/lib/solr/setup
+          test -s /data/svc/solr/home/solr.xml
+          test -d /data/svc/solr/home/configsets
+          printf '\n<!-- retained by package test -->\n' >>/data/svc/solr/home/solr.xml
+          cp /data/svc/solr/home/solr.xml /tmp/custom-solr.xml
+          /usr/lib/solr/setup
+          cmp /tmp/custom-solr.xml /data/svc/solr/home/solr.xml
 changes:
   - what: Only the application and our bootstrap. Wolfi's solr package also depends on Bash, BusyBox, and OpenJDK 21; none belongs in this package or its runtime deps.
     why: Package the server without the shell-based launcher, bundled JVM or service manager.

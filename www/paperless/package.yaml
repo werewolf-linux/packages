@@ -17,7 +17,7 @@ melange:
   package:
     name: paperless
     version: 3.3.4
-    epoch: 6
+    epoch: 7
     description: Document management with OCR, tags and full-text search
     copyright:
       - license: GPL-3.0-only
@@ -87,6 +87,11 @@ melange:
         cp -a src /usr/lib/paperless/app
         rm -rf /usr/lib/paperless/app/paperless_testing /usr/lib/paperless/app/conftest.py
         find /usr/lib/paperless/app -type d -name tests -print | sort -r | while IFS= read -r d; do rm -rf "$d"; done
+        # The application imports as an installed package does, wherever a
+        # process starts (-m granian, -m celery, manage.py): Werewolf's
+        # Python puts no working directory on the path.
+        echo /usr/lib/paperless/app >"$(/usr/lib/paperless/bin/python -c \
+          'import sysconfig; print(sysconfig.get_path("purelib"))')/paperless-app.pth"
         cd /usr/lib/paperless/app
         export PAPERLESS_SECRET_KEY=build
         export PAPERLESS_REDIS=redis://127.0.0.1:6379
@@ -98,13 +103,26 @@ melange:
         mkdir -p "$PAPERLESS_MEDIA_ROOT" "$PAPERLESS_CONSUMPTION_DIR" "$PAPERLESS_STATICDIR"
         /usr/lib/paperless/bin/python manage.py collectstatic --no-input
         /usr/lib/paperless/bin/python manage.py check
-        /usr/lib/paperless/bin/python /home/build/consumers.py
+        /usr/lib/paperless/bin/python /home/build/tests/consumers.py
         rm -rf /tmp/paperless-build
     - runs: |
         cd /usr/lib/paperless
         rm -f bin/activate* bin/deactivate* .gitignore .lock
         mkdir -p ${{targets.destdir}}/usr/lib
         cp -a /usr/lib/paperless ${{targets.destdir}}/usr/lib/paperless
+  test:
+    environment:
+      contents:
+        packages:
+          - ghostscript
+          - qpdf
+          - tesseract
+          - tesseract-eng
+          - ttf-dejavu
+    pipeline:
+      - name: Installed OCR and searchable PDF processing
+        runs: |
+          /usr/lib/paperless/bin/python consumers.py
 changes:
   - what: 'Paperless-ngx for werewolf''s paperless form, as Wolfi would package it. The release tarball carries the built web interface. uv installs what uv.lock pins, into a virtual environment on Wolfi''s Python 3.13 at /usr/lib/paperless. The assistant''s packages (torch, llama-index, sentence-transformers) are left out: nothing imports them until a chat runs, and this form does not run one. OCR programs are not in this package. The form installs Wolfi''s tesseract, ghostscript, ImageMagick, poppler and qpdf, which the updater can replace. Offered to wolfi-dev/os as it is; when Wolfi ships Paperless, the form names the package and this file goes.'
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
@@ -114,7 +132,11 @@ changes:
     why: Keep the standard document-management path without optional cloud, dashboard and AI runtimes.
     evidence:
       - package.yaml
-      - consumers.py
+      - tests/consumers.py
     claims:
       - minimized
+  - what: Name the application directory in a .pth file in the environment's site-packages.
+    why: The application imports as an installed package does, whatever directory a process starts in, with upstream's own commands; Werewolf's Python puts no working directory on the path.
+    evidence:
+      - package.yaml
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.

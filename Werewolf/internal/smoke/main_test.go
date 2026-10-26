@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -101,6 +102,9 @@ func TestSmokeKeepsExplicitScratchAndConfinesApplication(t *testing.T) {
 		}
 		Test struct {
 			Environment struct {
+				Contents struct {
+					Packages []string
+				}
 				Accounts struct {
 					RunAs string `yaml:"run-as"`
 				}
@@ -116,6 +120,9 @@ func TestSmokeKeepsExplicitScratchAndConfinesApplication(t *testing.T) {
 	}
 	if recipe.Test.Environment.Accounts.RunAs != "0" {
 		t.Fatal("bootstrap identity changed")
+	}
+	if !slices.Contains(recipe.Test.Environment.Contents.Packages, "mksh") {
+		t.Fatal("test root needs a shell when hardened BusyBox omits /bin/sh")
 	}
 	if len(recipe.Test.Pipeline) != 1 {
 		t.Fatal("expected one confined runtime command")

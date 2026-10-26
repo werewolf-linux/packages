@@ -96,7 +96,7 @@ wolfi:
             cat > /tmp/samba-probe.sh <<'WEREWOLF_SAMBA_PROBE'
             ${file:tests/probe.sh}WEREWOLF_SAMBA_PROBE
             sh /tmp/samba-probe.sh
-  revision: 4
+  revision: 5
   recipe: samba
 changes:
   - what: Configure --without-pam, drop linux-pam-dev, and remove the samba-pam-winbind subpackage.

@@ -9,7 +9,7 @@ melange:
   package:
     name: musl-werewolf
     version: 1.2.6
-    epoch: 4
+    epoch: 5
     description: musl with local resolver socket confinement
     copyright:
       - license: MIT
@@ -49,6 +49,15 @@ melange:
         ./lib/libc.so tests/probe tests/root
         install -Dm755 lib/libc.so "${{targets.destdir}}/usr/lib/werewolf-musl/libc.so"
         install -Dm644 COPYRIGHT "${{targets.destdir}}/usr/share/licenses/musl-werewolf/COPYRIGHT"
+  test:
+    pipeline:
+      - name: Installed dynamic loader
+        runs: |
+          status=0
+          /usr/lib/werewolf-musl/libc.so >/tmp/musl-version 2>&1 || status=$?
+          test "$status" = 1
+          grep -F 'musl libc' /tmp/musl-version
+          grep -F 'Version ${{package.version}}' /tmp/musl-version
 changes:
   - what: An opt-in musl shared runtime with the upstream CVE-2026-107891 fix and loopback-bound UDP resolver sockets when all configured IPv4 nameservers are loopback.
     why: Programs using musl with Werewolf’s local DNS proxy need no externally bound DNS socket. A private install path lets forms adopt this without replacing the system libc.

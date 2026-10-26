@@ -158,6 +158,7 @@ this repository's automation uses each context's `package.yaml` update record as
 
 ```sh
 make updates                       # read-only discovery for every context
+GH_TOKEN="$(gh auth token)" make updates  # use the existing GitHub login
 make PACKAGE=solr updates           # discover one upstream release
 Werewolf/.work/tools/package updates --engine upstream --write --package solr
 Werewolf/.work/tools/package catalog validate  # offline coverage check
@@ -200,9 +201,11 @@ publisher signs and uploads APKs to R2. Failed updates are recorded in the
 `upstream-update-report` artifact and make the update run fail after other updates
 have been committed. Release credentials remain confined to the publisher.
 
-`tests/smoke.json` describes runtime checks for nineteen contexts. The Go smoke
-runner installs the built APK and its runtime dependencies in a disposable
-Melange bubblewrap runner. Checks include application version commands, Python
+Each direct recipe declares installed checks in its native `melange.test` section.
+The Go smoke runner installs the built APK and its runtime dependencies in a
+disposable Melange runner. It installs mksh explicitly because hardened BusyBox
+omits `/bin/sh`. Explicit test repositories are retained, so the Pi-hole curl
+check uses Alpine's musl and TLS libraries. Checks include application version commands, Python
 imports, n8n's native SQLite and isolate modules, model parsing and ONNX CPU
 inference with invalid-shape and unknown-input rejection. The ONNX fixture comes
 from Werewolf's form tests. APK installation uses unsigned local test indexes;

@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,6 +62,8 @@ func run(ctx context.Context, args []string) error {
 	runner := flags.String("runner", "", "Melange test runner")
 	root := flags.String("root", ".", "repository root")
 	selected := flags.String("package", "", "one package; empty selects all applicable packages")
+	category := flags.String("category", "", "select a package category")
+	buildTests := flags.Bool("build", false, "build missing APKs before running Melange tests")
 	engine := flags.String("engine", "", "filter catalog entries by upstream or wolfi")
 	arch := flags.String("arch", packaging.Architecture(), "target APK architecture")
 	wolfi := flags.String("wolfi", "", "clean local Wolfi checkout")
@@ -160,12 +163,12 @@ func run(ctx context.Context, args []string) error {
 	}
 	var chosen []packaging.Package
 	for _, pkg := range packages {
-		if (*selected == "" || pkg.Name == *selected) && (*engine == "" || pkg.Engine == *engine) {
+		if (*selected == "" || pkg.Name == *selected) && (*engine == "" || pkg.Engine == *engine) && (*category == "" || strings.Split(pkg.Path, "/")[0] == *category) {
 			chosen = append(chosen, pkg)
 		}
 	}
 	if len(chosen) == 0 {
-		return fmt.Errorf("no matching package: %s", *selected)
+		return fmt.Errorf("no matching packages (package=%q, category=%q, engine=%q)", *selected, *category, *engine)
 	}
 	if command == "catalog" {
 		action := "validate"
@@ -251,11 +254,31 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	if command == "test" {
-		if *selected == "" {
-			return errors.New("test requires --package")
+		if flags.NArg() != 0 {
+			return errors.New("test accepts --package or --category, without positional arguments")
+		}
+		if *fresh && !*buildTests {
+			return errors.New("test --fresh requires --build")
+		}
+		if len(chosen) > 1 || *buildTests || *report != "" || *jsonOutput {
+			results, testErr := packaging.TestPackages(ctx, chosen, packaging.TestOptions{Arch: *arch, Runner: *runner, Build: *buildTests, Fresh: *fresh, Report: *report})
+			if *jsonOutput {
+				if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
+					return err
+				}
+			} else {
+				passed := 0
+				for _, result := range results {
+					if result.Status == "passed" {
+						passed++
+					}
+				}
+				fmt.Printf("%d/%d package suites passed (%s)\n", passed, len(chosen), *arch)
+			}
+			return testErr
 		}
 		if chosen[0].Engine == "wolfi" {
-			return packaging.BuildWolfi(ctx, chosen[0], *arch, true)
+			return packaging.BuildWolfi(ctx, chosen[0], *arch, true, *runner)
 		}
 		old, err := os.Getwd()
 		if err != nil {
@@ -265,7 +288,7 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		defer os.Chdir(old)
-		return smoke.Check(ctx, *selected, *arch, *runner)
+		return smoke.Check(ctx, chosen[0].Name, *arch, *runner)
 	}
 	if command == "plan" {
 		result, err := packaging.PlanCI(ctx, chosen, *base, *head)
@@ -387,7 +410,7 @@ func run(ctx context.Context, args []string) error {
 			err = packaging.Prepare(ctx, pkg, target, *source)
 		case "build":
 			if pkg.Engine == "wolfi" {
-				err = packaging.BuildWolfi(ctx, pkg, *arch, *testOnly)
+				err = packaging.BuildWolfi(ctx, pkg, *arch, *testOnly, *runner)
 			} else {
 				if *werewolf != "" {
 					err = packaging.BuildLocalApplication(ctx, pkg, *arch, *werewolf)

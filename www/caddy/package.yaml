@@ -17,7 +17,7 @@ melange:
   package:
     name: caddy
     version: 2.11.7
-    epoch: 6
+    epoch: 7
     description: Fast, multi-platform web server with automatic HTTPS, position independent
     copyright:
       - license: Apache-2.0

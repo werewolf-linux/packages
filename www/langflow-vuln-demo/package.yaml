@@ -8,7 +8,7 @@ melange:
   package:
     name: langflow-vuln-demo
     version: 1.8.1
-    epoch: 4
+    epoch: 5
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
       - license: MIT
@@ -79,6 +79,21 @@ melange:
         rm -f /usr/lib/langflow/bin/activate* /usr/lib/langflow/bin/pip*
         mkdir -p ${{targets.destdir}}/usr/lib
         cp -a /usr/lib/langflow ${{targets.destdir}}/usr/lib/langflow
+  test:
+    environment:
+      contents:
+        packages:
+          - onnx-minilm-l6-v2
+    pipeline:
+      - name: Installed training API and CPU embeddings
+        runs: |
+          /usr/lib/langflow/bin/python -P shared-tests/python-gates.py
+          /usr/lib/langflow/bin/python -P imports.py
+          /usr/lib/langflow/bin/python -P /usr/lib/langflow/check-embedding.py
+test:
+  confined: true
+  allow:
+    - python:native
 changes:
   - what: Package the intentionally vulnerable application release under an isolated training package name.
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

@@ -317,7 +317,7 @@ wolfi:
         # Cleanup
         kill "$SERVER_PID"
       set: ${file:tests/wget.sh}
-  revision: 8
+  revision: 9
   recipe: busybox
 changes:
   - what: Enable CONFIG_FEATURE_PREFER_APPLETS in busybox, busybox-full and busybox-static, keeping BUSYBOX_EXEC_PATH /usr/bin/busybox.

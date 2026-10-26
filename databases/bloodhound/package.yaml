@@ -15,7 +15,7 @@ melange:
   package:
     name: neo4j-4.4
     version: 4.4.48
-    epoch: 4
+    epoch: 5
     description: Neo4j 4.4 community, which BloodHound's image still speaks
     copyright:
       - license: GPL-3.0-or-later
@@ -56,6 +56,16 @@ melange:
         chmod 755 "$jna/aarch64/libjnidispatch.so" "$jna/x86_64/libjnidispatch.so"
         find "$d" -type d -exec chmod 755 {} +
         find "$d" -type f -exec chmod 644 {} +
+  test:
+    environment:
+      accounts:
+        run-as: "1000"
+    pipeline:
+      - name: Installed Neo4j administration classes
+        runs: |
+          java -cp '/var/lib/neo4j/lib/*' org.neo4j.commandline.admin.AdminTool --help >/tmp/neo4j-help 2>&1 || { cat /tmp/neo4j-help; exit 1; }
+          grep -F 'neo4j-admin' /tmp/neo4j-help
+          test -s /usr/lib/jna/${{build.arch}}/libjnidispatch.so
 changes:
   - what: 'Neo4j 4.4 for werewolf''s bloodhound form. BloodHound''s image calls db.indexes, db.createIndex and db.createUniquePropertyConstraint, which Neo4j 5 removed, and Wolfi''s packages start at 2025. This is the community tarball BloodHound''s compose pins, without its shell scripts. JNA''s library is unpacked beside it: a temporary directory is noexec, so Neo4j cannot unpack the library there.'
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

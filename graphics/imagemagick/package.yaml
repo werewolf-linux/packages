@@ -50,7 +50,7 @@ wolfi:
               - ghostscript
               - ttf-dejavu
           runs: ${file:tests/probe.sh}
-  revision: 6
+  revision: 7
   recipe: imagemagick-7
 changes:
   - what: Omit X11, Pango, FFTW, Graphviz, Display PostScript and Perl support; retain common image formats, HEIC, PDF rasterization and font rendering.

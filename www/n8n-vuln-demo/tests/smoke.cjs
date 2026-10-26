@@ -1,4 +1,4 @@
-// Build-only smoke test: load the full server and migrate a fresh SQLite DB.
+// Load the full server and migrate a fresh SQLite DB, before and after packaging.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -14,7 +14,9 @@ const {once} = require('node:events');
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
   let output = '';
-  const child = spawn(process.execPath, ['--no-node-snapshot', 'node_modules/n8n/bin/n8n', 'start'], {
+  const root = process.env.N8N_PACKAGE_ROOT || process.cwd();
+  const child = spawn(process.execPath, ['--no-node-snapshot', path.join(root, 'node_modules/n8n/bin/n8n'), 'start'], {
+    cwd: root,
     env: {...process.env, HOME: home, N8N_USER_FOLDER: home, TMPDIR: home,
       N8N_LISTEN_ADDRESS: '127.0.0.1', N8N_PORT: String(port),
       N8N_DIAGNOSTICS_ENABLED: 'false', N8N_VERSION_NOTIFICATIONS_ENABLED: 'false',

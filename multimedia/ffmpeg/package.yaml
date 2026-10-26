@@ -138,7 +138,7 @@ wolfi:
         - old: |
             ffplay
           new: ""
-  revision: 8
+  revision: 9
   family: ffmpeg-
 changes:
   - what: Keep local media conversion and codecs; omit network/device protocols, ffplay, display and font integrations.

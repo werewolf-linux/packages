@@ -31,6 +31,9 @@ Werewolf/.work/tools/package updates --package caddy --write
 Werewolf/.work/tools/package discover --package python
 make PACKAGE=python build
 make test lint check
+make test-packages PACKAGE=caddy   # build missing APKs and run Melange tests
+make test-packages CATEGORY=www
+make test-packages                 # every package
 ```
 
 [Package definitions and maintenance](Werewolf/docs/package.md) is the format and workflow

@@ -8,7 +8,7 @@ melange:
   package:
     name: pihole-curl
     version: 8.23.0
-    epoch: 4
+    epoch: 5
     description: HTTP(S)-only musl curl for the Pi-hole OCI filesystem
     copyright:
       - license: curl
@@ -48,6 +48,21 @@ melange:
         install -Dm755 src/curl "${{targets.destdir}}/oci/pi-hole/usr/lib/werewolf-pihole/curl"
         install -Dm644 COPYING "${{targets.destdir}}/usr/share/licenses/pihole-curl/COPYING"
     - uses: strip
+  test:
+    environment:
+      contents:
+        repositories:
+          - https://dl-cdn.alpinelinux.org/alpine/v3.24/main
+          - https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+        packages:
+          - musl
+          - libssl3
+          - libcrypto3
+          - zlib
+    pipeline:
+      - name: Installed OCI executable against Alpine libraries
+        runs: |
+          werewolf-tools/package-helper curl --binary /oci/pi-hole/usr/lib/werewolf-pihole/curl --musl
 changes:
   - what: Install a musl curl executable only inside the Pi-hole OCI tree, with libcurl linked in and solver dependency/provide inference disabled.
     why: Preserve the OCI image ABI and its TLS/zlib libraries without altering the host Wolfi package solver.

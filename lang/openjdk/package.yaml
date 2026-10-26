@@ -133,7 +133,7 @@ wolfi:
   suite-setup:
     name: Permit effective root only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 13
+  revision: 14
   family: openjdk-
 changes:
   - what: Omit jmods, demos and the OCI entrypoint.

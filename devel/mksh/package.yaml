@@ -12,7 +12,7 @@ melange:
   package:
     name: mksh
     version: 59c
-    epoch: 2
+    epoch: 3
     description: MirBSD Korn Shell
     copyright:
       - license: MirOS AND Unicode-DFS-2016

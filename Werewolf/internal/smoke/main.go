@@ -70,8 +70,7 @@ func Check(ctx context.Context, name, arch, runner string) error {
 		}
 	}
 	if !hasTests {
-		fmt.Println(name + ": no additional installed-package tests")
-		return nil
+		return fmt.Errorf("%s: no Melange test pipeline declared", name)
 	}
 	s := spec{Allow: definition.Test.Allow, PreserveMtimes: definition.Test.PreserveMtimes}
 	if pkgs := overlay.Field(overlay.Field(overlay.Field(nativeTest, "environment"), "contents"), "packages"); pkgs != nil {
@@ -136,7 +135,9 @@ func Check(ctx context.Context, name, arch, runner string) error {
 	if err := update.RunCommand(ctx, root, tool, index...); err != nil {
 		return err
 	}
-	packages := append([]string{"busybox", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
+	// Hardened BusyBox omits its shell; Melange needs /bin/sh before it can
+	// execute any pipeline, including the confinement bootstrap.
+	packages := append([]string{"busybox", "mksh", "bubblewrap", "ca-certificates-bundle", meta.Name + "=" + version}, s.Packages...)
 	if runner == "qemu" {
 		packages = append(packages, "setpriv", "util-linux-misc", "mount", "iproute2")
 	}
@@ -170,9 +171,12 @@ func Check(ctx context.Context, name, arch, runner string) error {
 		}
 		packageNode, _ := overlay.Node(packages)
 		overlay.Put(contents, "packages", packageNode)
-		repositories, _ := overlay.Node([]string{repository, "https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"})
+		repositories, _ := overlay.Node([]string{repository})
 		if existing := overlay.Field(contents, "repositories"); existing != nil {
 			repositories.Content = append(repositories.Content, existing.Content...)
+		} else {
+			defaults, _ := overlay.Node([]string{"https://packages.wolfi.dev/os", "https://dist.werewolf-linux.org/apk/hardened", "https://dist.werewolf-linux.org/apk/packages"})
+			repositories.Content = append(repositories.Content, defaults.Content...)
 		}
 		overlay.Put(contents, "repositories", repositories)
 		if definition.Test.Confined {

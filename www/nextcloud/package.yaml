@@ -14,7 +14,7 @@ melange:
   package:
     name: nextcloud
     version: 35.0.2
-    epoch: 4
+    epoch: 5
     description: Nextcloud server, a safe home for all your data
     copyright:
       - license: AGPL-3.0-or-later
@@ -40,6 +40,18 @@ melange:
         rm -f nextcloud/config/CAN_INSTALL
         mkdir -p ${{targets.destdir}}/usr/share
         mv nextcloud ${{targets.destdir}}/usr/share/nextcloud
+  test:
+    environment:
+      contents:
+        packages:
+          - php-8.4
+    pipeline:
+      - name: Installed PHP entrypoint and release
+        runs: |
+          php -l /usr/share/nextcloud/index.php
+          php -l /usr/share/nextcloud/version.php
+          grep -F '${{package.version}}' /usr/share/nextcloud/version.php
+          test ! -e /usr/share/nextcloud/config/CAN_INSTALL
 changes:
   - what: 'Nextcloud for werewolf''s nextcloud form, as Wolfi would package it: the release tarball, checked by sha256, laid in /usr/share/nextcloud. It is PHP, so nothing is compiled; the form names the PHP it runs on. Wolfi''s own nextcloud-server-33 is a container''s: Apache, bash and PHP 8.3, a major release behind. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form names the package and this file goes.'
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.

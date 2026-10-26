@@ -7,7 +7,7 @@ melange:
   package:
     name: py3.15-onnxruntime
     version: 1.31.0
-    epoch: 4
+    epoch: 5
     description: CPU ONNX Runtime built for hardened Python 3.15
     copyright:
       - license: MIT

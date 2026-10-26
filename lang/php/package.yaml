@@ -327,7 +327,7 @@ wolfi:
   suite-setup:
     name: Grant every group for the suite (the probe clears them)
     runs: ${file:tests/build-grants.sh}
-  revision: 19
+  revision: 20
   family: php-
 changes:
   - what: Omit PEAR, phpdbg, Apache integration, CGI, Phar, unused extensions, readline, XPM and documentation.

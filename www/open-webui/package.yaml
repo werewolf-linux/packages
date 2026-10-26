@@ -18,7 +18,7 @@ melange:
   package:
     name: open-webui
     version: 0.12.4
-    epoch: 3
+    epoch: 4
     description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
     copyright:
       - license: LicenseRef-Open-WebUI
@@ -76,7 +76,7 @@ melange:
         d=$(mktemp -d)
         DATA_DIR=$d STATIC_DIR=$d/static USE_SLIM_DOCKER=true WEBUI_SECRET_KEY=build \
           PYTHONDONTWRITEBYTECODE=1 FROM_INIT_PY=true \
-          /usr/lib/open-webui/bin/python consumers.py
+          /usr/lib/open-webui/bin/python tests/consumers.py
         rm -rf "$d"
     # uv's parallel workers compile files in an unpredictable order, which
     # changes CPython's interned constants and the marshalled bytecode.
@@ -90,6 +90,15 @@ melange:
         rm -f bin/activate* bin/deactivate* .gitignore .lock
         mkdir -p ${{targets.destdir}}/usr/lib
         cp -a /usr/lib/open-webui ${{targets.destdir}}/usr/lib/open-webui
+  test:
+    pipeline:
+      - name: Installed chat, authentication and document storage
+        runs: |
+          work=$(mktemp -d)
+          DATA_DIR="$work" STATIC_DIR="$work/static" USE_SLIM_DOCKER=true WEBUI_SECRET_KEY=test \
+            PYTHONDONTWRITEBYTECODE=1 FROM_INIT_PY=true \
+            /usr/lib/open-webui/bin/python consumers.py
+          rm -rf "$work"
 changes:
   - what: 'Open WebUI for werewolf''s open-webui form, in its slim build: upstream''s own variant for a machine whose models are served elsewhere (here, by Ollama), its vectors kept in PostgreSQL with pgvector, without torch, local speech or document models, or any cloud storage SDK. Built by melange in Wolfi''s environment, into a virtual environment on Wolfi''s Python 3.12 at /usr/lib/open-webui: the Python packages upstream''s slim image installs (backend/requirements-slim.txt at the tag), resolved as PyPI stood on the date below, and the release''s wheel, which carries the web interface upstream builds. Wolfi''s own open-webui is the full build (torch, 7 GB installed) and lags upstream; when Wolfi ships a slim one, the form names the package and this file goes.'
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
@@ -100,7 +109,7 @@ changes:
     evidence:
       - package.yaml
       - optional-features.patch
-      - consumers.py
+      - tests/consumers.py
     claims:
       - minimized
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.

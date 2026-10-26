@@ -162,7 +162,7 @@ wolfi:
   suite-setup:
     name: Permit capabilities only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 10
+  revision: 11
   family: nodejs-
 changes:
   - what: Omit npm/npx, inspector, SEA and unused subpackages.

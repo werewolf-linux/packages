@@ -9,7 +9,7 @@ melange:
   package:
     name: mariadb
     version: 13.0.2
-    epoch: 2
+    epoch: 3
     description: 'The MariaDB open source relational database (Werewolf: newest stable, no PAM)'
     copyright:
       - license: GPL-3.0-or-later

@@ -208,6 +208,34 @@ Ordinary application tests live in `melange.test` and subpackage test sections, 
 configuration. It uses package-local fixtures; genuinely shared runtime checks live
 under `Werewolf/pipelines/tests` and are referenced as `shared-tests/FILE`.
 
+Select one context, a category, or the whole tree with the same Go command:
+
+```sh
+Werewolf/.work/tools/package test --package caddy
+Werewolf/.work/tools/package test --category www
+Werewolf/.work/tools/package test
+```
+
+Add `--build` to build missing APK sets first. Complete existing sets are checked
+for the selected names, versions and architecture before being tested again.
+`--build --fresh` rebuilds the selected architecture's generated work. Wolfi
+inputs must already be captured; testing never selects newer sources implicitly.
+The equivalent Make targets build missing packages and save a JSON report:
+
+```sh
+make test-packages PACKAGE=caddy
+make test-packages CATEGORY=www
+make test-packages
+```
+
+The batch continues after individual failures and exits unsuccessfully if any
+suite fails. `--report FILE` saves every selected context, including pending or
+cancelled work, and updates it after each package. Each context has a `test.log`
+under the logs directory reported by `package paths`. `--json` emits the final
+report to standard output. Build and test subprocesses receive no publication
+credentials. Successful batch runner roots are removed; failed roots remain
+available for diagnosis. `make test` runs the framework and contributor checks.
+
 `test.confined: true` runs shell probes as UID 1000 with no capabilities, read-only
 runtime and fixtures, and writable `/tmp`. Build/test allowances belong only to this
 disposable environment. `allow` lists explicit supported runtime grants, while

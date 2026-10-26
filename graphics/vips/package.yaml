@@ -86,7 +86,7 @@ wolfi:
       append:
         - name: Retained formats work and unused loaders are absent
           runs: ${file:tests/probe.sh}
-  revision: 8
+  revision: 9
   recipe: libvips
 changes:
   - what: Keep JPEG, PNG, WebP, GIF, EXIF and ICC processing; omit unused loaders, modules, C++ API and documentation.

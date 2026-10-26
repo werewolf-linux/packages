@@ -11,7 +11,7 @@ melange:
   package:
     name: langflow
     version: 1.13.0
-    epoch: 8
+    epoch: 9
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
       - license: MIT

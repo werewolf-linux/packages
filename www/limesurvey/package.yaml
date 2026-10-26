@@ -58,6 +58,19 @@ melange:
         ln -s /data/svc/php-fpm/upload upload
         mkdir -p ${{targets.destdir}}/usr/share
         cp -a . ${{targets.destdir}}/usr/share/limesurvey
+  test:
+    environment:
+      contents:
+        packages:
+          - php-8.4
+    pipeline:
+      - name: Installed application and writable-directory layout
+        runs: |
+          php -l /usr/share/limesurvey/index.php
+          php -l /usr/share/limesurvey/application/config/version.php
+          grep -F "'${{package.version}}'" /usr/share/limesurvey/application/config/version.php
+          test "$(readlink /usr/share/limesurvey/tmp)" = /data/svc/php-fpm/tmp
+          test "$(readlink /usr/share/limesurvey/upload)" = /data/svc/php-fpm/upload
 changes:
   - what: 'LimeSurvey for werewolf''s limesurvey form: the project''s release, as it ships it (its Composer and npm dependencies inside), pinned by sha256. Wolfi does not ship LimeSurvey. The code goes in /usr/share/limesurvey, read-only on the machine; its two writable trees, tmp/ (published assets, the runtime cache) and upload/ (themes, images, participants'' files), are links into the php-fpm service''s directory on /data, so every path LimeSurvey derives from them lands there. Its web installer, documentation and Apache files stay out. Offered to wolfi-dev/os as it is; when Wolfi ships it, the form names the package and this file goes.'
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
