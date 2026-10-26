@@ -18,7 +18,7 @@ The evidence below supports these priorities. Performance effects are qualitativ
 
 ## Engineering policy and selected scope
 
-Apply the copied [CONTRIBUTING.md](../../../CONTRIBUTING.md): simple, reliable, efficient, secure code; deny by default; concise documentation. The [Werewolf design](design/glibc-neutered.md) follows the project's template and its 120-line design limit. This audit is a detailed evidence inventory, not a design document; retaining per-CVE evidence is intentional.
+Apply the copied [CONTRIBUTING.md](../../../Werewolf/docs/contributing.md): simple, reliable, efficient, secure code; deny by default; concise documentation. The [Werewolf design](design/glibc-neutered.md) follows the project's template and its 120-line design limit. This audit is a detailed evidence inventory, not a design document; retaining per-CVE evidence is intentional.
 
 Use the smallest reliable patch at existing input/activation points, not wholesale deletion or new runtime controls. No permissive profile, generic environment allowlist, or PostgreSQL preload exception is proposed. Resolve current application requirements with explicit application APIs and setup changes first. CONTRIBUTING's Werewolf build/test commands apply to integration in Werewolf; glibc package validation also requires its own upstream and architecture checks. Candidate code and CI exist; passing release and integration gates remain required.
 

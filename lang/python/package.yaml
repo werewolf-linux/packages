@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: python/cpython
@@ -203,7 +203,7 @@ wolfi:
     - path: [var-transforms, to=upstreamversion, match]
       expect: (.*)_git.*
       set: ^([0-9]+\.[0-9]+\.[0-9]+)(?:_git[0-9]+)?$
-  revision: 13
+  revision: 14
   family: python-
 changes:
   - what: Omit GUI, documentation, alternate JIT and unused interpreter variants.

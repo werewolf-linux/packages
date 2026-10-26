@@ -37,7 +37,7 @@ Failures include intentionally removed features, missing environment-selected fi
 
 `tests/harness.mk` selects memory-traced programs from upstream test environment metadata and formatting-fixture lists. It links the upstream debug DSO before libc with an explicit RPATH. This changes test executable dependencies, not production libc or installed headers. A targeted allocation test reports no leaks with tracing active. Production cleanup removes `libc_malloc_debug.so*`. Locale preparation covers every test directory declaring `LOCALES`, rather than only localedata's own list.
 
-Native `go run ./cmd/package probe glibc --build BUILD --trace-spawn` uses strace to check the actual shell exec environment. Its explicit-spawn positive control forwards IFS; wordexp must strip IFS while forwarding ordinary application data, for dynamic and static callers. Trace files are temporary and not published.
+Native `go -C Werewolf run ./cmd/package probe glibc --build BUILD --trace-spawn` uses strace to check the actual shell exec environment. Its explicit-spawn positive control forwards IFS; wordexp must strip IFS while forwarding ordinary application data, for dynamic and static callers. Trace files are temporary and not published.
 
 the shared Go glibc probe builds and executes `elf/tst-werewolf-audit` as a mandatory gate.
 It compiles the actual audit dispatch with private state using glibc's internal

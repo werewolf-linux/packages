@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   separator: _
   github:
@@ -157,7 +157,7 @@ wolfi:
         runs: |
           curl --version | grep -F "ldap ldaps"
           curl --version | grep -F "HTTP3"
-  revision: 8
+  revision: 9
   recipe: curl
 changes:
   - what: Build HTTP(S)-only curl/libcurl with TLS, cookies and gzip/deflate; omit other protocols, proxying, HTTP/2, HTTP/3 and unused authentication backends.

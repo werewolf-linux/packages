@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: moodle/moodle
@@ -16,7 +16,7 @@ melange:
   package:
     name: moodle
     version: "5.3"
-    epoch: 4
+    epoch: 5
     description: Moodle, a learning management system
     copyright:
       - license: GPL-3.0-or-later

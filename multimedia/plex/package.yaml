@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: plex
   reason: Track the signed public APT repository; refresh both architectures together and stop for review if the codec ABI changes.
@@ -9,7 +9,7 @@ melange:
   package:
     name: plexmediaserver
     version: 1.43.5.11079
-    epoch: 1
+    epoch: 2
     description: Plex Media Server with build-time codec dependencies
     # The vendor tree carries its private musl ABI and Python Script Host.
     # Resource-script shebangs must not pull an unrelated system Python 2.

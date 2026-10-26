@@ -1,0 +1,752 @@
+{
+  "$defs": {
+    "Action": {
+      "additionalProperties": false,
+      "properties": {
+        "curl": {
+          "$ref": "#/$defs/CurlOptions"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "type": "array"
+        },
+        "glibc": {
+          "$ref": "#/$defs/GlibcOptions"
+        },
+        "locales": {
+          "$ref": "#/$defs/LocaleOptions"
+        },
+        "requirements": {
+          "$ref": "#/$defs/Requirements"
+        },
+        "wheels": {
+          "items": {
+            "$ref": "#/$defs/Wheel"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "claims": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "what": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "what",
+        "why",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "Check": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "string"
+        },
+        "working-directory": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "CurlOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "binary": {
+          "type": "string"
+        },
+        "cookies": {
+          "type": "boolean"
+        },
+        "musl": {
+          "type": "boolean"
+        },
+        "netrc-disabled": {
+          "type": "boolean"
+        },
+        "psl": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "Definition": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "melange"
+          ]
+        },
+        {
+          "required": [
+            "wolfi"
+          ]
+        }
+      ],
+      "properties": {
+        "actions": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Action"
+          },
+          "type": "object"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/Change"
+          },
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "type": "array"
+        },
+        "drop-when": {
+          "type": "string"
+        },
+        "melange": {
+          "description": "Native Melange configuration; validated by the repository's pinned Melange.",
+          "required": [
+            "package",
+            "pipeline"
+          ],
+          "type": "object"
+        },
+        "replaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "test": {
+          "$ref": "#/$defs/Test"
+        },
+        "update": {
+          "$ref": "#/$defs/Source"
+        },
+        "wolfi": {
+          "$ref": "#/$defs/Derivation"
+        }
+      },
+      "required": [
+        "update",
+        "changes"
+      ],
+      "type": "object"
+    },
+    "Derivation": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "recipe"
+          ]
+        },
+        {
+          "required": [
+            "family"
+          ]
+        }
+      ],
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Edit"
+          },
+          "type": "array"
+        },
+        "context": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "context-edits": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "type": "array"
+        },
+        "description-suffix": {
+          "type": "string"
+        },
+        "edits": {
+          "items": {
+            "$ref": "#/$defs/Edit"
+          },
+          "type": "array"
+        },
+        "epoch-multiplier": {
+          "type": "integer"
+        },
+        "family": {
+          "type": "string"
+        },
+        "max-fail-per-mille": {
+          "type": "integer"
+        },
+        "min-kernel": {
+          "type": "string"
+        },
+        "origin-main-only": {
+          "type": "boolean"
+        },
+        "patch-working-directory": {
+          "type": "string"
+        },
+        "patches": {
+          "type": "string"
+        },
+        "prepared": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "prepared-edits": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "type": "array"
+        },
+        "recipe": {
+          "type": "string"
+        },
+        "release-edits": {
+          "items": {
+            "$ref": "#/$defs/Edit"
+          },
+          "type": "array"
+        },
+        "resources": {
+          "$ref": "#/$defs/Fieldsd9ec672b6b82"
+        },
+        "results-suffix": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stable-provides": {
+          "type": "string"
+        },
+        "stream-parts": {
+          "type": "integer"
+        },
+        "suite-setup": {},
+        "test-edits": {
+          "items": {
+            "$ref": "#/$defs/Edit"
+          },
+          "type": "array"
+        },
+        "test-packages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "test-setup": {},
+        "test-unpinned": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "upstream-patch-prefix": {
+          "type": "string"
+        },
+        "upstream-patches": {
+          "additionalProperties": {
+            "$ref": "#/$defs/UpstreamPatch"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "revision",
+        "sources"
+      ],
+      "type": "object"
+    },
+    "Edit": {
+      "additionalProperties": false,
+      "properties": {
+        "absent": {
+          "type": "boolean"
+        },
+        "after": {
+          "type": "string"
+        },
+        "append": {
+          "items": {},
+          "type": "array"
+        },
+        "before": {
+          "type": "string"
+        },
+        "delete": {
+          "type": "boolean"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "expect": {},
+        "join": {
+          "$ref": "#/$defs/Join"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prepend": {
+          "items": {},
+          "type": "array"
+        },
+        "remove": {
+          "items": {},
+          "type": "array"
+        },
+        "replace": {
+          "items": {
+            "$ref": "#/$defs/Replacement"
+          },
+          "type": "array"
+        },
+        "set": {},
+        "shape": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Fieldsd9ec672b6b82": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "type": "string"
+        },
+        "memory": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "File": {
+      "additionalProperties": false,
+      "properties": {
+        "optional": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "qualify": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "replace": {
+          "items": {
+            "$ref": "#/$defs/Replacement"
+          },
+          "type": "array"
+        },
+        "require-contains": {
+          "type": "string"
+        },
+        "when-contains": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "GitHub": {
+      "additionalProperties": false,
+      "properties": {
+        "identifier": {
+          "type": "string"
+        },
+        "strip-prefix": {
+          "type": "string"
+        },
+        "strip-suffix": {
+          "type": "string"
+        },
+        "use-tag": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "identifier"
+      ],
+      "type": "object"
+    },
+    "GlibcOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline-loader": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        },
+        "cc": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cxx": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fixtures": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "runner": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "secure": {
+          "type": "boolean"
+        },
+        "trace-spawn": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "Join": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "LocaleOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "makefile": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Policy": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "commit-var": {
+          "type": "string"
+        },
+        "components": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Policy"
+          },
+          "type": "object"
+        },
+        "hold": {
+          "type": "string"
+        },
+        "lock": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "separator": {
+          "type": "string"
+        },
+        "series": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "version-pattern": {
+          "type": "string"
+        },
+        "version-replace": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Replacement": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "new": {
+          "type": "string"
+        },
+        "old": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "string"
+        },
+        "omit": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "omit-prefixes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output": {
+          "type": "string"
+        },
+        "replace": {
+          "items": {
+            "$ref": "#/$defs/Replacement"
+          },
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required-prefixes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "github"
+          ]
+        },
+        {
+          "required": [
+            "source"
+          ]
+        }
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "commit-var": {
+          "type": "string"
+        },
+        "components": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Policy"
+          },
+          "type": "object"
+        },
+        "github": {
+          "$ref": "#/$defs/GitHub"
+        },
+        "hold": {
+          "type": "string"
+        },
+        "lock": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "separator": {
+          "type": "string"
+        },
+        "series": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "suffix": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "version-pattern": {
+          "type": "string"
+        },
+        "version-replace": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Test": {
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "confined": {
+          "type": "boolean"
+        },
+        "preserve-mtimes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "UpstreamPatch": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Wheel": {
+      "additionalProperties": false,
+      "properties": {
+        "distribution": {
+          "type": "string"
+        },
+        "record-files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remove-requirements": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/Definition",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Werewolf package definition"
+}

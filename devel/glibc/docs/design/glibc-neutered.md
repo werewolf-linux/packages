@@ -8,7 +8,7 @@ Build a Wolfi-derived glibc with five fixed protections: deny environment config
 
 The [vulnerability audit](../glibc-vuln-audit.md) records ten years of glibc flaws and analogous libc failures. Looney Tunables attacked startup parsing; PwnKit restored converter settings after startup; sudo exploits used NSS without loader variables. Removing environment variables at launch covers only some of these paths.
 
-Follow [CONTRIBUTING.md](../../../../CONTRIBUTING.md): small changes, deny by default, fail closed. Candidate patches now build and pass focused probes on aarch64 and emulated x86_64. Native package, full upstream, integration, and performance gates remain prerequisites for production.
+Follow [CONTRIBUTING.md](../../../../Werewolf/docs/contributing.md): small changes, deny by default, fail closed. Candidate patches now build and pass focused probes on aarch64 and emulated x86_64. Native package, full upstream, integration, and performance gates remain prerequisites for production.
 
 ## Goals
 

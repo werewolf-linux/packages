@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   reason: Use the upstream mirror for release tags; recipe inputs come from the official musl release archive. New releases must apply the policy patch and pass the resolver probes.
   github:
@@ -9,7 +9,7 @@ melange:
   package:
     name: musl-werewolf
     version: 1.2.6
-    epoch: 3
+    epoch: 4
     description: musl with local resolver socket confinement
     copyright:
       - license: MIT

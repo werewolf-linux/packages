@@ -7,7 +7,7 @@ Wolfi's names (`samba-server`, `libauth-samba`, `samba-libs` and the rest) but
 ## Use
 
 Werewolf: nothing to add. The `samba` form takes this build from the hardened
-feed. Wolfi, after [feed setup](../../docs/usage.md#install):
+feed. Wolfi, after [feed setup](../../Werewolf/docs/usage.md#install):
 
 ```sh
 apk add samba-server@hardened

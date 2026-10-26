@@ -36,7 +36,7 @@ jobs:
       - name: Remove what a cancelled build left
         if: runner.environment == 'self-hosted'
         run: |
-          for directory in build; do
+          for directory in Werewolf/.work build; do
             if [ -d "$directory" ]; then
               unshare --user --map-auto --map-root-user rm -rf -- "$directory"
             fi
@@ -48,9 +48,10 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
+          cache-dependency-path: Werewolf/go.sum
       - run: make tools
-      - run: build/tools/package install-melange --dest build/tools/melange
-      - run: PATH="$PWD/build/tools:$PATH" make test lint check
+      - run: Werewolf/.work/tools/package install-melange --dest Werewolf/.work/tools/melange
+      - run: PATH="$PWD/Werewolf/.work/tools:$PATH" make test lint check
       - name: Plan changed package validation
         id: plan
         env:
@@ -61,7 +62,7 @@ jobs:
           args=(plan --json --github)
           if [ -n "$BASE" ]; then args+=(--base "$BASE" --head "$HEAD"); fi
           if [ -n "$PACKAGE" ]; then args+=(--package "$PACKAGE"); fi
-          build/tools/package "${args[@]}"
+          Werewolf/.work/tools/package "${args[@]}"
   runner-profile:
     strategy:
       fail-fast: false
@@ -76,12 +77,13 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
+          cache-dependency-path: Werewolf/go.sum
       - run: make tools
       - name: Install and exercise the confined build runner
         run: |
           sudo -n apt-get -o Acquire::Retries=3 update
           sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap
-          sudo -n "$PWD/build/tools/package" setup-runner
+          sudo -n "$PWD/Werewolf/.work/tools/package" setup-runner
   capture:
     needs: check
     if: needs.check.outputs.wolfi != '[]'
@@ -100,15 +102,16 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
+          cache-dependency-path: Werewolf/go.sum
       - run: make tools
       - name: Select one immutable snapshot before either architecture builds
         env:
           GH_TOKEN: ${{ github.token }}
-        run: build/tools/package discover --package "$PACKAGE"
+        run: Werewolf/.work/tools/package discover --package "$PACKAGE"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: inputs-${{ matrix.package }}
-          path: build/bundles/${{ matrix.package }}.tar.gz
+          path: Werewolf/.work/bundles/${{ matrix.package }}.tar.gz
           if-no-files-found: error
   native:
     name: ${{ matrix.package }} (${{ matrix.arch }})

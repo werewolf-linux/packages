@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: continuwuity/continuwuity
@@ -16,7 +16,7 @@ melange:
   package:
     name: continuwuity
     version: 26.9.1
-    epoch: 4
+    epoch: 5
     description: A Matrix homeserver, the continuation of conduwuit
     copyright:
       - license: Apache-2.0

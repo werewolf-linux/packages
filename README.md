@@ -2,8 +2,12 @@
 
 Applications, libraries and hardened runtimes in one categorized ports tree.
 Every `CATEGORY/NAME/` is a complete build context with one maintained
-[`package.yaml`](docs/package.md). It contains a native Melange recipe or guarded
+[`package.yaml`](Werewolf/docs/package.md). It contains a native Melange recipe or guarded
 Wolfi derivation, one automatic update policy, tests and maintenance evidence.
+
+For installation, start with [Using the packages](Werewolf/docs/usage.md).
+For changes, start with [Contributing packages](Werewolf/docs/contributing.md).
+[Werewolf/](Werewolf/README.md) maps the shared maintenance infrastructure.
 
 ```text
 devel/glibc/       lang/python/      net/curl/
@@ -14,30 +18,30 @@ devel/libffi/      lang/php/         www/caddy/
 
 Names are globally unique and stable across category moves. APK names remain
 compatible with Wolfi where we replace its packages. All commands run from the
-repository root; shared mechanics live in `internal/`, `pipelines/` and `tools/`.
+repository root; shared infrastructure lives in [Werewolf/](Werewolf/README.md).
 
 ```sh
 make tools
-build/tools/package catalog list
-build/tools/package new --repo OWNER/PROJECT www/example
-build/tools/package check --package caddy
-build/tools/package render --package caddy
-build/tools/package updates --package caddy
-build/tools/package updates --package caddy --write
-build/tools/package discover --package python
+Werewolf/.work/tools/package catalog list
+Werewolf/.work/tools/package new --repo OWNER/PROJECT www/example
+Werewolf/.work/tools/package check --package caddy
+Werewolf/.work/tools/package render --package caddy
+Werewolf/.work/tools/package updates --package caddy
+Werewolf/.work/tools/package updates --package caddy --write
+Werewolf/.work/tools/package discover --package python
 make PACKAGE=python build
 make test lint check
 ```
 
-[Package definitions and maintenance](docs/package.md) is the format and workflow
+[Package definitions and maintenance](Werewolf/docs/package.md) is the format and workflow
 reference, including defaults, helper actions, guarded edits, generated paths and
-CI planning. [Application packaging](docs/applications.md) covers dependency locks
-and service consumers. [Wolfi packages](docs/wolfi.md) covers runtime policy,
-publication and native/guest build requirements. [Feed usage](docs/usage.md) covers
+CI planning. [Application packaging](Werewolf/docs/applications.md) covers dependency locks
+and service consumers. [Wolfi packages](Werewolf/docs/wolfi.md) covers runtime policy,
+publication and native/guest build requirements. [Feed usage](Werewolf/docs/usage.md) covers
 installation, capability grants and denial logs.
 
 Tooling requires Go 1.27+, git, pinned Melange and package-specific test tools.
-Install the builder with `build/tools/package install-melange`. Native builds use
+Install the builder with `Werewolf/.work/tools/package install-melange`. Native builds use
 Linux bubblewrap; supported Wolfi builds can use QEMU guests. Local application
 builds may use a sibling Werewolf checkout by setting `WEREWOLF=/path/to/werewolf`.
 Plex provenance checks also require GnuPG.
@@ -50,15 +54,15 @@ do not prevent other packages from publishing.
 
 The application feed is `https://dist.werewolf-linux.org/apk/packages`; hardened
 Wolfi derivations use `https://dist.werewolf-linux.org/apk/hardened`. Both retain the
-trust root in `release/packages.pub`. Signing credentials stay in the `release`
+trust root in `Werewolf/keys/packages.pub`. Signing credentials stay in the `release`
 environment; application builders receive no signing credentials. Signed Wolfi
 packages retain their installed-test and recovery gates.
 
-All generated work lives under ignored `build/`. `package paths` reports exact
+All generated work lives under ignored `Werewolf/.work/`. `package paths` reports exact
 locations. Dependency manifests and locks keep their native ecosystem formats;
 JSON reports are machine output, while maintained package definitions are YAML.
 
 Original application recipes and tools retain [Apache-2.0](LICENSE). Imported
-Wolfi engine tooling retains [GPL-3.0](LICENSES/wolfi/LICENSE); patches retain their
-upstream licenses. [Import provenance](LICENSES/wolfi/IMPORT.json) and associated
-license notices remain under `LICENSES/wolfi/`.
+Wolfi engine tooling retains [GPL-3.0](Werewolf/licenses/wolfi/LICENSE); patches retain their
+upstream licenses. [Import provenance](Werewolf/licenses/wolfi/IMPORT.json) and associated
+license notices remain under `Werewolf/licenses/wolfi/`.

@@ -32,7 +32,7 @@ jobs:
       - name: Remove what a cancelled build left
         if: runner.environment == 'self-hosted'
         run: |
-          for directory in build; do
+          for directory in Werewolf/.work build; do
             if [ -d "$directory" ]; then
               unshare --user --map-auto --map-root-user rm -rf -- "$directory"
             fi
@@ -43,15 +43,16 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
+          cache-dependency-path: Werewolf/go.sum
       - run: make tools
-      - run: build/tools/package install-melange --dest build/tools/melange
+      - run: Werewolf/.work/tools/package install-melange --dest Werewolf/.work/tools/melange
       - name: Test the publisher before selecting builds
-        run: PATH="$PWD/build/tools:$PATH" make test lint check
+        run: PATH="$PWD/Werewolf/.work/tools:$PATH" make test lint check
       - name: Select unpublished packages and staged retries
         id: plan
         env:
           PACKAGE: ${{ inputs.package }}
-        run: PATH="$PWD/build/tools:$PATH" build/tools/package release-plan --package "$PACKAGE"
+        run: PATH="$PWD/Werewolf/.work/tools:$PATH" Werewolf/.work/tools/package release-plan --package "$PACKAGE"
   release:
     needs: plan
     if: needs.plan.outputs.publish != '[]'

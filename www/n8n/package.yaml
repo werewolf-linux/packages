@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: npm
   project: n8n
@@ -17,7 +17,7 @@ melange:
   package:
     name: n8n
     version: 2.44.7
-    epoch: 1
+    epoch: 2
     description: n8n workflow automation on hardened Node.js
     copyright:
       - license: LicenseRef-Sustainable-Use
@@ -88,6 +88,10 @@ melange:
         runs: |-
           node /usr/lib/n8n/node_modules/n8n/bin/n8n --version | grep -F '${{package.version}}'
           node --no-node-snapshot n8n-check.cjs
+checks:
+  - name: Optional native dependency pruning
+    working-directory: tests
+    runs: go test prune_test.go
 changes:
   - what: Package the npm release with a pinned dependency lock; omit optional native profilers and watchers while retaining workflow backends.
     why: Prune optional native profilers and watchers while retaining workflow backends and pinned dependency locks.

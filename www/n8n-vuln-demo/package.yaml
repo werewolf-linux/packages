@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: npm
   project: n8n
@@ -8,7 +8,7 @@ melange:
   package:
     name: n8n-vuln-demo
     version: 1.120.0
-    epoch: 4
+    epoch: 5
     description: n8n workflow automation on hardened Node.js
     copyright:
       - license: LicenseRef-Sustainable-Use

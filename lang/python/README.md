@@ -5,7 +5,7 @@ Wolfi's newest stable CPython recipe with runtime restrictions; currently `pytho
 ## Use and allowances
 
 Werewolf: add `python-3.15` to `packages`; migrate forms pinned to older streams.
-Wolfi, after [feed setup](../../docs/usage.md#install):
+Wolfi, after [feed setup](../../Werewolf/docs/usage.md#install):
 
 ```sh
 apk add python-3.15@hardened
@@ -15,7 +15,7 @@ Run `python3 /usr/lib/app/main.py` as a non-root user with code mounted read-onl
 Install dependencies into the image or a virtual environment; `pyvenv.cfg` still works.
 Add `allow: [python:native]` to the existing Werewolf service for ctypes, or create
 `/etc/runtime-hardening/allow/SERVICE/python/native` on Wolfi. Substitute any group
-below; see [grant scope and restart instructions](../../docs/usage.md#grant-an-allowance).
+below; see [grant scope and restart instructions](../../Werewolf/docs/usage.md#grant-an-allowance).
 
 ## Patches
 
@@ -36,7 +36,7 @@ retains CPython's environment/user-site defaults; other applicable checks remain
 
 ## Debug
 
-Use [stderr denial records](../../docs/usage.md#debug-a-refusal) to identify the group.
+Use [stderr denial records](../../Werewolf/docs/usage.md#debug-a-refusal) to identify the group.
 
 | Symptom | Fix |
 |---|---|
@@ -68,7 +68,7 @@ which would attach `CAP_NET_BIND_SERVICE` to the interpreter binary.
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
 Build guests grant the groups privately; APKs contain no hardening exception files.
 [Installed-package probes](tests/probe.sh) check each grant and reject symlink grants.
-[Build instructions](../../docs/wolfi.md#building-locally); patches: PSF-2.0.
+[Build instructions](../../Werewolf/docs/wolfi.md#building-locally); patches: PSF-2.0.
 
 Readline and curses native extensions are omitted. GDBM, shelve and SQLite remain
 for application data, including persistent Celery schedules; the installed-package

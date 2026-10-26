@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   series: "4.4"
   reason: 'The package is neo4j-4.4: BloodHound requires APIs removed in Neo4j 5 and later. Track stable patches of the named compatibility stream.'
@@ -15,7 +15,7 @@ melange:
   package:
     name: neo4j-4.4
     version: 4.4.48
-    epoch: 3
+    epoch: 4
     description: Neo4j 4.4 community, which BloodHound's image still speaks
     copyright:
       - license: GPL-3.0-or-later

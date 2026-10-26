@@ -56,7 +56,7 @@ jobs:
         if: runner.environment == 'self-hosted'
         working-directory: .
         run: |
-          for directory in build; do
+          for directory in Werewolf/.work build; do
             if [ -d "$directory" ]; then
               unshare --user --map-auto --map-root-user rm -rf -- "$directory"
             fi
@@ -69,40 +69,40 @@ jobs:
         if: inputs.inputs_artifact != ''
         with:
           name: ${{ inputs.inputs_artifact }}
-          path: build/input-bundle
+          path: Werewolf/.work/input-bundle
       - name: Restore captured inputs with their file modes
         if: inputs.inputs_artifact != ''
         run: |
-          build/tools/package restore-inputs --package "$PACKAGE" --archive "build/input-bundle/$PACKAGE.tar.gz"
+          Werewolf/.work/tools/package restore-inputs --package "$PACKAGE" --archive "Werewolf/.work/input-bundle/$PACKAGE.tar.gz"
       - name: Capture the latest stable source and Wolfi recipe for a build by hand
         if: inputs.inputs_artifact == ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: build/tools/package refresh --package "$PACKAGE"
+        run: Werewolf/.work/tools/package refresh --package "$PACKAGE"
       - name: Locate the captured work and artifacts
         id: paths
-        run: build/tools/package paths --package "$PACKAGE" --arch '${{ matrix.arch }}' --github
+        run: Werewolf/.work/tools/package paths --package "$PACKAGE" --arch '${{ matrix.arch }}' --github
       - name: Verify provenance and derivation
-        run: build/tools/package derive --package "$PACKAGE"
+        run: Werewolf/.work/tools/package derive --package "$PACKAGE"
       - name: Write production signing key
         if: inputs.production
         env:
           PACKAGES_APK_SIGNING_KEY: ${{ secrets.WEREWOLF_PACKAGES_KEY }}
         run: |
           test -n "$PACKAGES_APK_SIGNING_KEY"
-          build/tools/package signing-key --engine wolfi --production
+          Werewolf/.work/tools/package signing-key --engine wolfi --production
       - name: Build and test signed packages
         run: |
           set -o pipefail
           mkdir -p '${{ steps.paths.outputs.logs }}'
-          scripts/ci-root env PATH="$PWD/build/tools:$PATH" make PACKAGE="$PACKAGE" \
+          Werewolf/runner/ci-root env PATH="$PWD/Werewolf/.work/tools:$PATH" make PACKAGE="$PACKAGE" \
             ARCH=${{ matrix.arch }} build 2>&1 | tee '${{ steps.paths.outputs.logs }}/build.log'
       - name: Record successful native validation
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
-            scripts/ci-root chown -R "$(id -u):$(id -g)" '${{ steps.paths.outputs.artifacts }}'
+            Werewolf/runner/ci-root chown -R "$(id -u):$(id -g)" '${{ steps.paths.outputs.artifacts }}'
           fi
-          build/tools/package provenance --package "$PACKAGE" --arch ${{ matrix.arch }}
+          Werewolf/.work/tools/package provenance --package "$PACKAGE" --arch ${{ matrix.arch }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -121,10 +121,10 @@ jobs:
       - name: Restore build ownership for the next checkout
         if: always()
         run: |
-          if [ -d build ]; then
+          if [ -d Werewolf/.work ]; then
             owner=0:0
             if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
               owner="$(id -u):$(id -g)"
             fi
-            scripts/ci-root chown -R "$owner" build
+            Werewolf/runner/ci-root chown -R "$owner" Werewolf/.work
           fi

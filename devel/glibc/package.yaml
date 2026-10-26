@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   version-pattern: ^([0-9]+\.[0-9]+)$
   version-replace: ${1}
@@ -669,7 +669,7 @@ wolfi:
   test-setup:
     name: Adapt apk test tooling to strict option ordering
     runs: ${template:tests/apk-adapter.sh}
-  revision: 21
+  revision: 22
   max-fail-per-mille: 55
   family: glibc-
 changes:

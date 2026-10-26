@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: FFmpeg/FFmpeg
@@ -138,7 +138,7 @@ wolfi:
         - old: |
             ffplay
           new: ""
-  revision: 7
+  revision: 8
   family: ffmpeg-
 changes:
   - what: Keep local media conversion and codecs; omit network/device protocols, ffplay, display and font integrations.

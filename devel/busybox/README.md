@@ -7,7 +7,7 @@ Wolfi's names and outranks Wolfi's build, so every Werewolf image with busybox g
 ## Use
 
 Werewolf: nothing to add. Every image lists the hardened feed. Wolfi, after
-[feed setup](../../docs/usage.md#install):
+[feed setup](../../Werewolf/docs/usage.md#install):
 
 ```sh
 apk add busybox-full@hardened

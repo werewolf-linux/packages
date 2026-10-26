@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: open-webui/open-webui
@@ -18,7 +18,7 @@ melange:
   package:
     name: open-webui
     version: 0.12.4
-    epoch: 2
+    epoch: 3
     description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
     copyright:
       - license: LicenseRef-Open-WebUI

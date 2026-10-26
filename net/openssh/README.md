@@ -9,7 +9,7 @@ every Werewolf sshd form gets it. Design: Werewolf's
 ## Use
 
 Werewolf: nothing to add. Every image lists the hardened feed. Wolfi, after
-[feed setup](../../docs/usage.md#install):
+[feed setup](../../Werewolf/docs/usage.md#install):
 
 ```sh
 apk add openssh-server@hardened

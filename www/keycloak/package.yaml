@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: keycloak/keycloak
@@ -20,7 +20,7 @@ melange:
   package:
     name: keycloak
     version: 26.8.1
-    epoch: 4
+    epoch: 5
     description: Open Source Identity and Access Management, built for PostgreSQL by its socket
     copyright:
       - license: Apache-2.0

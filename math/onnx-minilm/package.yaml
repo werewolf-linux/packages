@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: content
   reason: Upstream publishes an unversioned model archive; changed bytes increment the APK epoch.
@@ -7,7 +7,7 @@ melange:
   package:
     name: onnx-minilm-l6-v2
     version: 1.0.0
-    epoch: 3
+    epoch: 4
     description: Verified all-MiniLM-L6-v2 ONNX embedding model and tokenizer
     copyright:
       - license: Apache-2.0

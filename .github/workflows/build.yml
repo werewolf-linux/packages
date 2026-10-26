@@ -34,9 +34,11 @@ jobs:
       - name: Remove what an interrupted build left
         if: runner.environment == 'self-hosted'
         run: |
-          if [ -d build ]; then
-            unshare --user --map-auto --map-root-user rm -rf -- build
-          fi
+          for directory in Werewolf/.work build; do
+            if [ -d "$directory" ]; then
+              unshare --user --map-auto --map-root-user rm -rf -- "$directory"
+            fi
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -46,45 +48,45 @@ jobs:
         if: inputs.engine == 'wolfi'
         with:
           name: ${{ inputs.inputs_artifact }}
-          path: build/input-bundle
+          path: Werewolf/.work/input-bundle
       - name: Restore the source snapshot selected before native validation
         if: inputs.engine == 'wolfi'
-        run: build/tools/package restore-inputs --package "$PACKAGE" --archive "build/input-bundle/$PACKAGE.tar.gz"
+        run: Werewolf/.work/tools/package restore-inputs --package "$PACKAGE" --archive "Werewolf/.work/input-bundle/$PACKAGE.tar.gz"
       - name: Locate generated work and artifacts
         id: paths
-        run: build/tools/package paths --package "$PACKAGE" --arch "$ARCH" --github
+        run: Werewolf/.work/tools/package paths --package "$PACKAGE" --arch "$ARCH" --github
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: build/cache
-          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', steps.paths.outputs.context), 'tools.lock.json') }}
+          path: Werewolf/.work/cache
+          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', steps.paths.outputs.context), 'Werewolf/tools.lock.json') }}
           restore-keys: source-${{ inputs.arch }}-${{ inputs.package }}-
       - name: Build and validate the selected package
         run: |
           set -o pipefail
           mkdir -p '${{ steps.paths.outputs.logs }}'
-          scripts/ci-root mkdir -p build/cache/melange
-          scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
-            build/tools/package build --package "$PACKAGE" --arch "$ARCH" \
+          Werewolf/runner/ci-root mkdir -p Werewolf/.work/cache/melange
+          Werewolf/runner/ci-root env PATH="$PWD/Werewolf/.work/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            Werewolf/.work/tools/package build --package "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee '${{ steps.paths.outputs.logs }}/build.log'
       - name: Exercise installed application packages
         if: inputs.engine == 'upstream'
         run: |
           set -o pipefail
-          scripts/ci-root env PATH="$PWD/build/tools:$PATH" \
-            build/tools/package test --package "$PACKAGE" --arch "$ARCH" \
+          Werewolf/runner/ci-root env PATH="$PWD/Werewolf/.work/tools:$PATH" \
+            Werewolf/.work/tools/package test --package "$PACKAGE" --arch "$ARCH" \
             2>&1 | tee -a '${{ steps.paths.outputs.logs }}/build.log'
       - name: Restore artifact ownership
         if: always()
         run: |
-          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] && [ -d build ]; then
-            scripts/ci-root chown -R "$(id -u):$(id -g)" build
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] && [ -d Werewolf/.work ]; then
+            Werewolf/runner/ci-root chown -R "$(id -u):$(id -g)" Werewolf/.work
           fi
       - name: Verify native application provenance
         if: inputs.engine == 'upstream'
-        run: PATH="$PWD/build/tools:$PATH" build/tools/package artifact-verify --package "$PACKAGE" --arch "$ARCH"
+        run: PATH="$PWD/Werewolf/.work/tools:$PATH" Werewolf/.work/tools/package artifact-verify --package "$PACKAGE" --arch "$ARCH"
       - name: Record successful Wolfi native validation
         if: inputs.engine == 'wolfi'
-        run: build/tools/package provenance --package "$PACKAGE" --arch "$ARCH"
+        run: Werewolf/.work/tools/package provenance --package "$PACKAGE" --arch "$ARCH"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ inputs.package }}-${{ inputs.arch }}

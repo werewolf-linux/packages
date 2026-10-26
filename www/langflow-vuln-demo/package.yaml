@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: pypi
   project: langflow
@@ -8,7 +8,7 @@ melange:
   package:
     name: langflow-vuln-demo
     version: 1.8.1
-    epoch: 3
+    epoch: 4
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
       - license: MIT

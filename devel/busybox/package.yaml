@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   version-pattern: ^([0-9]+)_([0-9]+)_([0-9]+)$
   version-replace: ${1}.${2}.${3}
@@ -317,7 +317,7 @@ wolfi:
         # Cleanup
         kill "$SERVER_PID"
       set: ${file:tests/wget.sh}
-  revision: 7
+  revision: 8
   recipe: busybox
 changes:
   - what: Enable CONFIG_FEATURE_PREFER_APPLETS in busybox, busybox-full and busybox-static, keeping BUSYBOX_EXEC_PATH /usr/bin/busybox.

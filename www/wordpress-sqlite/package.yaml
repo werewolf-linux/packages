@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: WordPress/sqlite-database-integration
@@ -7,7 +7,7 @@ melange:
   package:
     name: wordpress-sqlite-integration
     version: 3.1.1
-    epoch: 3
+    epoch: 4
     description: WordPress SQLite database integration and drop-in
     copyright:
       - license: GPL-2.0-or-later

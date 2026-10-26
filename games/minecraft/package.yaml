@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: minecraft
 melange:
@@ -10,7 +10,7 @@ melange:
   package:
     name: minecraft
     version: 26.3
-    epoch: 3
+    epoch: 4
     description: Minecraft Java Edition server
     copyright:
       - license: LicenseRef-Minecraft-EULA

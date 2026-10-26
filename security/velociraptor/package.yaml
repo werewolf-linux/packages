@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: Velocidex/velociraptor
@@ -10,7 +10,7 @@ melange:
   package:
     name: velociraptor
     version: 0.77.3
-    epoch: 3
+    epoch: 4
     description: Endpoint visibility and collection server
     copyright:
       - license: AGPL-3.0-only

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: libffi/libffi
@@ -56,7 +56,7 @@ wolfi:
             ${file:tests/probe.c}WEREWOLF_LIBFFI_PROBE
             gcc -o "$work/probe" "$work/probe.c" -lffi
             "$work/probe"
-  revision: 6
+  revision: 7
   recipe: libffi
 changes:
   - what: Enable static executable trampolines and disable PaX emulated trampolines.

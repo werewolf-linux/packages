@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: opensearch-project/OpenSearch
@@ -15,7 +15,7 @@ melange:
   package:
     name: opensearch
     version: 3.9.0
-    epoch: 3
+    epoch: 4
     description: Open source distributed and RESTful search engine, with its security plugin
     copyright:
       - license: Apache-2.0

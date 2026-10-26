@@ -9,7 +9,7 @@ hardened glibc or Python does not replace those bundled components.
 `plex.yaml` pins the current public release and every codec by SHA-256 for x86_64
 and aarch64. `InRelease`, the two package indexes and `PlexSign.v2.key` retain the
 vendor's signed provenance. `sources.json` records the codec manifest results.
-`go run ./cmd/package plex-verify` (from the repository root) checks the repository signature, signing-key fingerprint,
+`go -C Werewolf run ./cmd/package plex-verify` (from the repository root) checks the repository signature, signing-key fingerprint,
 package-index hashes and all recipe pins without network access.
 
 Build with `make PACKAGE=plex build` from this repository. The recipe installs

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: wikimedia/mediawiki
@@ -16,7 +16,7 @@ melange:
   package:
     name: mediawiki
     version: 1.46.2
-    epoch: 3
+    epoch: 4
     description: The wiki engine of Wikipedia, long-term release
     copyright:
       - license: GPL-2.0-or-later

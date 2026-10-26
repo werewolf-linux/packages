@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: git-tags
   url: https://git.kernel.org/pub/scm/libs/libcap/libcap.git
@@ -49,7 +49,7 @@ wolfi:
             cat > /tmp/libcap-probe.sh <<'WEREWOLF_LIBCAP_PROBE'
             ${file:tests/probe.sh}WEREWOLF_LIBCAP_PROBE
             sh /tmp/libcap-probe.sh
-  revision: 2
+  revision: 3
   recipe: libcap
 changes:
   - what: Build and install with PAM_CAP=no, and drop linux-pam-dev and the chmod of pam_cap.so.

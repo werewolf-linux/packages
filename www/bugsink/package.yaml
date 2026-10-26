@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: pypi
   project: bugsink
@@ -9,7 +9,7 @@ melange:
   package:
     name: bugsink
     version: 2.6.2
-    epoch: 4
+    epoch: 5
     description: Error tracking compatible with Sentry SDKs
     copyright:
       - license: PolyForm-Shield-1.0.0

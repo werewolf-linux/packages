@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   pattern: ^([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)$
   github:
@@ -17,7 +17,7 @@ melange:
   package:
     name: limesurvey
     version: 7.5.1
-    epoch: 4
+    epoch: 5
     description: Online survey tool
     copyright:
       - license: GPL-2.0-or-later

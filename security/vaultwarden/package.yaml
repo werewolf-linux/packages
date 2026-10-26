@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   components:
     web-vault-version:
@@ -18,7 +18,7 @@ melange:
   package:
     name: vaultwarden
     version: 1.37.4
-    epoch: 5
+    epoch: 6
     description: Bitwarden-compatible password manager server
     copyright:
       - license: AGPL-3.0-only

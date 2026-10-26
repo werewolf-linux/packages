@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   hold: Intentionally vulnerable training release; never advance this fixture automatically.
   github:
@@ -9,7 +9,7 @@ melange:
   package:
     name: solr-vuln-demo
     version: 8.11.0
-    epoch: 4
+    epoch: 5
     description: Deliberately vulnerable Solr, on hardened OpenJDK 27
     copyright:
       - license: Apache-2.0
@@ -38,6 +38,9 @@ melange:
         cp -a server licenses LICENSE.txt NOTICE.txt "$dest/"
         CGO_ENABLED=0 go build -buildmode=pie -trimpath -ldflags='-s -w' -o "$dest/setup" setup.go
         install -m644 log4j2.xml "$dest/log4j2.xml"
+checks:
+  - name: Solr setup configuration
+    runs: go test setup.go setup_test.go
 changes:
   - what: Package the intentionally vulnerable application release under an isolated training package name.
     why: Keep a deliberately vulnerable training release with the same minimal server packaging.

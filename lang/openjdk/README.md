@@ -5,7 +5,7 @@ Wolfi's newest stable OpenJDK recipe with runtime restrictions; currently `openj
 ## Use and allowances
 
 Werewolf: add `openjdk-27-jre` and `openjdk-27-default-jvm` to `packages` for services;
-use `openjdk-27`/`openjdk-27-default-jdk` for compilation. Wolfi, after [feed setup](../../docs/usage.md#install):
+use `openjdk-27`/`openjdk-27-default-jdk` for compilation. Wolfi, after [feed setup](../../Werewolf/docs/usage.md#install):
 
 ```sh
 apk add openjdk-27-jre@hardened openjdk-27-default-jvm@hardened
@@ -15,7 +15,7 @@ Run `java -jar /usr/lib/app/app.jar` as a non-root user. Werewolf's normal JVM J
 needs top-level `allow: [jit]`. Add `allow: [java:native]` to the existing service
 for native libraries, or create `/etc/runtime-hardening/allow/SERVICE/java/native`
 on Wolfi. The namespace is `java`, not `openjdk`.
-See [grant scope and restart instructions](../../docs/usage.md#grant-an-allowance).
+See [grant scope and restart instructions](../../Werewolf/docs/usage.md#grant-an-allowance).
 
 ## Patches
 
@@ -38,7 +38,7 @@ Allowance results are cached: restart the JVM after every allowance change.
 
 ## Debug
 
-Use [stderr denial records](../../docs/usage.md#debug-a-refusal) to identify the group.
+Use [stderr denial records](../../Werewolf/docs/usage.md#debug-a-refusal) to identify the group.
 
 | Symptom | Fix |
 |---|---|
@@ -74,4 +74,4 @@ Linkable-runtime builds and jlink tests remain. Attach, RMI, management-RMI and
 JDWP modules still ship; the package is not a reduced jlink runtime.
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
 Retained Wolfi tests and [probes](tests/probe.sh) check grants, manifests and refusals.
-[Build instructions](../../docs/wolfi.md#building-locally); patches: GPL-2.0-only WITH Classpath-exception-2.0.
+[Build instructions](../../Werewolf/docs/wolfi.md#building-locally); patches: GPL-2.0-only WITH Classpath-exception-2.0.

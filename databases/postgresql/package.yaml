@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   separator: _
   github:
@@ -352,7 +352,7 @@ wolfi:
         name: Database lifecycle and consumer tests
         prefix: |
           trap 'sudo -u "$PGUSER" pg_ctl -D "$PGDATA" -m immediate stop >/dev/null 2>&1 || true' EXIT
-  revision: 4
+  revision: 5
   family: postgresql-
 changes:
   - what: Omit PAM, LDAP and Kerberos/GSSAPI from server and libpq; omit ECPG from default runtime dependencies. Retain LLVM JIT, TLS, ICU, compression, XML, PL/pgSQL and contrib extensions.

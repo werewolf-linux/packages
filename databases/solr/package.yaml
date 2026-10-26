@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   github:
     identifier: apache/solr
@@ -10,7 +10,7 @@ melange:
   package:
     name: solr
     version: 10.0.0
-    epoch: 4
+    epoch: 5
     description: Apache Solr, directly launched with hardened OpenJDK 27
     copyright:
       - license: Apache-2.0

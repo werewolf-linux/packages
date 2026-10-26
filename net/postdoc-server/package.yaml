@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   source: git
   repo: atomdrift-project/postdoc
@@ -15,7 +15,7 @@ melange:
   package:
     name: postdoc
     version: 0.2.0_git20261025
-    epoch: 3
+    epoch: 4
     description: Worker and server coordination for the Atomdrift analysis fleet
     copyright:
       - license: Apache-2.0

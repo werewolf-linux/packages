@@ -1,8 +1,4 @@
-/build/
-/out/
+/Werewolf/.work/
 __pycache__/
 *.pyc
 .DS_Store
-
-# Historical local output; the maintained build root is build/.
-/wolfi/

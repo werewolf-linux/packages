@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../docs/package.schema.json
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
 update:
   components:
     gvm-libs-version:
@@ -15,7 +15,7 @@ melange:
   package:
     name: pg-gvm
     version: 22.6.18
-    epoch: 7
+    epoch: 8
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later
