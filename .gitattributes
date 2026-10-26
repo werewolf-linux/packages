@@ -1,0 +1,2 @@
+# Patch context contains spaces on otherwise empty lines.
+*/*/patches/*.patch whitespace=-blank-at-eol

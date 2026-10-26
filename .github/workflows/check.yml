@@ -24,6 +24,10 @@ jobs:
           (github.event_name == 'workflow_dispatch' ||
            github.event.pull_request.head.repo.full_name == github.repository) &&
           vars.WEREWOLF_X86_64_BUILD_RUNNER || '["ubuntu-26.04"]') }}
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      wolfi: ${{ steps.plan.outputs.wolfi }}
+      has_build: ${{ steps.plan.outputs.has_build }}
     timeout-minutes: 20
     steps:
       # A cancelled build can leave files its user namespace owns, which
@@ -32,7 +36,7 @@ jobs:
       - name: Remove what a cancelled build left
         if: runner.environment == 'self-hosted'
         run: |
-          for directory in build wolfi/build; do
+          for directory in build; do
             if [ -d "$directory" ]; then
               unshare --user --map-auto --map-root-user rm -rf -- "$directory"
             fi
@@ -40,14 +44,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
       - run: make tools
       - run: build/tools/package install-melange --dest build/tools/melange
       - run: PATH="$PWD/build/tools:$PATH" make test lint check
-      - name: Validate every context and its APK names
-        run: PATH="$PWD/build/tools:$PATH" build/tools/package plan --offline
+      - name: Plan changed package validation
+        id: plan
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.sha }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          args=(plan --json --github)
+          if [ -n "$BASE" ]; then args+=(--base "$BASE" --head "$HEAD"); fi
+          if [ -n "$PACKAGE" ]; then args+=(--package "$PACKAGE"); fi
+          build/tools/package "${args[@]}"
   runner-profile:
     strategy:
       fail-fast: false
@@ -68,31 +82,48 @@ jobs:
           sudo -n apt-get -o Acquire::Retries=3 update
           sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap
           sudo -n "$PWD/build/tools/package" setup-runner
-  native-smoke:
+  capture:
     needs: check
+    if: needs.check.outputs.wolfi != '[]'
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
-    uses: ./.github/workflows/build.yml
-    with:
-      package: ${{ inputs.package || 'onnx-minilm' }}
-      arch: ${{ matrix.arch }}
-      trusted: ${{ github.repository == 'werewolf-linux/packages' &&
-        !inputs.use_hosted &&
-        (github.event_name == 'workflow_dispatch' ||
-         github.event.pull_request.head.repo.full_name == github.repository) }}
-
-  wordpress-smoke:
-    needs: check
+        package: ${{ fromJSON(needs.check.outputs.wolfi) }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    env:
+      PACKAGE: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+        with:
+          go-version: '1.27.x'
+      - run: make tools
+      - name: Select one immutable snapshot before either architecture builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: build/tools/package discover --package "$PACKAGE"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: inputs-${{ matrix.package }}
+          path: build/bundles/${{ matrix.package }}.tar.gz
+          if-no-files-found: error
+  native:
+    name: ${{ matrix.package }} (${{ matrix.arch }})
+    needs: [check, capture]
+    if: always() && !cancelled() && needs.check.result == 'success' && needs.check.outputs.has_build == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        arch: [x86_64, aarch64]
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.check.outputs.matrix) }}
     uses: ./.github/workflows/build.yml
     with:
-      package: wordpress-sqlite
+      package: ${{ matrix.package }}
       arch: ${{ matrix.arch }}
+      engine: ${{ matrix.engine }}
+      inputs_artifact: inputs-${{ matrix.package }}
       trusted: ${{ github.repository == 'werewolf-linux/packages' &&
         !inputs.use_hosted &&
         (github.event_name == 'workflow_dispatch' ||

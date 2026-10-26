@@ -29,9 +29,9 @@ audit/design references. Keep allocator/string/math implementations out of these
 
 `package prepare` uses the same bounded, exact-commit shallow fetcher as Melange, applies Wolfi patches first, and checks each patch with GNU patch before applying it. Context mismatches stop preparation. It never resets a developer checkout or substitutes a newer source commit. Offsets and fuzz up to two context lines match Melange; fuzz is reported for review.
 
-On patch drift, prepare an unmodified new source, apply the old series one patch at a time, and manually revise only the failing mechanism. Compare the final diff and behavior with the previous validated release; update each patch's base/reference as appropriate. Retain explanatory context rather than generating zero-context patches. Increment `policy.json`'s revision for policy/packaging changes before releasing new package bytes under an existing upstream version.
+On patch drift, prepare an unmodified new source, apply the old series one patch at a time, and manually revise only the failing mechanism. Compare the final diff and behavior with the previous validated release; update each patch's base/reference as appropriate. Retain explanatory context rather than generating zero-context patches. Increment `package.yaml`'s revision for policy/packaging changes before releasing new package bytes under an existing upstream version.
 
-`overlay.yaml` holds the package naming, added flags, application gates, and omitted facilities. It preserves compiler environment, upstream hardening, full tests and ABI checks. The sole failure-count override is the requested raw 5.5% ceiling. `package verify` checks these invariants and input hashes before any package build.
+`package.yaml` holds the package naming, added flags, application gates, and omitted facilities. It preserves compiler environment, upstream hardening, full tests and ABI checks. The sole failure-count override is the requested raw 5.5% ceiling. `package verify` checks these invariants and input hashes before any package build.
 
 Test binaries use upstream's hardcoded test interpreter/RPATH option. Build utilities use the installed build-host libc. Neither gets a policy bypass; the shipped loader rejects the same overrides under test. Retain every failure and its output; the ratio gate does not reclassify failures.
 

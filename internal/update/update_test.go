@@ -417,10 +417,10 @@ func TestLangflowMovesWheelURLsCommandsAndLocksTogether(t *testing.T) {
 
 func TestCategorizedUpdatesAndExplicitTrainingHold(t *testing.T) {
 	root := t.TempDir()
-	mustWrite(t, filepath.Join(root, "wolfi", ".keep"), "")
-	mustWrite(t, filepath.Join(root, "www", "example", "metadata.json"), `{"update":{"source":"github","repo":"a/b","prefix":"v"},"hardening":{"minimized":false,"pledge":false,"minimized_reason":"Fixture","pledge_reason":"Fixture","evidence":["recipe.yaml"]},"wolfi":{"relationship":"independent","recipes":[],"changes":[{"what":"Fixture","why":"Exercise updates","evidence":["recipe.yaml"]}],"removal_condition":"Fixture"}}`)
-	path := filepath.Join(root, "www", "example", "recipe.yaml")
-	mustWrite(t, path, fetchRecipe)
+	mustWrite(t, filepath.Join(root, "pipelines", ".keep"), "")
+
+	path := filepath.Join(root, "www", "example", "package.yaml")
+	mustWrite(t, path, "update: {github: {identifier: a/b, strip-prefix: v}}\nchanges:\n- what: Fixture\n  why: Exercise updates\n  evidence: [package.yaml]\nmelange:\n"+indentRecipe(fetchRecipe))
 	c := mockClient(t, map[string]string{
 		"https://api.github.com/repos/a/b/releases/latest": `{"tag_name":"v1.10.0"}`,
 		"https://example.org/1.10.0/arm64.tar.gz":          "arm", "https://example.org/1.10.0/amd64.tar.gz": "amd",
@@ -534,4 +534,14 @@ func TestGitBranchTracksNewCommitsWithinTheSameDay(t *testing.T) {
 	if r.Status != "updated" || value(field(recipe.root, "package"), "version") != "0.2.0_git20261025" || value(field(recipe.root, "package"), "epoch") != "0" {
 		t.Fatalf("new-day commit was not promoted: %+v", r)
 	}
+}
+
+func indentRecipe(text string) string {
+	var result strings.Builder
+	for _, line := range strings.SplitAfter(text, "\n") {
+		if line != "" {
+			result.WriteString("  " + line)
+		}
+	}
+	return result.String()
 }

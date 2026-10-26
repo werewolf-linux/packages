@@ -52,8 +52,8 @@ var exactCommit = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func policyHashes(pkg Package) (map[string]string, error) {
 	result := map[string]string{}
-	shared := []string{"go.mod", "go.sum", "Makefile", "tools.lock.json", "release/packages.pub", "scripts/ci-root", "wolfi/tools/guest/melange-guest.yaml", ".github/workflows/wolfi-build.yml", "cmd/package/main.go", "cmd/package-helper/main.go"}
-	for _, directory := range []string{"internal/apk", "internal/catalog", "internal/overlay", "internal/packaging", "internal/probe", "internal/transform", "internal/update", "wolfi/pipelines"} {
+	shared := []string{"go.mod", "go.sum", "Makefile", "tools.lock.json", "release/packages.pub", "scripts/ci-root", "tools/guest/melange-guest.yaml", ".github/workflows/wolfi-build.yml", "cmd/package/main.go", "cmd/package-helper/main.go", ".github/actions/setup-builder/action.yml", ".github/workflows/build.yml"}
+	for _, directory := range []string{"internal/apk", "internal/catalog", "internal/overlay", "internal/packaging", "internal/probe", "internal/transform", "internal/update", "internal/smoke", "pipelines", "tools/guest"} {
 		err := filepath.WalkDir(filepath.Join(pkg.Root, directory), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -90,15 +90,19 @@ func policyHashes(pkg Package) (map[string]string, error) {
 		}
 		result[filepath.ToSlash(name)] = sum
 	}
-	hashes, _, err := hashFiles(pkg.Directory, func(path string) bool {
-		first := strings.Split(filepath.ToSlash(path), "/")[0]
-		return slices.Contains([]string{"README.md", "docs", "tools", "metadata.json", "__pycache__"}, first) || strings.HasSuffix(path, ".pyc")
-	})
+	hashes, _, err := hashFiles(pkg.Directory, excludedInput)
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := hashes["package.yaml"]; ok {
+		sum, err := definitionDigest(filepath.Join(pkg.Directory, "package.yaml"))
+		if err != nil {
+			return nil, err
+		}
+		hashes["package.yaml"] = sum
+	}
 	for name, sum := range hashes {
-		result[filepath.ToSlash(filepath.Join(pkg.Path, name))] = sum
+		result[filepath.ToSlash(filepath.Join(pkg.Name, name))] = sum
 	}
 	return result, nil
 }
@@ -232,7 +236,7 @@ func effective(pkg Package, baseline *yaml.Node, lock Inputs) (*yaml.Node, error
 		overlay.Put(checkout, "expected-commit", overlay.String(lock.SourceCommit))
 	}
 	if len(pkg.Spec.ReleaseEdits) > 0 {
-		vars, err := overlay.Variables(config, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "wolfi/pipelines"))
+		vars, err := overlay.Variables(config, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "pipelines"))
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +262,12 @@ func rewrite(n *yaml.Node, change func(string) string) {
 
 // Capture stages a complete input snapshot and validates the effective recipe
 // before replacing previously usable inputs.
-func Capture(ctx context.Context, pkg Package, checkout string) (Inputs, error) {
+func Capture(ctx context.Context, target *Package, checkout string) (Inputs, error) {
+	return capture(ctx, target, checkout, true)
+}
+
+func capture(ctx context.Context, target *Package, checkout string, install bool) (Inputs, error) {
+	pkg := *target
 	var lock Inputs
 	release, err := update.NewClient(os.Getenv("GH_TOKEN")).ResolveRelease(ctx, *pkg.Update.Upstream)
 	if err != nil {
@@ -339,7 +348,7 @@ func Capture(ctx context.Context, pkg Package, checkout string) (Inputs, error) 
 		return lock, err
 	}
 	lock.EffectiveRecipe = overlay.Value(overlay.Field(recipe, "package"), "name") + ".yaml"
-	vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "wolfi/pipelines"))
+	vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "pipelines"))
 	if err != nil {
 		return lock, err
 	}
@@ -364,22 +373,28 @@ func Capture(ctx context.Context, pkg Package, checkout string) (Inputs, error) 
 	if err := writeJSON(filepath.Join(candidate, "upstream.lock.json"), lock); err != nil {
 		return lock, err
 	}
+	if !install {
+		return lock, nil
+	}
+	pkg.Build = filepath.Join(packageBuildRoot(pkg), lock.BuildID)
+	if err := os.MkdirAll(pkg.Build, 0755); err != nil {
+		return lock, err
+	}
 	destination := filepath.Join(pkg.Build, "inputs")
-	backup := candidate + "-previous"
-	if _, err := os.Stat(destination); err == nil {
-		if err := os.Rename(destination, backup); err != nil {
+	if _, err := os.Stat(destination); os.IsNotExist(err) {
+		if err := os.Rename(candidate, destination); err != nil {
 			return lock, err
 		}
-		defer os.RemoveAll(backup)
-	} else if !os.IsNotExist(err) {
+	} else if err != nil {
 		return lock, err
 	}
-	if err := os.Rename(candidate, destination); err != nil {
-		if restore := os.Rename(backup, destination); restore != nil {
-			return lock, fmt.Errorf("replace inputs: %w; rollback: %v", err, restore)
-		}
+	if _, err := VerifyInputs(pkg); err != nil {
 		return lock, err
 	}
+	if err := selectCaptured(pkg, lock.BuildID); err != nil {
+		return lock, err
+	}
+	*target = pkg
 	slog.Info("captured package inputs", "package", pkg.Name, "version", lock.Version, "wolfi_version", lock.Wolfi.Version, "build_id", lock.BuildID)
 	return lock, nil
 }
@@ -468,7 +483,7 @@ func Derive(pkg Package) (*yaml.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	vars, err := overlay.Variables(effective, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "wolfi/pipelines"))
+	vars, err := overlay.Variables(effective, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "pipelines"))
 	if err != nil {
 		return nil, err
 	}
@@ -509,6 +524,9 @@ func Derive(pkg Package) (*yaml.Node, error) {
 
 func verifySeries(pkg Package) error {
 	data, err := os.ReadFile(filepath.Join(pkg.Directory, "patches/series"))
+	if os.IsNotExist(err) && pkg.Spec.Patches == "" {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -544,6 +562,9 @@ func verifySeries(pkg Package) error {
 // Prepare checks out the exact source and applies patches in build order.
 // It refuses to reset an existing source checkout.
 func Prepare(ctx context.Context, pkg Package, destination, localSource string) error {
+	if err := ensureBuildRoot(pkg.Root); err != nil {
+		return err
+	}
 	lock, err := VerifyInputs(pkg)
 	if err != nil {
 		return err
@@ -565,7 +586,7 @@ func Prepare(ctx context.Context, pkg Package, destination, localSource string) 
 	if err != nil {
 		return err
 	}
-	vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "wolfi/pipelines"))
+	vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "pipelines"))
 	if err != nil {
 		return err
 	}
@@ -665,7 +686,7 @@ attempts:
 		}
 	}
 	series, err := os.ReadFile(filepath.Join(pkg.Directory, "patches/series"))
-	if err != nil {
+	if err != nil && !(os.IsNotExist(err) && pkg.Spec.Patches == "") {
 		return err
 	}
 	for _, name := range strings.Fields(string(series)) {

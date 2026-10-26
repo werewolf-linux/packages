@@ -183,10 +183,27 @@ func RestoreInputs(pkg Package, archive string) error {
 	}
 	candidate := pkg
 	candidate.Build = stage
-	if _, err := VerifyInputs(candidate); err != nil {
+	lock, err := VerifyInputs(candidate)
+	if err != nil {
 		return err
 	}
+	if pkg.Root != "" && pkg.Name != "" {
+		pkg.Build = filepath.Join(packageBuildRoot(pkg), lock.BuildID)
+		if err := os.MkdirAll(pkg.Build, 0755); err != nil {
+			return err
+		}
+	}
 	destination := filepath.Join(pkg.Build, "inputs")
+	if pkg.Root != "" && pkg.Name != "" {
+		if _, err := os.Stat(destination); err == nil {
+			if _, err := VerifyInputs(pkg); err != nil {
+				return err
+			}
+			return selectCaptured(pkg, lock.BuildID)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
 	backup := filepath.Join(stage, "previous")
 	hadPrevious := false
 	if _, err := os.Lstat(destination); err == nil {
@@ -204,6 +221,9 @@ func RestoreInputs(pkg Package, archive string) error {
 			}
 		}
 		return err
+	}
+	if pkg.Root != "" && pkg.Name != "" {
+		return selectCaptured(pkg, lock.BuildID)
 	}
 	return nil
 }

@@ -1,5 +1,0 @@
-actions:
-  probe:
-    curl:
-      binary: ./src/curl
-      musl: true

@@ -1,0 +1,125 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  source: pypi
+  project: bugsink
+  lock: bugsink
+melange:
+  # Application and hashed dependencies only. Python comes from hardened-packages;
+  # the venv's interpreter remains a link to the system package, never a copied binary.
+  package:
+    name: bugsink
+    version: 2.6.2
+    epoch: 4
+    description: Error tracking compatible with Sentry SDKs
+    copyright:
+      - license: PolyForm-Shield-1.0.0
+    dependencies:
+      runtime:
+        - python-3.15>=3.15.0_git20261010-r2000
+        - tzdata
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - build-base
+        - busybox
+        - patch
+        - ca-certificates-bundle
+        - python-3.15
+        - python-3.15-dev
+        - libffi-dev
+        - uv
+    environment:
+      UV_PYTHON_DOWNLOADS: never
+      UV_NO_CACHE: "1"
+      UV_LINK_MODE: copy
+  pipeline:
+    - runs: |
+        uv venv --python /usr/bin/python3.15 /usr/lib/bugsink
+        uv pip install --python /usr/lib/bugsink/bin/python --require-hashes -r build-requirements.txt
+        uv pip install --python /usr/lib/bugsink/bin/python --require-hashes \
+          --no-build-isolation --compile-bytecode -r requirements.txt
+        site=/usr/lib/bugsink/lib/python3.15/site-packages
+        # ctypes initializes libffi callbacks on import. Compile the queue's three
+        # inotify calls instead, so the service needs neither JIT nor python:native.
+        /usr/lib/bugsink/bin/python inotify-module.py "$site"
+        werewolf-tools/package-helper --action inotify --root "$site"
+        /usr/lib/bugsink/bin/python -m compileall -q -f --invalidation-mode checked-hash "$site/inotify_simple.py"
+        /usr/lib/bugsink/bin/python inotify-check.py
+        # Keep CFFI for the compiled inotify adapter. Minidumps and Brotli
+        # are removed together with their eager imports and configuration.
+        patch --batch --fuzz=0 -p1 -d "$site" < disable-optional.patch
+        werewolf-tools/package-helper --action metadata --root "$site"
+        uv pip uninstall --python /usr/lib/bugsink/bin/python brotli symbolic milksnake setuptools wheel
+        /usr/lib/bugsink/bin/python -m compileall -q "$site/bugsink" "$site/events" "$site/files" "$site/sentry"
+        cp "$site/bugsink/conf_templates/docker.py.template" "$site/bugsink_conf.py"
+        # Keep the existing persistent database and ephemeral queue locations.
+        sed -i "s|'/tmp/snappea.sqlite3'|'/run/svc/bugsink/snappea.sqlite3'|; \
+          s|'/data/db.sqlite3'|'/data/svc/bugsink/db.sqlite3'|" "$site/bugsink_conf.py"
+        echo "SNAPPEA['WAKEUP_CALLS_DIR'] = '/run/svc/bugsink/snappea.wakeup'" >> "$site/bugsink_conf.py"
+        echo "BUGSINK['INGEST_STORE_BASE_DIR'] = '/run/svc/bugsink/ingestion'" >> "$site/bugsink_conf.py"
+        cp "$site/bugsink/gunicorn.docker.conf.py" /usr/lib/bugsink/gunicorn.conf.py
+        rm -f /usr/lib/bugsink/bin/activate* /usr/lib/bugsink/.gitignore \
+          /usr/lib/bugsink/.lock
+        mkdir -p ${{targets.destdir}}/usr/lib
+        cp -a /usr/lib/bugsink ${{targets.destdir}}/usr/lib/bugsink
+        # uv must not have silently copied or downloaded an interpreter.
+        test -L "${{targets.destdir}}/usr/lib/bugsink/bin/python"
+  test:
+    pipeline:
+      - name: Installed package consumers
+        runs: |-
+          /usr/lib/bugsink/bin/python shared-tests/python-gates.py
+          /usr/lib/bugsink/bin/bugsink-manage --version
+          /usr/lib/bugsink/bin/python bugsink-check.py
+changes:
+  - what: Application and hashed dependencies only. Python comes from hardened-packages; the venv's interpreter remains a link to the system package, never a copied binary.
+    why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+actions:
+  inotify:
+    files:
+      - path: inotify_simple.py
+        replace:
+          - old: from ctypes import CDLL, get_errno, c_int
+            new: from _werewolf_inotify import ffi, lib as _libc
+          - old: |
+              from ctypes.util import find_library
+            new: ""
+          - old: |
+              _libc = None
+            new: ""
+          - old: errno = get_errno()
+            new: errno = ffi.errno
+          - old: |2
+                      global _libc; _libc = _libc or CDLL(find_library('c'), use_errno=True)
+            new: ""
+          - old: bytes_avail = c_int()
+            new: bytes_avail = ffi.new("int *")
+          - old: ioctl(self, FIONREAD, bytes_avail)
+            new: ioctl(self, FIONREAD, ffi.buffer(bytes_avail))
+          - old: 'if not bytes_avail.value:'
+            new: 'if not bytes_avail[0]:'
+          - old: os.read(self.fileno(), bytes_avail.value)
+            new: os.read(self.fileno(), bytes_avail[0])
+  metadata:
+    wheels:
+      - distribution: bugsink
+        remove-requirements:
+          - brotli
+          - symbolic
+        record-files:
+          - bugsink/streams.py
+          - events/storage.py
+          - files/minidump.py
+          - sentry/minidump.py
+          - bugsink/conf_templates/docker.py.template
+test:
+  confined: true

@@ -1,0 +1,151 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: FFmpeg/FFmpeg
+    strip-prefix: n
+    use-tag: true
+wolfi:
+  # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+  title: FFmpeg
+  stream-parts: 2
+  sources:
+    - https://github.com/FFmpeg/FFmpeg.git
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/FFmpeg/FFmpeg
+          expected-commit: ${lock.source_commit}
+          tag: n${{package.version}}
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=patch
+        - runs
+        - uses=autoconf/make
+        - uses=upstream-tests/ffmpeg-fate
+        - uses=autoconf/make-install
+        - runs
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=${{package.name}}-${{range.key}}
+        - name=${{package.name}}-static
+        - name=${{package.name}}-dev
+        - name=${{package.name}}-doc
+        - name=${{package.name}}-qt-faststart
+    - path: [pipeline, uses=patch]
+      expect:
+        uses: patch
+        with:
+          patches: fate-seek-hls-pin-threads.patch
+    - path: [pipeline, "2", runs]
+      expect: |
+        ./configure \
+          --prefix=/usr \
+          --libdir=/usr/lib \
+          --enable-shared \
+          --enable-libx264 \
+          --enable-libx265 \
+          --enable-libaom \
+          --enable-libtheora \
+          --enable-gpl \
+          --enable-version3 \
+          --enable-openssl \
+          --enable-libmp3lame \
+          --enable-libopencore-amrnb \
+          --enable-ffplay \
+          --enable-libdav1d \
+          --enable-libharfbuzz \
+          --enable-libopus \
+          --enable-libsnappy \
+          --enable-libsrt \
+          --enable-libssh \
+          --enable-libsvtav1 \
+          --enable-libvorbis \
+          --enable-libvpx \
+          --enable-libwebp \
+          --enable-libxml2 \
+          --enable-lzma \
+          --enable-libfontconfig \
+          --enable-libfreetype \
+          --enable-libopenjpeg \
+          --enable-libspeex \
+          --enable-libsoxr \
+          --enable-libzmq
+  edits:
+    - path: [package, dependencies, provides]
+      append:
+        - ffmpeg-hardened=${{package.full-version}}
+    - path: [environment, contents, packages]
+      remove:
+        - expat-dev
+        - fontconfig-dev
+        - freetype-dev
+        - harfbuzz-dev
+        - libsdl2-dev
+        - libsodium-dev
+        - libsrt
+        - libssh-dev
+        - libxml2-dev
+        - openssl-${{vars.openssl-version}}-dev
+        - zeromq-dev
+      append:
+        - zlib-dev
+        - bzip2-dev
+        - xz-dev
+    - path: [pipeline, "2", runs]
+      replace:
+        - old: |2
+              --enable-libzmq
+          new: |2
+              --disable-libzmq --disable-autodetect --disable-network --disable-protocols --enable-protocol=file,pipe --disable-indevs --enable-indev=lavfi --disable-outdevs --enable-zlib --enable-bzlib
+        - old: |2
+              --enable-libfontconfig \
+              --enable-libfreetype \
+          new: |2
+              --disable-libfontconfig \
+              --disable-libfreetype \
+        - old: |2
+              --enable-libxml2 \
+          new: |2
+              --disable-libxml2 \
+        - old: |2
+              --enable-libsrt \
+              --enable-libssh \
+          new: |2
+              --disable-libsrt \
+              --disable-libssh \
+        - old: |2
+              --enable-libharfbuzz \
+          new: |2
+              --disable-libharfbuzz \
+        - old: |2
+              --enable-ffplay \
+          new: |2
+              --disable-ffplay \
+        - old: |2
+              --enable-openssl \
+          new: |2
+              --disable-openssl \
+    - path: [test, pipeline]
+      append:
+        - name: Local media conversions work without network or display support
+          runs: ${file:tests/probe.sh}
+    - path: [test, pipeline, uses=test/tw/help-check, with, bins]
+      replace:
+        - old: |
+            ffplay
+          new: ""
+  revision: 7
+  family: ffmpeg-
+changes:
+  - what: Keep local media conversion and codecs; omit network/device protocols, ffplay, display and font integrations.
+    why: Retain the media operations required by Mastodon while reducing library integrations and code paths.
+    evidence:
+      - package.yaml
+      - tests/probe.sh
+    claims:
+      - minimized
+drop-when: Wolfi ships an equivalent restricted profile and installed-package probes pass.

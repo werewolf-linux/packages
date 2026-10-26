@@ -8,6 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/werewolf-linux/packages/internal/catalog"
+	"github.com/werewolf-linux/packages/internal/overlay"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
@@ -169,10 +172,23 @@ func Verify(ctx context.Context, directory string) (Sources, error) {
 	if err != nil {
 		return sources, err
 	}
-	recipe, err := os.ReadFile(filepath.Join(directory, "plex.yaml"))
+	definition, err := catalog.Read(filepath.Join(directory, "package.yaml"))
 	if err != nil {
 		return sources, err
 	}
+	pins := map[string][]string{}
+	var visit func(*yaml.Node)
+	visit = func(n *yaml.Node) {
+		if overlay.Value(n, "uses") == "fetch" {
+			with := overlay.Field(n, "with")
+			url := overlay.Value(with, "uri")
+			pins[url] = append(pins[url], overlay.Value(with, "expected-sha256"))
+		}
+		for _, child := range n.Content {
+			visit(child)
+		}
+	}
+	visit(&definition.Melange)
 	for arch, apt := range map[string]string{"aarch64": "arm64", "x86_64": "amd64"} {
 		raw, err := os.ReadFile(filepath.Join(directory, "Packages."+apt))
 		if err != nil {
@@ -200,7 +216,7 @@ func Verify(ctx context.Context, directory string) (Sources, error) {
 			entries = append(entries, Source{URL: codec.URL, SHA256: codec.SHA256})
 		}
 		for _, entry := range entries {
-			if !hashPattern.MatchString(entry.SHA256) || bytes.Count(recipe, []byte("uri: "+entry.URL+"\n")) != 1 || !bytes.Contains(recipe, []byte("uri: "+entry.URL+"\n      expected-sha256: "+entry.SHA256+"\n")) {
+			if !hashPattern.MatchString(entry.SHA256) || len(pins[entry.URL]) != 1 || pins[entry.URL][0] != entry.SHA256 {
 				return sources, fmt.Errorf("missing, duplicate or altered recipe pin: %s", entry.URL)
 			}
 		}
@@ -344,7 +360,7 @@ func Refresh(ctx context.Context, directory, version string) error {
 	if err != nil {
 		return err
 	}
-	recipe, err := os.ReadFile(filepath.Join(directory, "plex.yaml"))
+	recipe, err := os.ReadFile(filepath.Join(directory, "package.yaml"))
 	if err != nil {
 		return err
 	}
@@ -402,7 +418,7 @@ func Refresh(ctx context.Context, directory, version string) error {
 	sources.Version = version
 	sources.Architectures = architectures
 	baseVersion := strings.SplitN(version, "-", 2)[0]
-	epochPattern := regexp.MustCompile(`(?m)^  epoch: ([0-9]+)$`)
+	epochPattern := regexp.MustCompile(`(?m)^    epoch: ([0-9]+)$`)
 	match := epochPattern.FindStringSubmatch(text)
 	if match == nil {
 		return fmt.Errorf("recipe lacks epoch")
@@ -415,8 +431,8 @@ func Refresh(ctx context.Context, directory, version string) error {
 		}
 		epoch++
 	}
-	text = regexp.MustCompile(`(?m)^  version: .*$`).ReplaceAllString(text, "  version: "+baseVersion)
-	text = epochPattern.ReplaceAllString(text, "  epoch: "+strconv.Itoa(epoch))
+	text = regexp.MustCompile(`(?m)^    version: .*$`).ReplaceAllString(text, "    version: "+baseVersion)
+	text = epochPattern.ReplaceAllString(text, "    epoch: "+strconv.Itoa(epoch))
 	data, err := json.MarshalIndent(sources, "", "  ")
 	if err != nil {
 		return err
@@ -424,7 +440,7 @@ func Refresh(ctx context.Context, directory, version string) error {
 	if err := os.WriteFile(filepath.Join(directory, "sources.json"), append(data, '\n'), 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "plex.yaml"), []byte(text), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "package.yaml"), []byte(text), 0644); err != nil {
 		return err
 	}
 	_, err = Verify(ctx, directory)

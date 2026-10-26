@@ -1,0 +1,28 @@
+name: Set up the package builder
+description: Install pinned tools and check the native build sandbox
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+      with:
+        go-version: '1.27.x'
+    - shell: bash
+      run: make tools
+    - shell: bash
+      run: |
+        if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
+          sudo -n apt-get -o Acquire::Retries=3 update
+          sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make patch
+        else
+          for tool in bwrap git make patch unshare newuidmap newgidmap; do
+            command -v "$tool" >/dev/null || { echo "Missing native builder: $tool" >&2; exit 1; }
+          done
+        fi
+        build/tools/package install-melange --dest build/tools/melange
+        scripts/ci-root "$PWD/build/tools/package" setup-runner
+        scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
+          --cap-add CAP_SYS_CHROOT -- "$PWD/build/tools/package" chroot-probe
+        if [ -f build/tools/bwrap.apparmor ]; then
+          scripts/ci-root /usr/bin/bwrap --ro-bind / / --dev /dev --proc /proc --unshare-pid \
+            --cap-add CAP_SYS_CHROOT -- "$PWD/build/tools/package" chroot-probe --expect-denied
+        fi

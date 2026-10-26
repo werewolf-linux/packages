@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"github.com/werewolf-linux/packages/internal/overlay"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,25 +49,17 @@ func TestGitTagsUpstream(t *testing.T) {
 	if err := os.Mkdir(directory, 0755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"overlay.yaml", "policy.json", "proof"} {
+	for _, name := range []string{"proof"} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte("{}"), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	valid := func(upstream Policy) Metadata {
-		var m Metadata
-		yes := true
-		m.Update = Policy{Source: "wolfi", Recipe: "libcap", Upstream: &upstream}
-		m.Hardening.Minimized, m.Hardening.Pledge = &yes, &yes
-		m.Hardening.MinimizedReason, m.Hardening.PledgeReason = "reason", "reason"
-		m.Hardening.Evidence = []string{"proof"}
-		m.Wolfi.Relationship, m.Wolfi.Recipes, m.Wolfi.RemovalCondition = "derived", []string{"libcap"}, "never"
-		m.Wolfi.Changes = append(m.Wolfi.Changes, struct {
-			What     string   `json:"what"`
-			Why      string   `json:"why"`
-			Evidence []string `json:"evidence"`
-		}{"what", "why", []string{"proof"}})
-		return m
+	valid := func(upstream Policy) Definition {
+		return Definition{
+			Update:  Source{Policy: upstream},
+			Wolfi:   &Derivation{Recipe: "libcap", Revision: 1, Spec: overlay.Spec{Sources: []string{"https://example.org/libcap.git"}}},
+			Changes: []Change{{What: "what", Why: "why", Evidence: []string{"proof"}}},
+		}
 	}
 	url := "https://git.kernel.org/pub/scm/libs/libcap/libcap.git"
 	if err := validate(directory, valid(Policy{Source: "git-tags", URL: url, Prefix: "v1."})); err != nil {
@@ -84,8 +77,9 @@ func TestGitTagsUpstream(t *testing.T) {
 		}
 	}
 	m := valid(Policy{Source: "git-tags", URL: url})
-	m.Update.URL = url
+	m.Update.Source = "github"
+	m.Update.Repo = "kernel/libcap"
 	if err := validate(directory, m); err == nil {
-		t.Error("accepted a URL outside the upstream policy")
+		t.Error("accepted a URL outside git-tags")
 	}
 }

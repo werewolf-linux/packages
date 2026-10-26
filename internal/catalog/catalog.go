@@ -3,8 +3,8 @@ package catalog
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,56 +16,35 @@ import (
 // Policy describes an automatic release source. Wolfi recipes independently
 // track an upstream policy while retaining a captured packaging baseline.
 type Policy struct {
-	Source         string            `json:"source"`
-	Separator      string            `json:"separator,omitempty"`
-	Repo           string            `json:"repo,omitempty"`
-	URL            string            `json:"url,omitempty"`
-	Project        string            `json:"project,omitempty"`
-	Prefix         string            `json:"prefix,omitempty"`
-	Pattern        string            `json:"pattern,omitempty"`
-	Suffix         string            `json:"suffix,omitempty"`
-	VersionPattern string            `json:"version-pattern,omitempty"`
-	VersionReplace string            `json:"version-replace,omitempty"`
-	Series         string            `json:"series,omitempty"`
-	Branch         string            `json:"branch,omitempty"`
-	Lock           string            `json:"lock,omitempty"`
-	Reason         string            `json:"reason,omitempty"`
-	Hold           string            `json:"hold,omitempty"`
-	Components     map[string]Policy `json:"components,omitempty"`
-	CommitVar      string            `json:"commit-var,omitempty"`
-	Recipe         string            `json:"recipe,omitempty"`
-	Family         string            `json:"family,omitempty"`
-	Upstream       *Policy           `json:"upstream,omitempty"`
+	Source         string            `json:"source" yaml:"source,omitempty"`
+	Separator      string            `json:"separator,omitempty" yaml:"separator,omitempty"`
+	Repo           string            `json:"repo,omitempty" yaml:"repo,omitempty"`
+	URL            string            `json:"url,omitempty" yaml:"url,omitempty"`
+	Project        string            `json:"project,omitempty" yaml:"project,omitempty"`
+	Prefix         string            `json:"prefix,omitempty" yaml:"prefix,omitempty"`
+	Pattern        string            `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Suffix         string            `json:"suffix,omitempty" yaml:"suffix,omitempty"`
+	VersionPattern string            `json:"version-pattern,omitempty" yaml:"version-pattern,omitempty"`
+	VersionReplace string            `json:"version-replace,omitempty" yaml:"version-replace,omitempty"`
+	Series         string            `json:"series,omitempty" yaml:"series,omitempty"`
+	Branch         string            `json:"branch,omitempty" yaml:"branch,omitempty"`
+	Lock           string            `json:"lock,omitempty" yaml:"lock,omitempty"`
+	Reason         string            `json:"reason,omitempty" yaml:"reason,omitempty"`
+	Hold           string            `json:"hold,omitempty" yaml:"hold,omitempty"`
+	Components     map[string]Policy `json:"components,omitempty" yaml:"components,omitempty"`
+	CommitVar      string            `json:"commit-var,omitempty" yaml:"commit-var,omitempty"`
+	Recipe         string            `json:"recipe,omitempty" yaml:"-"`
+	Family         string            `json:"family,omitempty" yaml:"-"`
+	Upstream       *Policy           `json:"upstream,omitempty" yaml:"-"`
 }
 
-// Metadata records why a package exists and the evidence supporting its policy.
-type Metadata struct {
-	Update    Policy `json:"update"`
-	Hardening struct {
-		Minimized       *bool    `json:"minimized"`
-		Pledge          *bool    `json:"pledge"`
-		MinimizedReason string   `json:"minimized_reason"`
-		PledgeReason    string   `json:"pledge_reason"`
-		Evidence        []string `json:"evidence"`
-	} `json:"hardening"`
-	Wolfi struct {
-		Relationship string   `json:"relationship"`
-		Recipes      []string `json:"recipes"`
-		Changes      []struct {
-			What     string   `json:"what"`
-			Why      string   `json:"why"`
-			Evidence []string `json:"evidence"`
-		} `json:"changes"`
-		RemovalCondition string `json:"removal_condition"`
-	} `json:"wolfi"`
-}
-
-// Package is a stable package identity and its repository-relative context.
+// Package is a stable identity and its repository-relative build context.
 type Package struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Engine string `json:"engine"`
-	Metadata
+	Name   string      `json:"name" yaml:"name"`
+	Path   string      `json:"path" yaml:"path"`
+	Engine string      `json:"engine" yaml:"engine"`
+	Update Policy      `json:"update" yaml:"update"`
+	Config *Definition `json:"-" yaml:"-"`
 }
 
 var Name = regexp.MustCompile(`^[a-z0-9][a-z0-9+_.-]*$`)
@@ -73,16 +52,21 @@ var repository = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 var gitURL = regexp.MustCompile(`^https://[A-Za-z0-9./_-]+$`)
 var project = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
-// Decode rejects unknown fields, trailing JSON, and missing input.
+// Category accepts descriptive package categories without a central category registry.
+func Category(name string) bool {
+	return Name.MatchString(name) && name != "." && name != ".." && !slices.Contains([]string{"cmd", "internal", "scripts", "tests", "docs", "build", "out", "pipelines", "tools", "release", "wolfi"}, name)
+}
+
+// Decode rejects unknown fields and multiple YAML documents.
 func Decode(data []byte, value any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
 	if err := decoder.Decode(value); err != nil {
 		return err
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return fmt.Errorf("expected one JSON value")
+		return fmt.Errorf("expected one YAML document")
 	}
 	return nil
 }
@@ -90,7 +74,7 @@ func Decode(data []byte, value any) error {
 // Load validates every context, including orphan recipes that would otherwise
 // disappear silently from update and publication jobs.
 func Load(root string) ([]Package, error) {
-	paths, err := filepath.Glob(filepath.Join(root, "*", "*", "metadata.json"))
+	paths, err := filepath.Glob(filepath.Join(root, "*", "*", "package.yaml"))
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +83,11 @@ func Load(root string) ([]Package, error) {
 	for _, path := range paths {
 		directory := filepath.Dir(path)
 		name := filepath.Base(directory)
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
 		category := filepath.Base(filepath.Dir(directory))
-		if !slices.Contains([]string{"databases", "devel", "games", "graphics", "lang", "mail", "math", "multimedia", "net", "net-im", "security", "www"}, category) {
+		if !Category(category) {
 			return nil, fmt.Errorf("unsupported category: %s", category)
 		}
 		if !Name.MatchString(name) || name == "." || name == ".." || seen[name] {
@@ -115,15 +102,11 @@ func Load(root string) ([]Package, error) {
 				return nil, fmt.Errorf("symlinked context: %s", p)
 			}
 		}
-		data, err := os.ReadFile(path)
+		meta, err := Read(path)
 		if err != nil {
 			return nil, err
 		}
-		var meta Metadata
-		if err := Decode(data, &meta); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		if err := validate(directory, meta); err != nil {
+		if err := validate(directory, *meta); err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
 		relative, err := filepath.Rel(root, directory)
@@ -131,10 +114,10 @@ func Load(root string) ([]Package, error) {
 			return nil, err
 		}
 		engine := "upstream"
-		if meta.Update.Source == "wolfi" {
+		if meta.Wolfi != nil {
 			engine = "wolfi"
 		}
-		packages = append(packages, Package{Name: name, Path: relative, Engine: engine, Metadata: meta})
+		packages = append(packages, Package{Name: name, Path: relative, Engine: engine, Update: meta.Policy(), Config: meta})
 		seen[name] = true
 	}
 	for _, pattern := range []string{"*.yaml"} {
@@ -144,11 +127,11 @@ func Load(root string) ([]Package, error) {
 		}
 		for _, path := range candidates {
 			category := filepath.Base(filepath.Dir(filepath.Dir(path)))
-			if slices.Contains([]string{"scripts", "tests", "wolfi", "build", ".github", "internal"}, category) {
+			if !Category(category) {
 				continue
 			}
 			if !seen[filepath.Base(filepath.Dir(path))] {
-				return nil, fmt.Errorf("missing package metadata: %s", path)
+				return nil, fmt.Errorf("missing package.yaml: %s", path)
 			}
 		}
 	}
@@ -159,9 +142,9 @@ func Load(root string) ([]Package, error) {
 	return packages, nil
 }
 
-func validate(directory string, m Metadata) error {
+func validate(directory string, m Definition) error {
 	name := filepath.Base(directory)
-	p := m.Update
+	p := m.Policy()
 	if !slices.Contains([]string{"wolfi", "github", "github-releases", "github-tags", "pypi", "npm", "minecraft", "git", "content", "plex"}, p.Source) {
 		return fmt.Errorf("unsupported update source %q", p.Source)
 	}
@@ -186,10 +169,6 @@ func validate(directory string, m Metadata) error {
 	}
 	if p.Source == "git" && p.Branch == "" {
 		return fmt.Errorf("snapshot source needs a branch")
-	}
-	recipes, err := filepath.Glob(filepath.Join(directory, "*.yaml"))
-	if err != nil {
-		return err
 	}
 	if p.Source == "wolfi" {
 		if (p.Recipe == "") == (p.Family == "") {
@@ -218,40 +197,24 @@ func validate(directory string, m Metadata) error {
 				return err
 			}
 		}
-		if len(recipes) != 1 || filepath.Base(recipes[0]) != "overlay.yaml" {
-			return fmt.Errorf("Wolfi context needs overlay.yaml and no maintained recipe")
-		}
-		if _, err := os.Stat(filepath.Join(directory, "policy.json")); err != nil {
-			return err
-		}
-	} else if len(recipes) != 1 || filepath.Base(recipes[0]) == "overlay.yaml" {
-		return fmt.Errorf("upstream context needs exactly one maintained recipe")
 	}
-	h := m.Hardening
-	if h.Minimized == nil || h.Pledge == nil || strings.TrimSpace(h.MinimizedReason) == "" || strings.TrimSpace(h.PledgeReason) == "" {
-		return fmt.Errorf("hardening flags need booleans and reasons")
-	}
-	if err := evidence(directory, h.Evidence); err != nil {
-		return err
-	}
-	w := m.Wolfi
-	if !slices.Contains([]string{"derived", "replacement", "independent"}, w.Relationship) || (p.Source == "wolfi") != (w.Relationship == "derived") {
-		return fmt.Errorf("invalid Wolfi relationship")
-	}
-	if w.Relationship != "independent" && len(w.Recipes) == 0 {
-		return fmt.Errorf("Wolfi baseline is required")
-	}
-	if strings.TrimSpace(w.RemovalCondition) == "" || len(w.Changes) == 0 {
-		return fmt.Errorf("explain divergence and its removal condition")
-	}
-	for _, change := range w.Changes {
+	for _, change := range m.Changes {
 		if strings.TrimSpace(change.What) == "" || strings.TrimSpace(change.Why) == "" {
-			return fmt.Errorf("divergence needs what and why")
+			return fmt.Errorf("changes need what and why")
 		}
 		if err := evidence(directory, change.Evidence); err != nil {
 			return err
 		}
+		for _, claim := range change.Claims {
+			if claim != "minimized" && claim != "pledge" {
+				return fmt.Errorf("unknown hardening claim %q", claim)
+			}
+		}
 	}
+	if len(m.Changes) == 0 {
+		return fmt.Errorf("explain why this package is maintained")
+	}
+
 	return nil
 }
 

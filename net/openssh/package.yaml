@@ -1,0 +1,144 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  version-pattern: ^V_([0-9]+)_([0-9]+)_P([0-9]+)$
+  version-replace: ${1}.${2}_p${3}
+  github:
+    identifier: openssh/openssh-portable
+    use-tag: true
+wolfi:
+  # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+  title: OpenSSH
+  sources:
+    - https://github.com/openssh/openssh-portable.git
+  description-suffix: ' (Werewolf: no PAM, SELinux, zlib or PKCS#11)'
+  patches: patches
+  context:
+    patches: patches
+  upstream-patches:
+    no-version-check.patch:
+      sha256: 8b9598fd81f99d938dbbf833e755a4bd3c6885b9b06faec4f767ad0866b906bf
+      source: upstream-patches/no-version-check.patch
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/openssh/openssh-portable
+          tag: ${{vars.tag-name}}
+          expected-commit: ${lock.source_commit}
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=patch
+        - runs
+        - uses=autoconf/configure
+        - uses=autoconf/make
+        - uses=autoconf/make-install
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=openssh-doc
+        - name=openssh-keygen
+        - name=openssh-keyscan
+        - name=openssh-keysign
+        - name=openssh-sftp-server
+        - name=openssh-pkcs11-helper
+        - name=openssh-sk-helper
+        - name=openssh-server
+        - name=openssh-client
+        - name=openssh-service
+        - name=openssh-server-config
+        - name=openssh-pam-config
+    - path: [pipeline, uses=autoconf/configure, with, opts]
+      expect: |
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc/ssh \
+        --libexecdir=/usr/lib/ssh \
+        --with-pid-dir=/run \
+        --with-mantype=doc \
+        --disable-utmp \
+        --disable-wtmp \
+        --disable-lastlog \
+        --disable-strip \
+        --with-privsep-path=/var/empty \
+        --with-xauth=/usr/bin/xauth \
+        --with-default-path='/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin' \
+        --with-privsep-user=sshd \
+        --with-pam \
+        --with-pam-service=sshd \
+        --with-libedit \
+        --with-selinux
+    - path: [pipeline, "1"]
+      expect:
+        uses: patch
+        with:
+          patches: |
+            no-version-check.patch
+  edits:
+    - path: [environment, contents, packages]
+      remove:
+        - libselinux-dev
+        - linux-pam-dev
+        - zlib-dev
+    - path: [pipeline, uses=autoconf/configure, with, opts]
+      replace:
+        - old: |
+            --sbindir=/usr/bin \
+            --sysconfdir=/etc/ssh \
+            --libexecdir=/usr/lib/ssh \
+            --with-pid-dir=/run \
+            --with-mantype=doc \
+            --disable-utmp \
+            --disable-wtmp \
+            --disable-lastlog \
+            --disable-strip \
+            --with-privsep-path=/var/empty \
+            --with-xauth=/usr/bin/xauth \
+            --with-default-path='/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin' \
+            --with-privsep-user=sshd \
+            --with-pam \
+            --with-pam-service=sshd \
+            --with-libedit \
+            --with-selinux
+          new: --sbindir=/usr/bin --sysconfdir=/etc/ssh --libexecdir=/usr/lib/ssh --with-pid-dir=/run --with-mantype=doc --disable-utmp --disable-wtmp --disable-lastlog --disable-strip --with-privsep-path=/var/empty --with-xauth=/usr/bin/xauth --with-default-path='/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin' --with-privsep-user=sshd --without-pam --with-libedit --without-selinux --without-zlib --disable-pkcs11
+    - path: [subpackages, name=openssh-pam-config]
+      delete: true
+    - path: [test, pipeline]
+      append:
+        - name: Programs link no PAM, SELinux or zlib, and refuse compression and PKCS#11
+          runs: |
+            cat > /tmp/openssh-probe.sh <<'WEREWOLF_OPENSSH_PROBE'
+            ${file:tests/probe.sh}WEREWOLF_OPENSSH_PROBE
+            sh /tmp/openssh-probe.sh
+  revision: 5
+  recipe: openssh
+changes:
+  - what: Configure --without-pam --without-selinux --without-zlib --disable-pkcs11 and drop their build dependencies.
+    why: Werewolf runs sshd with UsePAM no on a kernel without SELinux; these libraries were only code mapped into root, network-facing processes. Compression and agent PKCS#11 support carried OpenSSH's own bugs.
+    evidence:
+      - package.yaml
+      - tests/probe.sh
+  - what: Remove the openssh-pam-config package.
+    why: It configures PAM for a server built without it.
+    evidence:
+      - package.yaml
+  - what: Do not reopen the pty by name where TIOCSCTTY already made it the controlling tty.
+    why: Werewolf runs sshd without CAP_DAC_OVERRIDE; the redundant open, as root, of a pty owned by another user fails and logs an error at every login.
+    evidence:
+      - patches/0001-no-pty-reopen.patch
+      - package.yaml
+  - what: Do not resolve the default listen address in sshd-session, which queues the ListenAddress lines it never binds.
+    why: Werewolf refuses netlink to sshd; glibc's sort of that two-family lookup asked netlink, and every connection logged the refusal.
+    evidence:
+      - patches/0002-no-default-listen-in-session.patch
+      - package.yaml
+  - evidence:
+      - package.yaml
+      - patches/0001-no-pty-reopen.patch
+      - patches/0002-no-default-listen-in-session.patch
+      - tests/probe.sh
+    what: Build OpenSSH without PAM, SELinux, zlib compression or PKCS#11 support; OpenSSL stays for P-256 security keys.
+    why: Establish the package's minimized policy.
+    claims:
+      - minimized
+drop-when: Wolfi ships equivalent build options and installed-package probes verify them; review before retiring this overlay.

@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,7 +46,7 @@ func melange(ctx context.Context, root string) (string, string, error) {
 	tool := os.Getenv("MELANGE")
 	if tool == "" {
 		tool = "melange"
-		for _, path := range []string{"build/tools/melange", "wolfi/build/tools/melange"} {
+		for _, path := range []string{"build/tools/melange"} {
 			candidate := filepath.Join(root, path)
 			if _, err := os.Stat(candidate); err == nil {
 				tool = candidate
@@ -68,6 +66,12 @@ func melange(ctx context.Context, root string) (string, string, error) {
 		return "", "", fmt.Errorf("install pinned Melange v%s", pin.Version)
 	}
 	return tool, pin.Version, nil
+}
+
+// Builder locates and verifies the pinned Melange used by every build and test command.
+func Builder(ctx context.Context, root string) (string, error) {
+	tool, _, err := melange(ctx, root)
+	return tool, err
 }
 
 // UnwrapKernel extracts arm64's kernel Image from an EFI zboot wrapper.
@@ -103,7 +107,7 @@ func Guest(ctx context.Context, root, arch, tool string) (string, string, error)
 	if kernel != "" && initramfs != "" {
 		return kernel, initramfs, nil
 	}
-	directory := filepath.Join(root, "wolfi/build/guest", arch)
+	directory := filepath.Join(root, "build/guest", arch)
 	kernel, initramfs = filepath.Join(directory, "vmlinuz"), filepath.Join(directory, "initramfs.cpio")
 	if info, err := os.Stat(kernel); err == nil && info.Mode().IsRegular() {
 		if info, err := os.Stat(initramfs); err == nil && info.Mode().IsRegular() {
@@ -122,7 +126,7 @@ func Guest(ctx context.Context, root, arch, tool string) (string, string, error)
 		return "", "", err
 	}
 	rootfs := filepath.Join(work, "rootfs.tar")
-	if err := Run(ctx, filepath.Join(root, "wolfi/tools/guest"), "apko", "build-minirootfs", "--build-arch", arch, "melange-guest.yaml", rootfs); err != nil {
+	if err := Run(ctx, filepath.Join(root, "tools/guest"), "apko", "build-minirootfs", "--build-arch", arch, "melange-guest.yaml", rootfs); err != nil {
 		return "", "", err
 	}
 	base := filepath.Join(work, "base.cpio")
@@ -202,6 +206,18 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	if !slices.Contains(Arches, arch) {
 		return fmt.Errorf("unsupported architecture %q", arch)
 	}
+	var err error
+	pkg, err = NativeWorkspace(pkg, arch)
+	if err != nil {
+		return err
+	}
+	if !testOnly {
+		if _, err := os.Stat(filepath.Join(pkg.Build, "source")); os.IsNotExist(err) {
+			if err := Prepare(ctx, pkg, filepath.Join(pkg.Build, "source"), ""); err != nil {
+				return err
+			}
+		}
+	}
 	recipe, err := Derive(pkg)
 	if err != nil {
 		return err
@@ -214,7 +230,7 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	if err != nil {
 		return err
 	}
-	engine := filepath.Join(pkg.Root, "wolfi")
+	engine := pkg.Root
 	if _, err := SigningKey(engine, false); err != nil {
 		return err
 	}
@@ -224,7 +240,7 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 			runner = "bubblewrap"
 		}
 	}
-	scratch := filepath.Join(engine, "build/runner")
+	scratch := filepath.Join(pkg.Build, "runner")
 	if err := os.MkdirAll(scratch, 0755); err != nil {
 		return err
 	}
@@ -305,15 +321,13 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	pipelines := filepath.Join(pkg.Build, "inputs/pipelines")
 	wolfiKey := filepath.Join(pkg.Build, "inputs/wolfi-signing.rsa.pub")
 	if !testOnly {
-		if _, err := os.Stat(filepath.Join(pkg.Directory, "packaging")); err == nil {
-			if err := copyTree(filepath.Join(pkg.Directory, "packaging"), filepath.Join(pkg.Build, "context/packaging")); err != nil {
+		if len(pkg.Config.Actions) != 0 {
+			if err := copyFile(filepath.Join(pkg.Directory, "package.yaml"), filepath.Join(pkg.Build, "context/package.yaml")); err != nil {
 				return err
 			}
 			if err := InstallHelper(ctx, pkg.Root, arch, filepath.Join(pkg.Build, "context")); err != nil {
 				return err
 			}
-		} else if !os.IsNotExist(err) {
-			return err
 		}
 		args := append([]string{"build", filepath.Join(pkg.Build, pkg.Name+".yaml")}, common...)
 		args = append(args, "--source-dir", filepath.Join(pkg.Build, "context"), "--namespace", "werewolf", "--pipeline-dir", pipelines, "--repository-append", "https://packages.wolfi.dev/os", "--keyring-append", wolfiKey, "--signing-key", filepath.Join(engine, "build/keys/werewolf-packages.rsa"), "--cache-dir", filepath.Join(scratch, "cache"), "--out-dir", packages)
@@ -328,15 +342,13 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool) er
 	if err := copyTree(filepath.Join(pkg.Build, "inputs/upstream"), testContext); err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(pkg.Directory, "packaging")); err == nil {
-		if err := copyTree(filepath.Join(pkg.Directory, "packaging"), filepath.Join(testContext, "packaging")); err != nil {
+	if len(pkg.Config.Actions) != 0 {
+		if err := copyFile(filepath.Join(pkg.Directory, "package.yaml"), filepath.Join(testContext, "package.yaml")); err != nil {
 			return err
 		}
 		if err := InstallHelper(ctx, pkg.Root, arch, testContext); err != nil {
 			return err
 		}
-	} else if !os.IsNotExist(err) {
-		return err
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -420,7 +432,7 @@ func wolfiTestRecipe(pkg Package, recipe *yaml.Node, lock Inputs, repository str
 	if err != nil {
 		return nil, err
 	}
-	vars, err := overlay.Variables(upstream, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "wolfi/pipelines"))
+	vars, err := overlay.Variables(upstream, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(pkg.Root, "pipelines"))
 	if err != nil {
 		return nil, err
 	}
@@ -437,11 +449,12 @@ type AppMetadata struct {
 }
 
 func appRecipe(pkg Package) (string, error) {
-	paths, err := filepath.Glob(filepath.Join(pkg.Directory, "*.yaml"))
-	if err != nil || len(paths) != 1 {
-		return "", fmt.Errorf("one recipe is required: %s", pkg.Name)
+	data, err := pkg.Config.Recipe()
+	if err != nil {
+		return "", err
 	}
-	return paths[0], nil
+	path := filepath.Join(pkg.Build, "recipe.yaml")
+	return path, writeFile(path, data, 0644)
 }
 
 // Metadata queries Melange so recipe parsing agrees with the actual builder.
@@ -484,37 +497,11 @@ func Metadata(ctx context.Context, pkg Package) (AppMetadata, error) {
 			return metadata, fmt.Errorf("invalid or duplicate APK name: %s", name)
 		}
 	}
-	hashes, modes, err := hashFiles(pkg.Directory, func(path string) bool {
-		return path == "metadata.json" || strings.Contains(path, "__pycache__") || strings.HasSuffix(path, ".pyc")
-	})
+	id, err := InputID(pkg)
 	if err != nil {
 		return metadata, err
 	}
-	var records []map[string]any
-	for path, sum := range hashes {
-		records = append(records, map[string]any{"path": filepath.ToSlash(filepath.Join(pkg.Name, path)), "sha256": sum, "mode": modes[path]})
-	}
-	policy, err := policyHashes(pkg)
-	if err != nil {
-		return metadata, err
-	}
-	for path, sum := range policy {
-		if strings.HasPrefix(path, pkg.Path+"/") {
-			continue
-		}
-		info, err := os.Stat(filepath.Join(pkg.Root, path))
-		if err != nil {
-			return metadata, err
-		}
-		records = append(records, map[string]any{"path": path, "sha256": sum, "mode": unixMode(info)})
-	}
-	slices.SortFunc(records, func(a, b map[string]any) int { return strings.Compare(a["path"].(string), b["path"].(string)) })
-	data, err := json.Marshal(records)
-	if err != nil {
-		return metadata, err
-	}
-	sum := sha256.Sum256(append(data, '\n'))
-	return AppMetadata{Context: pkg.Name, Names: names, Version: found.Version + "-r" + strconv.Itoa(found.Epoch), Inputs: hex.EncodeToString(sum[:])}, nil
+	return AppMetadata{Context: pkg.Name, Names: names, Version: found.Version + "-r" + strconv.Itoa(found.Epoch), Inputs: id}, nil
 }
 
 // BuildApplication runs the native builder with a minimal credential-free environment.
@@ -550,11 +537,11 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 	if err != nil {
 		return err
 	}
-	out := filepath.Join(pkg.Root, "build/artifacts", pkg.Name)
+	out := filepath.Join(pkg.Build, arch, "packages")
 	if _, err := os.Lstat(filepath.Join(out, arch)); !os.IsNotExist(err) {
 		return fmt.Errorf("use a clean artifact directory")
 	}
-	scratch := filepath.Join(pkg.Root, "build/runner", pkg.Name)
+	scratch := filepath.Join(pkg.Build, arch, "runner")
 	if err := os.MkdirAll(scratch, 0755); err != nil {
 		return err
 	}

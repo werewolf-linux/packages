@@ -29,6 +29,6 @@ running VM or substitute a newly downloaded module when a pinned codec is missin
 Plex remains proprietary; its bundled license files are retained. This recipe
 does not claim to rebuild, inspect or patch the proprietary server's source.
 
-`metadata.json` enables automatic tracking of the signed public APT repository.
+`package.yaml` enables automatic tracking of the signed public APT repository.
 The updater verifies both architectures in a scratch context; an unrecognized
 codec ABI fails preparation and requires a reviewed codec manifest refresh.

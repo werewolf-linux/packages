@@ -91,33 +91,18 @@ type Replacement struct {
 	Count int    `yaml:"count,omitempty"`
 }
 
-// Read rejects misspelled fields and multiple YAML documents.
-func Read(path string) (*Spec, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var spec Spec
-	dec := yaml.NewDecoder(f)
-	dec.KnownFields(true)
-	if err := dec.Decode(&spec); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		return nil, fmt.Errorf("%s: expected one YAML document", path)
-	}
-	if spec.Title == "" || len(spec.Sources) == 0 {
-		return nil, fmt.Errorf("%s: title and sources are required", path)
+// Validate checks the overlay's source and versioning rules.
+func (spec *Spec) Validate() error {
+	if len(spec.Sources) == 0 {
+		return fmt.Errorf("sources are required")
 	}
 	if spec.EpochMultiplier == 0 {
 		spec.EpochMultiplier = 1000
 	}
 	if spec.EpochMultiplier != 1 && spec.EpochMultiplier != 1000 {
-		return nil, fmt.Errorf("%s: epoch-multiplier must be 1 or 1000", path)
+		return fmt.Errorf("epoch-multiplier must be 1 or 1000")
 	}
-	return &spec, nil
+	return nil
 }
 
 // Parse decodes one recipe while retaining scalar types and field order.

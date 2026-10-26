@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,7 +17,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/werewolf-linux/packages/internal/probe"
-	"gopkg.in/yaml.v3"
 )
 
 // Plan groups changes by build phase so each action has an explicit root.
@@ -61,25 +59,10 @@ type Wheel struct {
 	Records      []string `yaml:"record-files,omitempty"`
 }
 
-// Read rejects misspelled fields before any package file is changed.
-func Read(path string) (Plan, error) {
-	var plan Plan
-	file, err := os.Open(path)
-	if err != nil {
-		return plan, err
-	}
-	defer file.Close()
-	decoder := yaml.NewDecoder(file)
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&plan); err != nil {
-		return plan, err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return plan, fmt.Errorf("expected one transformation plan")
-	}
+// Validate checks that every action has exactly one purpose.
+func (plan Plan) Validate() error {
 	if len(plan.Actions) == 0 {
-		return plan, fmt.Errorf("plan has no actions")
+		return fmt.Errorf("plan has no actions")
 	}
 	for name, action := range plan.Actions {
 		probes := 0
@@ -90,10 +73,10 @@ func Read(path string) (Plan, error) {
 		}
 		edits := len(action.Files) != 0 || action.Requirements != nil || len(action.Wheels) != 0
 		if probes > 1 || probes == 1 && edits || probes == 0 && !edits {
-			return plan, fmt.Errorf("action %q must select one probe or file transformations", name)
+			return fmt.Errorf("action %q must select one probe or file transformations", name)
 		}
 	}
-	return plan, nil
+	return nil
 }
 
 // Apply checks an entire action before writing its changed files.

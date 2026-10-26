@@ -7,7 +7,7 @@ outranks Wolfi's build, so everything that links `libcap.so.2` gets it.
 ## Use
 
 Werewolf: nothing to add. Every image lists the hardened feed. Wolfi, after
-[feed setup](../../wolfi/docs/usage.md#install):
+[feed setup](../../docs/usage.md#install):
 
 ```sh
 apk add libcap@hardened

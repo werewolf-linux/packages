@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/werewolf-linux/packages/internal/catalog"
 	"github.com/werewolf-linux/packages/internal/probe"
 	"github.com/werewolf-linux/packages/internal/transform"
 )
@@ -26,11 +27,15 @@ func main() {
 		}
 		return
 	}
-	plan := flag.String("plan", "packaging/changes.yaml", "package transformation plan")
+	plan := flag.String("plan", "package.yaml", "package definition")
 	root := flag.String("root", ".", "root of the files to change")
 	action := flag.String("action", "", "named build action")
 	flag.Parse()
-	spec, err := transform.Read(*plan)
+	definition, err := catalog.Read(*plan)
+	var spec transform.Plan
+	if err == nil {
+		spec.Actions = definition.Actions
+	}
 	if err == nil {
 		selected, ok := spec.Actions[*action]
 		if !ok {

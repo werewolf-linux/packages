@@ -1,0 +1,349 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: php/php-src
+    strip-prefix: php-
+    use-tag: true
+wolfi:
+  # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+  title: PHP
+  stream-parts: 2
+  sources:
+    - https://github.com/php/php-src.git
+  description-suffix: ' (Werewolf fixed hardening policy)'
+  patches: werewolf/patches
+  context:
+    patches: werewolf/patches
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/php/php-src
+          tag: php-${{package.version}}
+          expected-commit: ${lock.source_commit}
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=patch
+        - uses=patch
+        - name=Configure
+        - uses=autoconf/make
+        - name=Copy httpd.conf before install for apxs
+        - name=Make Install
+        - name=Remove httpd.conf after install for apxs
+        - name=Remove /var/run (only used by init scripts and services not shipped here)
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=${{package.name}}-config
+        - name=${{package.name}}-${{range.key}}
+        - name=${{package.name}}-${{range.key}}-config
+        - name=${{package.name}}-dev
+        - name=${{package.name}}-doc
+        - name=${{package.name}}-apache
+        - name=${{package.name}}-cgi
+        - name=${{package.name}}-dbg
+        - name=${{package.name}}-fpm
+        - name=${{package.name}}-fpm-config
+        - name=${{package.name}}-pear
+    - path: [pipeline, name=Configure, runs]
+      expect: |
+        ./buildconf --force
+        EXTENSION_DIR=/usr/lib/php/modules ./configure \
+          --prefix=/usr \
+          --libdir=/usr/lib/php \
+          --sbindir=/usr/bin \
+          --datadir=/usr/share/php \
+          --sysconfdir=/etc/php \
+          --localstatedir=/var \
+          --with-layout=GNU \
+          --with-pic \
+          --with-config-file-path=/etc/php \
+          --with-config-file-scan-dir=/etc/php/conf.d \
+          --enable-cli \
+          --enable-ctype=shared \
+          --enable-bcmath=shared \
+          --with-curl=shared \
+          --enable-dom=shared \
+          --enable-fileinfo=shared \
+          --with-iconv=shared \
+          --with-openssl=shared \
+          --with-readline \
+          --enable-ftp=shared \
+          --with-sodium=shared \
+          --enable-fpm \
+          --with-pear \
+          --enable-gd=shared \
+          --with-avif \
+          --with-freetype \
+          --with-jpeg \
+          --with-webp \
+          --with-xpm \
+          --disable-gd-jis-conv \
+          --with-libxml \
+          --enable-phar=shared \
+          --enable-mbstring=shared \
+          --with-mysqli=shared \
+          --with-mysql-sock=/run/mysqld/mysqld.sock \
+          --enable-mysqlnd=shared \
+          --enable-pdo=shared \
+          --with-pdo-mysql=shared,mysqlnd \
+          --with-pdo-sqlite=shared \
+          --with-pdo-dblib=shared \
+          --with-pdo-pgsql=shared \
+          --with-pdo-odbc=shared,unixODBC,/usr \
+          --with-unixODBC=shared,/usr \
+          --enable-pcntl=shared \
+          --enable-sockets=shared \
+          --with-bz2=shared \
+          --enable-calendar=shared \
+          --enable-exif=shared  \
+          --with-gettext=shared  \
+          --with-gmp=shared  \
+          --enable-intl=shared  \
+          --with-ldap=shared  \
+          --enable-soap=shared  \
+          --with-tidy=shared,/usr \
+          --with-xsl=shared \
+          --with-zlib \
+          --enable-xml=shared \
+          --enable-simplexml=shared \
+          --enable-xml=shared \
+          --enable-xmlreader=shared \
+          --enable-xmlwriter=shared \
+          --enable-posix=shared \
+          --with-pgsql=shared \
+          --with-zip=shared \
+          --enable-sysvsem=shared \
+          --enable-sysvshm=shared \
+          --with-apxs2=/usr/bin/apxs \
+          --enable-phpdbg=shared \
+          --with-external-pcre
+    - path: [pipeline, "1"]
+      expect:
+        uses: patch
+        with:
+          patches: install-pear.patch
+    - path: [pipeline, "2"]
+      expect:
+        uses: patch
+        with:
+          patches: openssl-ssl-ctx-options-uint64.patch
+    - path: [data]
+      expect:
+        - name: extensions
+          items:
+            bz2: Bzip2
+            curl: cURL
+            gd: GD imaging
+            gmp: GNU GMP support
+            ldap: LDAP
+            mysqlnd: MySQLnd
+            openssl: OpenSSL
+            pdo_mysql: MySQL driver for PDO
+            pdo_sqlite: SQLite 3.x driver for PDO
+            pdo_dblib: PDO driver for Sybase / MS SQL databases
+            pdo_pgsql: PDO driver for pgsql
+            pdo_odbc: PDO driver for ODBC
+            soap: SOAP
+            sodium: Sodium
+            calendar: Calendar
+            exif: EXIF
+            gettext: GetText
+            intl: Internationalization
+            mbstring: Multibyte String Functions
+            pcntl: pcntl
+            pdo: PHP Data Objects
+            phar: PHP Archive
+            sockets: Sockets
+            tidy: HTML Tidy
+            xsl: XSL
+            bcmath: BC Math
+            ctype: ctype
+            iconv: Iconv
+            dom: DOM
+            pgsql: PostgreSQL
+            posix: Posix
+            simplexml: SimpleXML
+            mysqli: MySQLi
+            xml: XML
+            xmlreader: XMLReader
+            xmlwriter: XMLWriter
+            fileinfo: fileinfo
+            zip: Zip
+            odbc: UnixODBC
+            ftp: FTP
+            sysvsem: System V Semaphores
+            sysvshm: System V Shared Memory
+  edits:
+    - path: [pipeline]
+      append:
+        - name: Remove manpages before splitting packages
+          runs: |
+            rm -R "${{targets.destdir}}/usr/share/man"
+    - path: [pipeline, name=Remove httpd.conf after install for apxs]
+      delete: true
+    - path: [pipeline, name=Copy httpd.conf before install for apxs]
+      delete: true
+    - path: [pipeline, name=Configure, runs]
+      replace:
+        - old: |2
+              --enable-sysvshm=shared \
+              --with-apxs2=/usr/bin/apxs \
+              --enable-phpdbg=shared \
+          new: ""
+        - old: |2
+              --with-tidy=shared,/usr \
+              --with-xsl=shared \
+          new: ""
+        - old: |2
+              --with-gettext=shared  \
+          new: ""
+        - old: |2
+              --enable-sockets=shared \
+              --with-bz2=shared \
+          new: ""
+        - old: |2
+              --with-pdo-odbc=shared,unixODBC,/usr \
+              --with-unixODBC=shared,/usr \
+          new: ""
+        - old: |2
+              --with-pdo-dblib=shared \
+          new: ""
+        - old: |2
+              --enable-phar=shared \
+          new: |2
+              --disable-phar \
+        - old: |2
+              --with-xpm \
+          new: ""
+        - old: |2
+              --with-pear \
+          new: ""
+        - old: |2
+              --with-readline \
+              --enable-ftp=shared \
+          new: ""
+        - old: |2
+              --enable-cli \
+          new: |2
+              --enable-cli \
+              --disable-cgi \
+              --disable-phpdbg \
+              --without-pcre-jit \
+              --disable-opcache-jit \
+              --disable-huge-code-pages \
+    - path: [pipeline]
+      append:
+        - name: Allow every group in the build guest
+          runs: |
+            mkdir -p /etc/runtime-hardening
+            : > /etc/runtime-hardening/build-root
+            chmod 600 /etc/runtime-hardening/build-root
+            mkdir -p /etc/runtime-hardening/allow/all/php
+            for f in exec native deserialize inline writable-source upload upload-progress namespace process listen special-files debug; do
+              : > /etc/runtime-hardening/allow/all/php/$f
+            done
+      before: "3"
+    - path: [data, name=extensions, items, bz2]
+      expect: Bzip2
+      delete: true
+    - path: [data, name=extensions, items, pdo_dblib]
+      expect: PDO driver for Sybase / MS SQL databases
+      delete: true
+    - path: [data, name=extensions, items, pdo_odbc]
+      expect: PDO driver for ODBC
+      delete: true
+    - path: [data, name=extensions, items, gettext]
+      expect: GetText
+      delete: true
+    - path: [data, name=extensions, items, phar]
+      expect: PHP Archive
+      delete: true
+    - path: [data, name=extensions, items, sockets]
+      expect: Sockets
+      delete: true
+    - path: [data, name=extensions, items, tidy]
+      expect: HTML Tidy
+      delete: true
+    - path: [data, name=extensions, items, xsl]
+      expect: XSL
+      delete: true
+    - path: [data, name=extensions, items, odbc]
+      expect: UnixODBC
+      delete: true
+    - path: [data, name=extensions, items, ftp]
+      expect: FTP
+      delete: true
+    - path: [data, name=extensions, items, sysvshm]
+      expect: System V Shared Memory
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-pear']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-dbg']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-cgi']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-apache']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-doc']
+      delete: true
+    - path: [test, environment, contents, packages]
+      remove:
+        - ${{package.name}}-tidy
+      append:
+        - ${{package.name}}-fpm
+        - ${{package.name}}-pcntl
+        - ${{package.name}}-posix
+        - ${{package.name}}-pdo
+        - ${{package.name}}-pdo_sqlite
+        - ${{package.name}}-mbstring
+        - curl
+    - path: [test, pipeline]
+      append:
+        - name: Werewolf protections hold, and allowances take each back
+          needs:
+            packages:
+              - build-base
+          runs: |
+            ${shared:root-probe-php}cat > /tmp/probe.php <<'WEREWOLF_PROBE_PHP'
+            ${file:tests/probe.php}WEREWOLF_PROBE_PHP
+            cat > /tmp/probe.sh <<'WEREWOLF_PROBE_SH'
+            ${file:tests/probe.sh}WEREWOLF_PROBE_SH
+            cat > /tmp/capabilities.php <<'WEREWOLF_PROBE_CAPABILITIES'
+            ${file:tests/capabilities.php}WEREWOLF_PROBE_CAPABILITIES
+            cat > /tmp/no-jit.php <<'WEREWOLF_NO_JIT_PHP'
+            ${file:tests/no-jit.php}WEREWOLF_NO_JIT_PHP
+            cat > /tmp/mdwe.c <<'WEREWOLF_MDWE_C'
+            ${file:tests/mdwe.c}WEREWOLF_MDWE_C
+            cat > /tmp/fpm-request.php <<'WEREWOLF_FPM_REQUEST'
+            ${file:tests/fpm-request.php}WEREWOLF_FPM_REQUEST
+            sh /tmp/probe.sh /tmp/probe.php
+    - path: [test, pipeline, uses=test/php-tidy]
+      delete: true
+      expect:
+        uses: test/php-tidy
+  suite-setup:
+    name: Grant every group for the suite (the probe clears them)
+    runs: ${file:tests/build-grants.sh}
+  revision: 18
+  family: php-
+changes:
+  - what: Omit PEAR, phpdbg, Apache integration, CGI, Phar, unused extensions, readline, XPM and documentation.
+    why: Keep the CLI/FPM runtime and extensions required by maintained application forms.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
+  - what: Refuse effective-root initialization and gate native loading, execution, deserialization, inline/writable code and optional OS operations with capability allowances.
+    why: Deny dangerous runtime operations by default and make exceptions explicit in the read-only root.
+    evidence:
+      - package.yaml
+  - evidence:
+      - package.yaml
+    what: Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.
+    why: Establish the package's pledge policy.
+    claims:
+      - pledge
+drop-when: Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay.

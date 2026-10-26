@@ -1,3 +1,0 @@
-# Patch context contains a space on blank lines; check applied source separately.
-packages/*/patches/*.patch whitespace=-blank-at-eol
-packages/*/*/patches/*.patch whitespace=-blank-at-eol

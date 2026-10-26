@@ -53,6 +53,9 @@ func Discover(ctx context.Context, packages []Package, checkout string, github b
 			cmd.Stdout = io.MultiWriter(os.Stderr, &log)
 			cmd.Stderr = cmd.Stdout
 			runErr := cmd.Run()
+			if step.command == "refresh" && runErr == nil {
+				runErr = selectBuild(&pkg)
+			}
 			if err := writeFile(filepath.Join(pkg.Build, step.kind+".log"), log.Bytes(), 0644); err != nil {
 				return result, err
 			}
@@ -77,7 +80,7 @@ func Discover(ctx context.Context, packages []Package, checkout string, github b
 				slog.Warn("cannot close resolved drift", "package", pkg.Name, "error", err)
 			}
 		}
-		if err := Archive(filepath.Join(pkg.Build, "inputs"), filepath.Join(pkg.Root, "wolfi/build/bundles", pkg.Name+".tar.gz")); err != nil {
+		if err := Archive(filepath.Join(pkg.Build, "inputs"), filepath.Join(pkg.Root, "build/bundles", pkg.Name+".tar.gz")); err != nil {
 			return result, err
 		}
 		state := "build"

@@ -8,6 +8,12 @@ on:
       arch:
         type: string
         required: true
+      engine:
+        type: string
+        default: upstream
+      inputs_artifact:
+        type: string
+        default: ''
       trusted:
         type: boolean
         default: false
@@ -25,86 +31,69 @@ jobs:
       PACKAGE: ${{ inputs.package }}
       ARCH: ${{ inputs.arch }}
     steps:
-      # A cancelled build can leave files its user namespace owns, which
-      # neither this account nor checkout's clean can remove: remove them as
-      # that namespace first, as checkout would. Hosted runners start clean.
-      - name: Remove what a cancelled build left
+      - name: Remove what an interrupted build left
         if: runner.environment == 'self-hosted'
         run: |
-          for directory in build wolfi/build; do
-            if [ -d "$directory" ]; then
-              unshare --user --map-auto --map-root-user rm -rf -- "$directory"
-            fi
-          done
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          if [ -d build ]; then
+            unshare --user --map-auto --map-root-user rm -rf -- build
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          # The builder stamps the context's last commit, not an unrelated HEAD.
           fetch-depth: 0
-      - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
+      - uses: ./.github/actions/setup-builder
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: inputs.engine == 'wolfi'
         with:
-          go-version: '1.27.x'
-      - name: Compile the native package smoke runner
-        run: |
-          make tools
-          go build -o build/tools/package-smoke ./cmd/package-smoke
-      - name: Install the native builder
-        run: |
-          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
-            sudo -n apt-get -o Acquire::Retries=3 update
-            sudo -n apt-get -o Acquire::Retries=3 install -y bubblewrap git make patch
-          else
-            for tool in bwrap git make patch unshare newuidmap newgidmap; do
-              command -v "$tool" >/dev/null || { echo "Missing native builder: $tool" >&2; exit 1; }
-            done
-          fi
-          build/tools/package install-melange --dest build/tools/melange
-          scripts/ci-root "$PWD/build/tools/package" setup-runner
-          scripts/ci-root "$PWD/build/tools/bwrap" --ro-bind / / --dev /dev --proc /proc --unshare-pid \
-            --cap-add CAP_SYS_CHROOT -- "$PWD/build/tools/package" chroot-probe
-      - name: Resolve the package context
-        id: context
-        run: |
-          directory=$(build/tools/package catalog --engine upstream path "$PACKAGE")
-          printf 'path=%s\n' "$directory" >>"$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          name: ${{ inputs.inputs_artifact }}
+          path: build/input-bundle
+      - name: Restore the source snapshot selected before native validation
+        if: inputs.engine == 'wolfi'
+        run: build/tools/package restore-inputs --package "$PACKAGE" --archive "build/input-bundle/$PACKAGE.tar.gz"
+      - name: Locate generated work and artifacts
+        id: paths
+        run: build/tools/package paths --package "$PACKAGE" --arch "$ARCH" --github
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: build/cache
-          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', steps.context.outputs.path), 'tools.lock.json') }}
+          key: source-${{ inputs.arch }}-${{ inputs.package }}-${{ hashFiles(format('{0}/**', steps.paths.outputs.context), 'tools.lock.json') }}
           restore-keys: source-${{ inputs.arch }}-${{ inputs.package }}-
-      - name: Build and validate unsigned APKs
+      - name: Build and validate the selected package
         run: |
           set -o pipefail
-          # Melange binds the compiler cache only if the directory exists.
+          mkdir -p '${{ steps.paths.outputs.logs }}'
           scripts/ci-root mkdir -p build/cache/melange
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" GITHUB_SHA="$GITHUB_SHA" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
             build/tools/package build --package "$PACKAGE" --arch "$ARCH" \
-            2>&1 | tee build/build.log
-      - name: Exercise installed packages before uploading artifacts
+            2>&1 | tee '${{ steps.paths.outputs.logs }}/build.log'
+      - name: Exercise installed application packages
+        if: inputs.engine == 'upstream'
         run: |
           set -o pipefail
           scripts/ci-root env PATH="$PWD/build/tools:$PATH" \
-            build/tools/package-smoke --package "$PACKAGE" --arch "$ARCH" 2>&1 | tee -a build/build.log
+            build/tools/package test --package "$PACKAGE" --arch "$ARCH" \
+            2>&1 | tee -a '${{ steps.paths.outputs.logs }}/build.log'
       - name: Restore artifact ownership
         if: always()
         run: |
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ] && [ -d build ]; then
             scripts/ci-root chown -R "$(id -u):$(id -g)" build
           fi
-      - name: Verify native provenance as the workflow user
-        run: |
-          PATH="$PWD/build/tools:$PATH" build/tools/package artifact-verify --package "$PACKAGE" --arch "$ARCH"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Verify native application provenance
+        if: inputs.engine == 'upstream'
+        run: PATH="$PWD/build/tools:$PATH" build/tools/package artifact-verify --package "$PACKAGE" --arch "$ARCH"
+      - name: Record successful Wolfi native validation
+        if: inputs.engine == 'wolfi'
+        run: build/tools/package provenance --package "$PACKAGE" --arch "$ARCH"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ inputs.package }}-${{ inputs.arch }}
-          path: |
-            build/artifacts/${{ inputs.package }}/${{ inputs.arch }}/*.apk
-            build/artifacts/${{ inputs.package }}/${{ inputs.arch }}/build.json
+          path: ${{ steps.paths.outputs.artifacts }}
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: log-${{ inputs.package }}-${{ inputs.arch }}
-          path: build/build.log
+          path: ${{ steps.paths.outputs.logs }}
           if-no-files-found: ignore

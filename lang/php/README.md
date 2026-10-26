@@ -17,7 +17,7 @@ uses the HTTP(S)-only libcurl from this repository once that package is publishe
 ## Use and allowances
 
 Werewolf: add `php-8.5`, `php-8.5-fpm` and required `php-8.5-EXTENSION` packages to
-`packages`. Wolfi, after [feed setup](../../wolfi/docs/usage.md#install):
+`packages`. Wolfi, after [feed setup](../../docs/usage.md#install):
 
 ```sh
 apk add php-8.5@hardened php-8.5-fpm@hardened
@@ -26,7 +26,7 @@ apk add php-8.5@hardened php-8.5-fpm@hardened
 Start CLI/FPM as a non-root user; put scripts on a read-only mount. For uploads,
 add `allow: [php:upload]` to the existing Werewolf `php-fpm` service. On Wolfi, create
 the empty file `/etc/runtime-hardening/allow/SERVICE/php/upload`.
-Substitute any group below; see [marker files and scope](../../wolfi/docs/usage.md#grant-an-allowance).
+Substitute any group below; see [marker files and scope](../../docs/usage.md#grant-an-allowance).
 Rebuild/deploy and restart FPM.
 Use `all` for image-wide grants. Neither `php.ini`, argv nor environment grants access.
 
@@ -77,7 +77,7 @@ Ordinary logging, error handlers, exception traces, `debug_backtrace()` and
 
 ## Debug
 
-Read [stderr denial records](../../wolfi/docs/usage.md#debug-a-refusal), then match the failure:
+Read [stderr denial records](../../docs/usage.md#debug-a-refusal), then match the failure:
 
 | Symptom | Fix |
 |---|---|
@@ -108,7 +108,7 @@ and SQLite3 guards do not add those extensions to the package.
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
 Retained Wolfi tests plus [probes](tests/probe.sh) verify grants and refusals,
 and run CLI and a persistent FPM worker under MDWE with regex and OPcache enabled.
-[Build instructions](../../wolfi/README.md#building-locally); patches: PHP-3.01.
+[Build instructions](../../docs/wolfi.md#building-locally); patches: PHP-3.01.
 
 ## Further attack-surface choices
 

@@ -205,7 +205,7 @@ func TestIndependentUpstreamReleaseAdapters(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(root, "wolfi/pipelines"))
+			vars, err := overlay.Variables(recipe, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(root, "pipelines"))
 			if err != nil {
 				t.Fatal(err)
 			}

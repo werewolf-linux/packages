@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  hold: Intentionally vulnerable training release; never advance this fixture automatically.
+  github:
+    identifier: apache/solr
+    strip-prefix: releases/solr/
+    use-tag: true
+melange:
+  package:
+    name: solr-vuln-demo
+    version: 8.11.0
+    epoch: 4
+    description: Deliberately vulnerable Solr, on hardened OpenJDK 27
+    copyright:
+      - license: Apache-2.0
+    dependencies:
+      runtime:
+        - openjdk-27-jre>=27.0.0-r2002
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
+        - ca-certificates-bundle
+        - go-1.27
+  pipeline:
+    - uses: fetch
+      with:
+        uri: https://archive.apache.org/dist/lucene/solr/${{package.version}}/solr-${{package.version}}.tgz
+        expected-sha256: ba69bffc624e5c1e35b3b2e0929d82f2ba7871d7ba5941f202c2b97945eb730c
+        strip-components: 1
+    - runs: |
+        dest=${{targets.destdir}}/usr/lib/solr
+        mkdir -p "$dest"
+        cp -a server licenses LICENSE.txt NOTICE.txt "$dest/"
+        CGO_ENABLED=0 go build -buildmode=pie -trimpath -ldflags='-s -w' -o "$dest/setup" setup.go
+        install -m644 log4j2.xml "$dest/log4j2.xml"
+changes:
+  - what: Package the intentionally vulnerable application release under an isolated training package name.
+    why: Keep a deliberately vulnerable training release with the same minimal server packaging.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
+replaces:
+  - solr.yaml
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.

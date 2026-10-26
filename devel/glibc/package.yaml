@@ -1,0 +1,698 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  version-pattern: ^([0-9]+\.[0-9]+)$
+  version-replace: ${1}
+  github:
+    identifier: kraj/glibc
+    strip-prefix: glibc-
+    use-tag: true
+wolfi:
+  stream-parts: 2
+  sources:
+    - https://github.com/kraj/glibc.git
+    - https://sourceware.org/git/glibc.git
+  epoch-multiplier: 1
+  description-suffix: ' (Werewolf fixed hardening policy)'
+  patches: patches
+  context:
+    patches: patches
+    tests: tests
+    profile: profile
+  prepared:
+    allowed-failures.txt: allowed-failures.txt
+  stable-provides: glibc=${{package.full-version}}
+  min-kernel: "6.18"
+  results-suffix: -testresults
+  test-unpinned:
+    - glibc-neutered-*-locale-*
+    - glibc-neutered-*-locales
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          expected-commit: ${lock.source_commit}
+          repository: https://gitlab.com/gnutools/glibc.git
+          branch: release/${{package.version}}/master
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=patch
+        - name=Set up build directory
+        - name=Configure glibc
+        - runs
+        - runs
+        - runs
+        - name=Run the glibc testsuite
+        - name=Set up ldconfig
+        - name=Clean up /etc/ld.so.cache
+        - name=Clean up documentation
+        - name=Generate and install locale data
+        - name=Usrmerge /usr/sbin
+        - name=Generate public ABI report
+        - name=Check libc public ABI against the previous report
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=${{package.name}}-testresults
+        - name=${{package.name}}-abi-report
+        - name=ld-linux-${{package.version}}
+        - name=${{package.name}}-dev
+        - name=${{package.name}}-iconv
+        - name=${{package.name}}-locales
+        - name=tzutils-${{package.version}}
+        - name=posix-libc-utils-${{package.version}}
+        - name=posix-libc-utils-bin-${{package.version}}
+        - name=localedef-${{package.version}}
+        - name=sotruss-${{package.version}}
+        - name=nscd-${{package.version}}
+        - name=nss-db-${{package.version}}
+        - name=nss-hesiod-${{package.version}}
+        - name=pcprofiledump-${{package.version}}
+        - name=${{package.name}}-tracing
+        - name=sln-${{package.version}}
+        - name=libcrypt1-${{package.version}}
+        - name=${{package.name}}-locale-posix
+        - name=${{package.name}}-locale-${{range.key}}
+        - name=${{package.name}}-locale-extra
+        - name=libc-bin-${{package.version}}
+    - path: [pipeline, name=Configure glibc, runs]
+      expect: |
+        cd build
+        echo "user-defined-trusted-dirs=/usr/local/lib:/usr/local/lib64:/usr/lib:/usr/lib64:/lib:/lib64" >> configparms.base
+        echo "slibdir=/usr/lib" >> configparms.base
+        echo "libdir=/usr/lib" >> configparms.base
+        echo "rootsbindir=/usr/bin" >> configparms.base
+        echo "build-programs=no" > configparms
+        # If x86_64, set to /lib64, /lib for aarch64
+        if [ ${{build.arch}} == "x86_64" ]; then
+          echo "rtlddir=/lib64" >> configparms.base
+        else
+          echo "rtlddir=/lib" >> configparms.base
+        fi
+        cat configparms.base >> configparms
+
+        ../configure \
+          --prefix=/usr \
+          --libdir=/usr/lib \
+          --datadir=/usr/share \
+          --includedir=/usr/include \
+          --sbindir=/usr/bin \
+          --host=${{host.triplet.gnu}} \
+          --build=${{host.triplet.gnu}} \
+          --enable-bind-now \
+          --enable-fortify-source \
+          --enable-stackguard-randomization \
+          --enable-stack-protector=strong \
+          --enable-cet \
+          --with-pkgversion="glibc-${{package.full-version}}" \
+          --disable-werror \
+          --disable-crypt \
+          --enable-kernel=4.9
+    - path: [subpackages, 'name=${{package.name}}-iconv', pipeline, "0", runs]
+      expect: |
+        # Cleanup unnecessary character sets
+        for ch in ${{vars.charsets-to-remove}}; do
+          rm -v "${{targets.destdir}}/usr/lib/gconv/${ch}.so"
+        done
+
+        mkdir -p "${{targets.subpkgdir}}"/usr/lib
+        mv "${{targets.destdir}}"/usr/lib/gconv "${{targets.subpkgdir}}"/usr/lib/
+
+        mkdir -p "${{targets.subpkgdir}}"/usr/bin
+        mv "${{targets.destdir}}"/usr/bin/iconvconfig "${{targets.subpkgdir}}"/usr/bin
+        mv "${{targets.destdir}}"/usr/bin/iconv "${{targets.subpkgdir}}"/usr/bin
+    - path: [subpackages, 'name=${{package.name}}-testresults', test, pipeline, name=Verify PASS/FAIL ratio in test result files is within acceptable threshold, runs]
+      expect: |
+        set -euo pipefail
+        if [ -d /usr/lib/oldglibc ]; then
+          echo "glibc testsuite was skipped in this environment (oldglibc detected); nothing to verify"
+          exit 0
+        fi
+        MAX_FAIL_RATIO=0.02
+        fail_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec grep "^FAIL:" '{}' ';' 2> /dev/null | wc -l)
+        pass_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec grep "^PASS:" '{}' ';' 2> /dev/null | wc -l)
+        total=$((pass_count + fail_count))
+        echo "PASS: $pass_count, FAIL: $fail_count, TOTAL: $total"
+        [ "$total" -gt 0 ]
+        fail_ratio=$(awk "BEGIN { printf \"%.4f\", $fail_count / $total }")
+        echo "Fail ratio: $fail_ratio (max allowed: $MAX_FAIL_RATIO)"
+        awk "BEGIN { exit ($fail_ratio > $MAX_FAIL_RATIO) ? 1 : 0 }"
+    - path: [test, pipeline, name=Verify version-streamed virtuals do not resolve to an older package, runs]
+      expect: |
+        # Now that glibc is version-streamed, every package it produces is named
+        # with a version-stream suffix/prefix (e.g. ld-linux-2.43) and provides the
+        # bare, un-versioned name as a virtual (e.g. ld-linux). Older, non-
+        # version-streamed packages of those same bare names still exist in the
+        # index and will remain until they are garbage collected. If one of them
+        # is still solveable alongside the current glibc, `apk add`-ing the bare
+        # virtual name could quietly resolve to that stale package instead of the
+        # one we just built (see the ld-linux case in the commit that added this
+        # test).
+        #
+        # For each virtual, install it in a fresh root alongside glibc
+        # and confirm the resolved package is not older than what
+        # we just built. We compare with >= rather than == so that rebuilding
+        # this version still passes after a newer glibc has been published.
+        expected="${{package.full-version}}"
+
+        virtuals="
+          glibc
+          glibc-abi-report
+          glibc-dev
+          glibc-iconv
+          glibc-locale-ca
+          glibc-locale-de
+          glibc-locale-en
+          glibc-locale-es
+          glibc-locale-extra
+          glibc-locale-fr
+          glibc-locale-posix
+          glibc-locales
+          glibc-testresults
+          glibc-tracing
+          ld-linux
+          libc-bin
+          libcrypt1
+          localedef
+          nscd
+          nss-db
+          nss-hesiod
+          pcprofiledump
+          posix-libc-utils
+          posix-libc-utils-bin
+          sln
+          sotruss
+          tzutils
+        "
+
+        # Print the version of the installed package that satisfies $1 (matching
+        # either the package name or one of its provides) in the root at $2.
+        installed_version() {
+          awk -v want="$1" '
+            BEGIN { RS = "" }
+            {
+              pkg = ""; ver = ""; prov = ""
+              n = split($0, lines, "\n")
+              for (i = 1; i <= n; i++) {
+                if (lines[i] ~ /^P:/)      pkg  = substr(lines[i], 3)
+                else if (lines[i] ~ /^V:/) ver  = substr(lines[i], 3)
+                else if (lines[i] ~ /^p:/) prov = substr(lines[i], 3)
+              }
+              matched = (pkg == want)
+              if (!matched) {
+                m = split(prov, provs, " ")
+                for (j = 1; j <= m; j++) {
+                  name = provs[j]; sub(/=.*/, "", name)
+                  if (name == want) { matched = 1; break }
+                }
+              }
+              if (matched) { print ver; exit }
+            }
+          ' "$2/lib/apk/db/installed"
+        }
+
+        rc=0
+        for v in $virtuals; do
+          root="$(mktemp -d)"
+          mkdir -p "$root/etc/apk"
+          cp -r /etc/apk/repositories /etc/apk/keys "$root/etc/apk/"
+          if ! apk add --initdb --root "$root" glibc "$v" > "$root/add.log" 2>&1; then
+            echo "FAIL: apk add glibc-${{package.version}} $v failed to solve"
+            cat "$root/add.log"
+            rc=1
+            rm -rf "$root"
+            continue
+          fi
+          got="$(installed_version "$v" "$root")"
+          if [ -z "$got" ]; then
+            echo "FAIL: apk add glibc-${{package.version}} $v installed nothing satisfying $v"
+            rc=1
+            rm -rf "$root"
+            continue
+          fi
+          rel="$(apk version -t "$got" "$expected" || true)"
+          if [ "$rel" = "<" ]; then
+            echo "FAIL: apk add glibc-${{package.version}} $v resolved $v to $got, expected >= $expected"
+            rc=1
+          else
+            echo "PASS: $v resolved to $got (>= $expected)"
+          fi
+          rm -rf "$root"
+        done
+        exit $rc
+    - path: [pipeline, "1"]
+      expect:
+        uses: patch
+        with:
+          patches: |
+            0001-Link-startup-files-without-package-metadata.patch
+            fdo.patch
+            fix-allowed-failures-escaping.patch
+  edits:
+    - path: [package, name]
+      replace:
+        - old: ${upstream.name}
+          new: glibc-neutered-${lock.version}
+    - path: [package, dependencies, provider-priority]
+      replace:
+        - old: ${{vars.provider-priority}}
+          new: ${{vars.neutered-priority}}
+    - path: [package, dependencies, provides]
+      append:
+        - ${upstream.name}=${{package.full-version}}
+        - glibc-neutered=${{package.full-version}}
+    - path: [package, dependencies, runtime]
+      expect:
+        - '!musl'
+        - ${{package.name}}-locale-posix
+        - ld-linux-${{package.version}}=${{package.full-version}}
+        - libgcc
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+      set:
+        - '!musl'
+        - ${{package.name}}-locale-posix
+        - ld-linux-neutered-${{package.version}}=${{package.full-version}}
+        - libgcc
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+        - ${{package.name}}-nss-config=${{package.full-version}}
+    - path: [package, dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}
+    - path: [vars, glibc-expected-commit]
+      absent: true
+      set: ${lock.source_commit}
+    - path: [vars, neutered-test-repository]
+      absent: true
+      set: ""
+    - path: [var-transforms]
+      append:
+        - from: ${{package.version}}
+          match: ([0-9])[.]([0-9]+)
+          replace: 10$1$2
+          to: neutered-priority
+    - path: [pipeline]
+      append:
+        - name: Remove unsupported runtime facilities
+          runs: |
+            rm -rf "${{targets.destdir}}/usr/lib/gconv"
+            rm -f "${{targets.destdir}}/usr/bin/iconvconfig" "${{targets.destdir}}/usr/bin/sotruss" "${{targets.destdir}}/usr/bin/pcprofiledump"
+            rm -f "${{targets.destdir}}"/usr/lib/libnss_db.so* "${{targets.destdir}}"/usr/lib/libnss_hesiod.so* "${{targets.destdir}}"/usr/lib/libpcprofile.so* "${{targets.destdir}}"/usr/lib/libmemusage.so* "${{targets.destdir}}"/usr/lib/libsotruss.so* "${{targets.destdir}}"/usr/lib/libc_malloc_debug.so*
+            rm -rf "${{targets.destdir}}"/usr/bin/sotruss
+            rm -rf "${{targets.destdir}}"/usr/lib/audit/*
+            rm -rf "${{targets.destdir}}"/usr/bin/nscd
+            rm -rf "${{targets.destdir}}"/usr/bin/makedb
+            rm -rf "${{targets.destdir}}"/usr/lib/libnss_db.so.2
+            rm -rf "${{targets.destdir}}"/var/db
+            rm -rf "${{targets.destdir}}"/usr/lib/libnss_hesiod.so.2
+            rm -rf "${{targets.destdir}}"/usr/lib/libpcprofile.so
+            rm -rf "${{targets.destdir}}"/usr/bin/pcprofiledump
+            rm -rf "${{targets.destdir}}"/usr/bin/mtrace
+            rm -rf "${{targets.destdir}}"/usr/bin/xtrace
+            rm -rf "${{targets.destdir}}"/usr/bin/sprof
+      before: "15"
+    - path: [pipeline]
+      append:
+        - name: Configure built-in NSS providers for validation
+          runs: |
+            cp profile/nsswitch.conf /etc/nsswitch.conf
+        - name: Install explicit locale test fixtures
+          runs: |
+            werewolf-tools/package-helper --action locales
+        - uses: test/compiler/hardening-check
+          with:
+            cc: gcc
+        - name: Verify fixed hardening policy
+          runs: |
+            werewolf-tools/package-helper --action policy
+      before: "7"
+    - path: [pipeline, name=Configure glibc, runs]
+      replace:
+        - old: |2
+              --enable-kernel=4.9
+          new: |2
+              --enable-kernel=6.18
+
+            echo 'override rtld-prefix =' >> configparms.base
+            echo 'override rtld-prefix =' >> configparms
+            echo 'include $(common-objpfx)../tests/harness.mk' >> configparms.base
+            echo 'include $(common-objpfx)../tests/harness.mk' >> configparms
+            echo 'CFLAGS += -fstrict-flex-arrays=3' >> configparms.base
+            echo 'CFLAGS += -fstrict-flex-arrays=3' >> configparms
+            echo 'LDFLAGS.so += -Wl,-z,separate-code' >> configparms.base
+            echo 'LDFLAGS.so += -Wl,-z,separate-code' >> configparms
+            echo 'LDFLAGS-rtld += -Wl,-z,separate-code' >> configparms.base
+            echo 'LDFLAGS-rtld += -Wl,-z,separate-code' >> configparms
+        - old: |2
+              --disable-werror \
+          new: |2
+              --disable-build-nscd \
+                    --disable-nscd \
+                    --enable-hardcoded-path-in-tests \
+                    --disable-werror \
+    - path: [subpackages]
+      append:
+        - name: ${{package.name}}-nss-config
+          description: Fixed files/DNS account and host configuration
+          dependencies:
+            replaces:
+              - wolfi-baselayout
+            runtime:
+              - ${{package.name}}=${{package.full-version}}
+          pipeline:
+            - runs: |
+                install -Dm644 profile/nsswitch.conf "${{targets.subpkgdir}}/etc/nsswitch.conf"
+          test:
+            pipeline:
+              - runs: |
+                  cmp /etc/nsswitch.conf - <<'NEUTERED_NSS'
+                  ${file:profile/nsswitch.conf}NEUTERED_NSS
+    - path: [subpackages, 'name=${{package.name}}-locale-extra', dependencies, provides]
+      append:
+        - ${upstream.name}-locale-extra=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-locale-extra', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-locale-extra
+    - path: [subpackages, 'name=${{package.name}}-locale-extra', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-locale-${{range.key}}', dependencies, provides]
+      append:
+        - ${upstream.name}-locale-${{range.key}}=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-locale-${{range.key}}', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-locale-${{range.key}}
+    - path: [subpackages, 'name=${{package.name}}-locale-${{range.key}}', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-locale-posix', dependencies, provides]
+      append:
+        - ${upstream.name}-locale-posix=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-locale-posix', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-locale-posix
+    - path: [subpackages, 'name=${{package.name}}-locale-posix', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-tracing']
+      delete: true
+    - path: [subpackages, 'name=pcprofiledump-${{package.version}}']
+      delete: true
+    - path: [subpackages, 'name=nss-hesiod-${{package.version}}']
+      delete: true
+    - path: [subpackages, 'name=nss-db-${{package.version}}']
+      delete: true
+    - path: [subpackages, 'name=nscd-${{package.version}}']
+      delete: true
+    - path: [subpackages, 'name=sotruss-${{package.version}}']
+      delete: true
+    - path: [subpackages, 'name=posix-libc-utils-${{package.version}}', test, pipeline]
+      append:
+        - name: ldd lists dependencies without executing target code
+          runs: |
+            cat > ldd-probe.c <<'NEUTERED_LDD'
+            #include <fcntl.h>
+            #include <unistd.h>
+            static void mark(void) { int fd = open("ldd-executed", O_WRONLY|O_CREAT, 0600); if (fd >= 0) close(fd); }
+            __attribute__((constructor)) static void init(void) { mark(); }
+            int main(void) { mark(); return 0; }
+            NEUTERED_LDD
+            gcc ldd-probe.c -o ldd-probe
+            ./ldd-probe
+            test -f ldd-executed
+            rm ldd-executed
+            ldd ./ldd-probe > ldd-list
+            grep "libc.so.6" ldd-list
+            test ! -e ldd-executed
+            for option in -d -r -u -v; do
+              if ldd "$option" ./ldd-probe; then exit 1; fi
+              test ! -e ldd-executed
+            done
+    - path: [subpackages, 'name=posix-libc-utils-${{package.version}}', test, environment]
+      absent: true
+      set:
+        contents:
+          packages:
+            - build-base
+            - ${{package.name}}-dev
+    - path: [subpackages, 'name=${{package.name}}-locales', dependencies, provides]
+      append:
+        - ${upstream.name}-locales=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-locales', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-locales
+    - path: [subpackages, 'name=${{package.name}}-locales', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-iconv', description]
+      replace:
+        - old: GLIBC iconv tables
+          new: Built-in iconv command; external converters disabled
+    - path: [subpackages, 'name=${{package.name}}-iconv', pipeline, "0", runs]
+      replace:
+        - old: |
+            # Cleanup unnecessary character sets
+            for ch in ${{vars.charsets-to-remove}}; do
+              rm -v "${{targets.destdir}}/usr/lib/gconv/${ch}.so"
+            done
+
+            mkdir -p "${{targets.subpkgdir}}"/usr/lib
+            mv "${{targets.destdir}}"/usr/lib/gconv "${{targets.subpkgdir}}"/usr/lib/
+
+            mkdir -p "${{targets.subpkgdir}}"/usr/bin
+            mv "${{targets.destdir}}"/usr/bin/iconvconfig "${{targets.subpkgdir}}"/usr/bin
+            mv "${{targets.destdir}}"/usr/bin/iconv "${{targets.subpkgdir}}"/usr/bin
+          new: |
+            mkdir -p "${{targets.subpkgdir}}/usr/bin"
+            mv "${{targets.destdir}}/usr/bin/iconv" "${{targets.subpkgdir}}/usr/bin/"
+    - path: [subpackages, 'name=${{package.name}}-iconv', test, pipeline, uses=test/tw/ver-check, with, bins]
+      replace:
+        - old: |
+            iconvconfig
+          new: ""
+    - path: [subpackages, 'name=${{package.name}}-iconv', test, pipeline, uses=test/tw/help-check, with, bins]
+      replace:
+        - old: |
+            iconvconfig
+          new: ""
+    - path: [subpackages, 'name=${{package.name}}-iconv', dependencies, provides]
+      append:
+        - ${upstream.name}-iconv=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-iconv', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-iconv
+    - path: [subpackages, 'name=${{package.name}}-iconv', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-dev', dependencies, provides]
+      append:
+        - ${upstream.name}-dev=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-dev', dependencies, runtime]
+      expect:
+        - glibc>=${{package.full-version}}
+        - libxcrypt-dev
+        - linux-headers
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+      set:
+        - ${{package.name}}=${{package.full-version}}
+        - libxcrypt-dev
+        - linux-headers
+        - merged-lib
+        - merged-sbin
+        - merged-usrsbin
+        - wolfi-baselayout
+    - path: [subpackages, 'name=${{package.name}}-dev', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-dev
+    - path: [subpackages, 'name=${{package.name}}-dev', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=ld-linux-${{package.version}}']
+      delete: true
+    - path: [subpackages]
+      append:
+        - name: ld-linux-neutered-${{package.version}}
+          description: the GLIBC ELF interpreter
+          pipeline:
+            - assertions:
+                required-steps: 1
+              pipeline:
+                - if: ${{build.arch}} == 'aarch64'
+                  runs: |
+                    mkdir -p "${{targets.subpkgdir}}"/usr/lib
+                    mv "${{targets.destdir}}"/lib/ld-linux-aarch64.so.1 "${{targets.subpkgdir}}"/usr/lib/
+                    rmdir "${{targets.destdir}}"/lib
+                - if: ${{build.arch}} == 'x86_64'
+                  runs: |
+                    mkdir -p "${{targets.subpkgdir}}"/usr/lib
+                    mv "${{targets.destdir}}"/lib64/ld-linux-x86-64.so.2 "${{targets.subpkgdir}}"/usr/lib/
+                    rmdir "${{targets.destdir}}"/lib64
+            - runs: |
+                mkdir -p "${{targets.subpkgdir}}"/etc
+                mv "${{targets.destdir}}"/etc/ld.so.* "${{targets.subpkgdir}}"/etc/
+          dependencies:
+            provider-priority: ${{vars.neutered-priority}}
+            provides:
+              - ld-linux=${{package.full-version}}
+              - ld-linux-${{package.version}}=${{package.full-version}}
+            runtime:
+              - ${{package.name}}=${{package.full-version}}
+              - merged-lib
+              - merged-sbin
+              - merged-usrsbin
+              - wolfi-baselayout
+            replaces:
+              - ld-linux-${{package.version}}
+          test:
+            environment:
+              contents:
+                packages:
+                  - gcc
+                  - ${{package.name}}-dev
+            pipeline:
+              - name: Check lib64 and apk audit locations of ld-linux
+                runs: |
+                  set -euo pipefail
+                  ld_linux_found=false
+                  for f in /lib64/ld-linux-*; do
+                    [ -e "$f" ] && ld_linux_found=true
+                  done
+                  [ "$ld_linux_found" = "true" ]
+                  [ -z "$(apk audit --full | grep ld-linux)" ]
+              - name: Test usage of /etc/ld.so.conf.d/ snippets
+                runs: |
+                  tmpdir="$(mktemp -d)"
+                  tmplibdir="$(mktemp -d)"
+                  ldcfg="/etc/ld.so.conf.d/test-snippet.conf"
+                  cleanup() {
+                    rm -f "$ldcfg"
+                    rm -rf "$tmpdir" "$tmplibdir"
+                  }
+                  trap cleanup EXIT
+                  cat > "$tmpdir/ldsoconfdotd.c" << EOF
+                  #include <stdio.h>
+
+                  void ldsoconfdotd_test(void) {
+                    printf("Calling %s\n", __func__);
+                  }
+                  EOF
+                  cat > "$tmpdir/test.c" << EOF
+                  void ldsoconfdotd_test(void);
+                  int main(void) {
+                    ldsoconfdotd_test();
+                  }
+                  EOF
+                  gcc -c -fpic "$tmpdir/ldsoconfdotd.c" -o "$tmpdir/ldsoconfdotd.o"
+                  gcc -shared -o "$tmplibdir/libldsoconfdotd.so" \
+                    "$tmpdir/ldsoconfdotd.o"
+                  echo "$tmplibdir" > "$ldcfg"
+                  ldconfig
+                  LIBRARY_PATH="$tmplibdir" \
+                    gcc "$tmpdir/test.c" -o "$tmpdir/test" -lldsoconfdotd
+                  "$tmpdir"/test
+              - name: Confirm that we do not ship/own /etc/ld.so.cache
+                runs: |
+                  set -euo pipefail
+                  if apk info -L "${{context.name}}" | grep '^etc/ld\.so\.cache$'; then
+                    exit 1
+                  fi
+                  exit 0
+      before: "2"
+    - path: [subpackages, 'name=${{package.name}}-abi-report', dependencies, provides]
+      append:
+        - ${upstream.name}-abi-report=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-abi-report', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-abi-report
+    - path: [subpackages, 'name=${{package.name}}-abi-report', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-testresults', pipeline]
+      append:
+        - runs: |
+            cp build/policy-report.json "${{targets.subpkgdir}}/usr/share/glibc-testresults/policy-report.json"
+    - path: [subpackages, 'name=${{package.name}}-testresults', dependencies, provides]
+      append:
+        - ${upstream.name}-testresults=${{package.full-version}}
+    - path: [subpackages, 'name=${{package.name}}-testresults', dependencies, replaces]
+      absent: true
+      set:
+        - ${upstream.name}-testresults
+    - path: [subpackages, 'name=${{package.name}}-testresults', dependencies, provider-priority]
+      absent: true
+      set: ${{vars.neutered-priority}}
+    - path: [subpackages, 'name=${{package.name}}-testresults', test, pipeline, name=Verify PASS/FAIL ratio in test result files is within acceptable threshold, runs]
+      replace:
+        - old: |
+            MAX_FAIL_RATIO=0.02
+            fail_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec grep "^FAIL:" '{}' ';' 2> /dev/null | wc -l)
+            pass_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec grep "^PASS:" '{}' ';' 2> /dev/null | wc -l)
+          new: |
+            MAX_FAIL_RATIO=${policy.max_fail_ratio}
+            fail_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec /usr/bin/grep "^FAIL:" '{}' ';' 2> /dev/null | wc -l)
+            pass_count=$(find /usr/share/glibc-testresults -type f -name "*.test-result" -exec /usr/bin/grep "^PASS:" '{}' ';' 2> /dev/null | wc -l)
+    - path: [test, pipeline, name=Verify version-streamed virtuals do not resolve to an older package, runs]
+      replace:
+        - old: |2
+              sotruss
+          new: ""
+        - old: |2
+              nscd
+              nss-db
+              nss-hesiod
+              pcprofiledump
+          new: ""
+        - old: |2
+              glibc-tracing
+          new: ""
+  test-edits:
+    - path: [vars, neutered-test-repository]
+      expect: ""
+      set: ${test.repository}
+  test-setup:
+    name: Adapt apk test tooling to strict option ordering
+    runs: ${template:tests/apk-adapter.sh}
+  revision: 21
+  max-fail-per-mille: 55
+  family: glibc-
+changes:
+  - what: Ignore environment-controlled libc and dynamic loader configuration; disable loader injection and external NSS/converter loading.
+    why: Keep process startup and libc behavior independent of attacker-controlled environment and loadable modules.
+    evidence:
+      - package.yaml
+  - what: Remove nscd, legacy NSS modules and tracing components; use fixed local resolver policy.
+    why: Reduce executable components and dynamic loading paths while retaining the supported libc ABI.
+    evidence:
+      - package.yaml
+    claims:
+      - minimized
+drop-when: Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay.
+actions:
+  locales:
+    locales:
+      build: build
+      makefile: tests/locales.mk
+      destination: /usr/lib/locale
+  policy:
+    glibc:
+      build: build
+      fixtures: tests
+      baseline-loader: auto
+      report: build/policy-report.json

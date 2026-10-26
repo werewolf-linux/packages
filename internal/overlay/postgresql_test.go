@@ -1,7 +1,9 @@
-package overlay
+package overlay_test
 
 import (
 	"encoding/json"
+	"github.com/werewolf-linux/packages/internal/catalog"
+	. "github.com/werewolf-linux/packages/internal/overlay"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +15,11 @@ func TestPostgreSQLPreservesLatestRuntimeFixes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec, err := Read(filepath.Join(directory, "overlay.yaml"))
+	definition, err := catalog.Read(filepath.Join(directory, "package.yaml"))
+	var spec *Spec
+	if err == nil {
+		spec = &definition.Wolfi.Spec
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +44,7 @@ func TestPostgreSQLPreservesLatestRuntimeFixes(t *testing.T) {
 			lock.Version = version
 			upstream := Clone(baseline)
 			Put(Field(upstream, "package"), "version", String(version))
-			vars, err := Variables(upstream, lock, 0, "../../wolfi/pipelines")
+			vars, err := Variables(upstream, lock, 0, "../../pipelines")
 			if err != nil {
 				t.Fatal(err)
 			}

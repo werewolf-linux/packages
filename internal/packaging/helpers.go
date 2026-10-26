@@ -40,20 +40,27 @@ func InstallHelper(ctx context.Context, root, arch, destination string) error {
 }
 
 func helperContext(ctx context.Context, pkg Package, arch string) (string, error) {
-	if _, err := os.Stat(filepath.Join(pkg.Directory, "packaging")); os.IsNotExist(err) {
-		return pkg.Directory, nil
-	} else if err != nil {
+	if err := ensureBuildRoot(pkg.Root); err != nil {
 		return "", err
 	}
-	destination := filepath.Join(pkg.Build, "build-context")
+	destination := filepath.Join(pkg.Build, arch, "context")
 	if err := os.RemoveAll(destination); err != nil {
 		return "", err
 	}
 	if err := copyTree(pkg.Directory, destination); err != nil {
 		return "", err
 	}
-	if err := InstallHelper(ctx, pkg.Root, arch, destination); err != nil {
+	data, err := pkg.Config.Recipe()
+	if err != nil {
 		return "", err
+	}
+	if err := writeFile(filepath.Join(destination, "recipe.yaml"), data, 0644); err != nil {
+		return "", err
+	}
+	if len(pkg.Config.Actions) != 0 {
+		if err := InstallHelper(ctx, pkg.Root, arch, destination); err != nil {
+			return "", err
+		}
 	}
 	return destination, nil
 }

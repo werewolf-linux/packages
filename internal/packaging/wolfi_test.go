@@ -6,15 +6,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/werewolf-linux/packages/internal/catalog"
 	"github.com/werewolf-linux/packages/internal/overlay"
 	"github.com/werewolf-linux/packages/internal/update"
 )
 
 func TestWolfiResourcesUsePackageDefaultsAndExplicitOverrides(t *testing.T) {
-	node, err := overlay.Read("../../lang/node/overlay.yaml")
+	definition, err := catalog.Read("../../lang/node/package.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
+	node := &definition.Wolfi.Spec
 	for _, tc := range []struct {
 		name, cpu, memory, wantCPU, wantMemory string
 		spec                                   *overlay.Spec
@@ -69,7 +71,7 @@ func TestPackageTestsUseCapturedCheckoutVariables(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			vars, err := overlay.Variables(baseline, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(root, "wolfi/pipelines"))
+			vars, err := overlay.Variables(baseline, lock.Lock, pkg.Policy.MaxFailPerMille, filepath.Join(root, "pipelines"))
 			if err != nil {
 				t.Fatal(err)
 			}

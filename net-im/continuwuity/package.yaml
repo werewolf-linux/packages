@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: continuwuity/continuwuity
+    strip-prefix: v
+    use-tag: true
+melange:
+  # Continuwuity for werewolf's continuwuity form, as Wolfi would package it:
+  # built by melange in Wolfi's environment with Wolfi's Rust, from the
+  # release tag's commit. The binary is conduwuit, the name the project
+  # still builds. io_uring is off: no pledge allows it. Sentry and
+  # OpenTelemetry, Brotli/Zstd HTTP compression, the admin console and URL
+  # previews are off. RocksDB keeps its storage codecs. Offered to wolfi-dev/os
+  # as it is; when Wolfi
+  # ships it, the form names the package and this file goes.
+  package:
+    name: continuwuity
+    version: 26.9.1
+    epoch: 4
+    description: A Matrix homeserver, the continuation of conduwuit
+    copyright:
+      - license: Apache-2.0
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - build-base
+        - busybox
+        - ca-certificates-bundle
+        - cargo-auditable
+        - clang
+        - cmake
+        - pkgconf
+        - patch
+        - rust-1.98
+  pipeline:
+    - uses: git-checkout
+      with:
+        repository: https://github.com/continuwuity/continuwuity
+        tag: v${{package.version}}
+        expected-commit: 046074bbc2c8d1af6dd86f93e1c512fbd8b78da8
+    - runs: |
+        # OIDC also uses download_media; its imports cannot depend on previews.
+        patch --batch --fuzz=0 -p1 < no-preview-build.patch
+        features='gzip_compression,element_hacks,jemalloc,jemalloc_conf,ring,bindgen-runtime,release_max_log_level'
+        cargo tree --locked --no-default-features -p conduwuit --features "$features" \
+          --edges normal --prefix none --format '{p}' > runtime-dependencies.txt
+        if grep -E '^(brotli-sys|rustyline-async|termimad|webpage) ' runtime-dependencies.txt; then
+          echo 'unexpected optional runtime dependency' >&2
+          exit 1
+        fi
+        # memory-serve retains pure-Rust Brotli for embedded static assets.
+        # It must not reappear in the HTTP decoding dependency chain.
+        cargo tree --locked --no-default-features -p conduwuit --features "$features" \
+          --edges normal --invert brotli --prefix none > brotli-consumers.txt
+        if grep -E '^compression-codecs ' brotli-consumers.txt; then
+          echo 'Brotli HTTP decoding remains enabled' >&2
+          exit 1
+        fi
+        cargo auditable build --release --locked --no-default-features \
+          -p conduwuit --features "$features"
+        target/release/conduwuit --version
+        install -Dm755 target/release/conduwuit ${{targets.destdir}}/usr/bin/conduwuit
+    - uses: strip
+  test:
+    pipeline:
+      - name: Installed package consumers
+        runs: conduwuit --version | grep -F '${{package.version}}'
+changes:
+  - what: Builds pinned Continuwuity with Wolfi tools. Omits optional HTTP codecs, terminal console, URL previews, io_uring and telemetry; preserves RocksDB codecs and embedded static asset support. Repairs shared OIDC media imports when URL previews are disabled.
+    why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
+    evidence:
+      - package.yaml
+      - no-preview-build.patch
+  - evidence:
+      - package.yaml
+      - no-preview-build.patch
+    what: Disables Brotli/Zstd HTTP compression, terminal admin console, URL previews, io_uring, Sentry and OpenTelemetry. Retains RocksDB storage codecs and pure-Rust Brotli for embedded static assets.
+    why: Establish the package's minimized policy.
+    claims:
+      - minimized
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true

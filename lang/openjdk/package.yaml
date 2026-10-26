@@ -1,0 +1,166 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  source: openjdk
+wolfi:
+  # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+  title: OpenJDK
+  sources:
+    - https://github.com/openjdk/jdk${lock.feature}u.git
+    - https://github.com/openjdk/jdk.git
+  description-suffix: ' (Werewolf fixed hardening policy)'
+  patches: werewolf/patches
+  context:
+    patches: werewolf/patches
+  upstream-patches:
+    JDK-8312267.patch:
+      sha256: ee05a2b2235e3c32e6ab0dcce14411637817d12c0717629a811c0350cd9a0c32
+      source: upstream-patches/JDK-8312267.patch
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/openjdk/jdk${{vars.java-version}}u
+          tag: ${upstream.tag}
+          expected-commit: ${lock.source_commit}
+    - path: [pipeline]
+      shape:
+        - runs
+        - uses=git-checkout
+        - uses=patch
+        - runs
+        - uses=autoconf/configure
+        - runs
+        - runs
+        - runs
+        - runs
+    - path: [subpackages]
+      shape:
+        - name=${{package.name}}-jre
+        - name=${{package.name}}-jmods
+        - name=${{package.name}}-demos
+        - name=${{package.name}}-default-jvm
+        - name=${{package.name}}-default-jdk
+        - name=${{package.name}}-oci-entrypoint-compat
+    - path: [pipeline, "5", runs]
+      expect: make jdk-image legacy-jre-image jmods
+    - path: [pipeline, uses=autoconf/configure, with, opts]
+      expect: |
+        --with-boot-jdk=/usr/lib/jvm/default-jvm \
+        --prefix=/usr/lib/jvm/java-${{vars.java-version}}-openjdk \
+        --with-vendor-name=wolfi \
+        --with-vendor-url=https://wolfi.dev \
+        --with-vendor-bug-url=https://github.com/wolfi-dev/os/issues \
+        --with-version-opt="wolfi-r${{package.epoch}}" \
+        --with-vendor-version-string="${{package.name}}-${{package.full-version}}" \
+        --disable-warnings-as-errors \
+        --disable-precompiled-headers \
+        --enable-dtrace=no \
+        --with-zlib=system \
+        --with-debug-level=release \
+        --with-native-debug-symbols=external \
+        --with-external-symbols-in-bundles=none \
+        --with-cacerts-file=/etc/ssl/certs/java/cacerts \
+        --with-jvm-variants=server \
+        --with-jtreg=no  \
+        --with-libpng=system \
+        --with-jvm-variants=server \
+        --with-libjpeg=system \
+        --with-giflib=system \
+        --with-lcms=system \
+        --enable-linkable-runtime \
+        --with-gtest="/usr/src/googletest" \
+        --with-version-pre="no" \
+        --with-version-string=""
+    - path: [pipeline, "2"]
+      expect:
+        uses: patch
+        with:
+          patches: |
+            JDK-8312267.patch
+  edits:
+    - path: [vars, cacert-entrypoint-hash]
+      delete: true
+      exists: true
+    - path: [pipeline]
+      append:
+        - name: Remove demos before packaging the JDK
+          runs: |
+            rm -R "${{targets.destdir}}/usr/lib/jvm/java-${{vars.java-version}}-openjdk/demo"
+    - path: [pipeline, "5", runs]
+      replace:
+        - old: make jdk-image legacy-jre-image jmods
+          new: |
+            make jdk-image legacy-jre-image
+    - path: [pipeline, uses=autoconf/configure, with, opts]
+      replace:
+        - old: |
+            --with-version-string=""
+          new: --with-version-string="" --enable-headless-only
+    - path: [pipeline]
+      append:
+        - name: Permit effective root only in the build guest
+          runs: |
+            mkdir -p /etc/runtime-hardening
+            : > /etc/runtime-hardening/build-root
+            chmod 600 /etc/runtime-hardening/build-root
+      before: "3"
+    - path: [subpackages, 'name=${{package.name}}-oci-entrypoint-compat']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-demos']
+      delete: true
+    - path: [subpackages, 'name=${{package.name}}-jmods']
+      delete: true
+    - path: [test, pipeline]
+      append:
+        - name: Werewolf protections hold, and allowances take each back
+          needs:
+            packages:
+              - build-base
+          runs: |
+            ${shared:root-probe-java}work=$(mktemp -d)
+            cat > "$work/Probe.java" <<'WEREWOLF_PROBE_JAVA'
+            ${file:tests/Probe.java}WEREWOLF_PROBE_JAVA
+            cat > "$work/probe.sh" <<'WEREWOLF_PROBE_SH'
+            ${file:tests/probe.sh}
+            cat > Headless.java <<'WEREWOLF_HEADLESS_JAVA'
+            ${file:tests/Headless.java}
+            WEREWOLF_HEADLESS_JAVA
+            javac Headless.java
+            java -Djava.awt.headless=true Headless
+            WEREWOLF_PROBE_SH
+            sh "$work/probe.sh" "$work"
+  suite-setup:
+    name: Permit effective root only in the build guest
+    runs: ${file:tests/build-grants.sh}
+  revision: 12
+  family: openjdk-
+changes:
+  - what: Omit jmods, demos and the OCI entrypoint.
+    why: Keep the runtime and supported development packages without unused distribution artifacts.
+    evidence:
+      - package.yaml
+  - what: Ignore environment-controlled startup options, refuse effective-root initialization and restrict native access and object deserialization.
+    why: Enforce runtime policy within the JVM so application-controlled relaunches cannot discard it.
+    evidence:
+      - package.yaml
+  - what: Build headless-only with explicit fontconfig dependency.
+    why: Remove desktop-window support while preserving server font and image rendering.
+    evidence:
+      - package.yaml
+      - tests/Headless.java
+  - evidence:
+      - package.yaml
+      - tests/Headless.java
+    what: Headless-only JVM omits X11/desktop-window support, jmods, demos and the OCI entrypoint; font/image rendering and JIT remain.
+    why: Establish the package's minimized policy.
+    claims:
+      - minimized
+  - evidence:
+      - package.yaml
+      - tests/Headless.java
+    what: Built-in capability groups deny operations until root-held allowance files grant them; this is independent of the service form.
+    why: Establish the package's pledge policy.
+    claims:
+      - pledge
+drop-when: Wolfi ships equivalent policy and installed-package probes verify it; review before retiring this overlay.

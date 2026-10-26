@@ -1,7 +1,0 @@
-actions:
-  probe:
-    curl:
-      binary: curl
-      psl: true
-      cookies: true
-      netrc-disabled: true

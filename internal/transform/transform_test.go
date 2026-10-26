@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
+	"github.com/werewolf-linux/packages/internal/probe"
 	"os"
 	"path/filepath"
 	"strings"
@@ -126,14 +127,10 @@ func TestWheelMetadataAndRecordStayConsistent(t *testing.T) {
 	}
 }
 
-func TestPlansRejectUnknownOrAmbiguousActions(t *testing.T) {
-	for _, text := range []string{"actions:\n  x:\n    typo: true\n", "actions:\n  x:\n    curl: {binary: curl}\n    files: [{path: x}]\n", "actions: {x: {}}\n", "actions: {x: {files: [{path: x}]}}\n---\nextra: true\n"} {
-		path := filepath.Join(t.TempDir(), "plan.yaml")
-		if err := os.WriteFile(path, []byte(text), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := Read(path); err == nil {
-			t.Errorf("accepted invalid plan: %s", text)
+func TestPlansRejectAmbiguousActions(t *testing.T) {
+	for _, plan := range []Plan{{}, {Actions: map[string]Action{"empty": {}}}, {Actions: map[string]Action{"mixed": {Files: []File{{Path: "x"}}, Requirements: &Requirements{}, Curl: &probe.CurlOptions{}}}}} {
+		if err := plan.Validate(); err == nil {
+			t.Fatal("accepted empty or ambiguous action")
 		}
 	}
 }

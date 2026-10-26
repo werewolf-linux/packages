@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: WordPress/sqlite-database-integration
+    strip-prefix: v
+melange:
+  package:
+    name: wordpress-sqlite-integration
+    version: 3.1.1
+    epoch: 3
+    description: WordPress SQLite database integration and drop-in
+    copyright:
+      - license: GPL-2.0-or-later
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
+        - unzip
+  pipeline:
+    - uses: fetch
+      with:
+        uri: https://github.com/WordPress/sqlite-database-integration/releases/download/v${{package.version}}/plugin-sqlite-database-integration.zip
+        expected-sha256: a00baefefe852a0abd83f66cc04a4a91be3c1bd9d4b5adde62e7a72c7ba453a5
+        extract: false
+    - runs: |
+        unzip -q plugin-sqlite-database-integration.zip
+        content=${{targets.destdir}}/usr/src/wordpress/wp-content
+        plugin=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration
+        mkdir -p "$content/plugins/sqlite-database-integration"
+        cp -a plugin-sqlite-database-integration/. "$content/plugins/sqlite-database-integration/"
+        sed -e "s|{SQLITE_IMPLEMENTATION_FOLDER_PATH}|$plugin|g" \
+            -e 's|{SQLITE_PLUGIN}|sqlite-database-integration/load.php|g' \
+            plugin-sqlite-database-integration/db.copy >"$content/db.php"
+  test:
+    environment:
+      contents:
+        packages:
+          - php-8.4
+          - php-8.4-pdo
+          - php-8.4-pdo_sqlite
+    pipeline:
+      - name: Installed package consumers
+        runs: |
+          php=$(command -v php)
+          plugin=/usr/src/wordpress/wp-content/plugins/sqlite-database-integration
+          "$php" -l /usr/src/wordpress/wp-content/db.php
+          find "$plugin" -name '*.php' -print0 | xargs -0 -n 1 "$php" -l
+          test -s "$plugin/wp-includes/sqlite/db.php"
+          grep -F '${{package.version}}' "$plugin/load.php"
+          ! grep -E '\{SQLITE_(PLUGIN|IMPLEMENTATION_FOLDER_PATH)\}' /usr/src/wordpress/wp-content/db.php
+          "$php" -r '$db=new PDO("sqlite::memory:"); if ($db->query("select 42")->fetchColumn()!=42) exit(1);'
+changes:
+  - what: Package the official SQLite integration release and generate the database drop-in from its matching template.
+    why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
+    evidence:
+      - package.yaml
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true

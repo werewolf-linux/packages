@@ -1,7 +1,9 @@
-package overlay
+package overlay_test
 
 import (
 	"encoding/json"
+	"github.com/werewolf-linux/packages/internal/catalog"
+	. "github.com/werewolf-linux/packages/internal/overlay"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,7 +20,7 @@ func TestDerivationParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths, err := filepath.Glob(filepath.Join(root, "*", "*", "overlay.yaml"))
+	paths, err := filepath.Glob(filepath.Join(root, "*", "*", "package.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +30,14 @@ func TestDerivationParity(t *testing.T) {
 	for _, path := range paths {
 		t.Run(filepath.Base(filepath.Dir(path)), func(t *testing.T) {
 			name := filepath.Base(filepath.Dir(path))
-			spec, err := Read(path)
+			definition, err := catalog.Read(path)
+			if err == nil && definition.Wolfi == nil {
+				return
+			}
+			var spec *Spec
+			if err == nil {
+				spec = &definition.Wolfi.Spec
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -53,7 +62,7 @@ func TestDerivationParity(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := Clone(baseline)
-			vars, err := Variables(baseline, lock, 55, filepath.Join(root, "wolfi", "pipelines"))
+			vars, err := Variables(baseline, lock, 55, filepath.Join(root, "pipelines"))
 			if err != nil {
 				t.Fatal(err)
 			}

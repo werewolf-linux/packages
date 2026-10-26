@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  version-pattern: ^([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)$
+  version-replace: ${1}.${2}
+  github:
+    identifier: ImageMagick/ImageMagick
+wolfi:
+  # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
+  title: ImageMagick
+  sources:
+    - https://github.com/ImageMagick/ImageMagick.git
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          expected-commit: ${lock.source_commit}
+          repository: https://github.com/ImageMagick/ImageMagick.git
+          tag: ${{vars.mangled-package-version}}
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=autoconf/configure
+        - uses=autoconf/make
+        - uses=upstream-tests/make-check
+        - uses=autoconf/make-install
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=${{package.name}}-doc
+        - name=${{package.name}}-static
+        - name=${{package.name}}-dev
+  edits:
+    - path: [environment, contents, packages]
+      remove:
+        - fftw-dev
+        - libx11-dev
+        - libxext-dev
+        - pango-dev
+        - perl-dev
+    - path: [pipeline, uses=autoconf/configure, with]
+      absent: true
+      set:
+        opts: --without-x --without-fftw --without-pango --without-perl --without-gvc --without-dps
+    - path: [test, pipeline]
+      append:
+        - name: Server-side document and image consumers
+          needs:
+            packages:
+              - ghostscript
+              - ttf-dejavu
+          runs: ${file:tests/probe.sh}
+  revision: 5
+  recipe: imagemagick-7
+changes:
+  - what: Omit X11, Pango, FFTW, Graphviz, Display PostScript and Perl support; retain common image formats, HEIC, PDF rasterization and font rendering.
+    why: Document services do not need desktop display or FFT transforms.
+    evidence:
+      - package.yaml
+      - tests/probe.sh
+    claims:
+      - minimized
+drop-when: Wolfi ships equivalent reductions and consumer tests pass.

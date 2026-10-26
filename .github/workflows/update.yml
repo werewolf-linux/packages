@@ -47,7 +47,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PACKAGE: ${{ inputs.package }}
         run: |
-          PATH="$PWD/build/tools:$PATH" go run ./cmd/package-update --write --package "$PACKAGE" --report build/updates.json
+          PATH="$PWD/build/tools:$PATH" build/tools/package updates --engine upstream --write --package "$PACKAGE" --report build/updates.json
       - name: Commit successful updates and use the regular publisher
         if: always() && steps.update.outcome != 'skipped'
         env:

@@ -5,7 +5,7 @@ Wolfi's newest stable Node.js recipe with runtime restrictions; currently `nodej
 ## Use and allowances
 
 Werewolf: use the `node` form or add `nodejs-hardened` to `packages`; that alias
-requires our build and follows its newest stream. Wolfi, after [feed setup](../../wolfi/docs/usage.md#install):
+requires our build and follows its newest stream. Wolfi, after [feed setup](../../docs/usage.md#install):
 
 ```sh
 apk add nodejs-hardened@hardened
@@ -15,7 +15,7 @@ Run `node /usr/lib/app/main.js` as a non-root user, with application code and
 `node_modules` mounted read-only. Werewolf's Node form grants top-level `jit` for V8.
 Add `allow: [node:native]` to the existing Werewolf service for native addons, or
 create `/etc/runtime-hardening/allow/SERVICE/node/native` on Wolfi. Substitute any
-supported group below; see [grant scope and restart instructions](../../wolfi/docs/usage.md#grant-an-allowance).
+supported group below; see [grant scope and restart instructions](../../docs/usage.md#grant-an-allowance).
 
 ## Patches
 
@@ -45,7 +45,7 @@ Flags, permission audit mode, worker options and JS settings cannot grant allowa
 
 ## Debug
 
-Read [stderr denial records](../../wolfi/docs/usage.md#debug-a-refusal), then match the failure:
+Read [stderr denial records](../../docs/usage.md#debug-a-refusal), then match the failure:
 
 | Symptom | Fix |
 |---|---|
@@ -79,7 +79,7 @@ Omit minimal/minimal-compat, shared libnode, OCI-entrypoint and documentation su
 Epoch is `1000 × policy revision + Wolfi epoch`; `wolfi-origin` preserves CVE matching.
 [Probes](tests/probe.sh) check APIs, workers, grants and real/effective UID mismatches.
 Build guests grant groups privately; APKs contain no hardening exception files.
-[Build instructions](../../wolfi/README.md#building-locally); patches: MIT.
+[Build instructions](../../docs/wolfi.md#building-locally); patches: MIT.
 
 The separate `node:ffi` API is omitted. Native addons remain gated by the native
 allowance; built-in SQLite and TypeScript are retained for common consumers.

@@ -29,7 +29,7 @@ func TestSignedVendorInputs(t *testing.T) {
 		change     func([]byte) []byte
 	}{
 		{"changed index", "Packages.arm64", func(data []byte) []byte { return append(data, []byte("Package: attacker\n")...) }},
-		{"changed recipe pin", "plex.yaml", func(data []byte) []byte {
+		{"changed recipe pin", "package.yaml", func(data []byte) []byte {
 			return []byte(strings.Replace(string(data), sources.Architectures["aarch64"].Codecs[0].SHA256, strings.Repeat("0", 64), 1))
 		}},
 		{"changed vendor pin", "sources.json", func(data []byte) []byte {
@@ -38,7 +38,7 @@ func TestSignedVendorInputs(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			directory := t.TempDir()
-			for _, name := range []string{"sources.json", "PlexSign.v2.key", "InRelease", "Packages.arm64", "Packages.amd64", "plex.yaml"} {
+			for _, name := range []string{"sources.json", "PlexSign.v2.key", "InRelease", "Packages.arm64", "Packages.amd64", "package.yaml"} {
 				data, err := os.ReadFile(filepath.Join(root, name))
 				if err != nil {
 					t.Fatal(err)

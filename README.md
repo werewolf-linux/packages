@@ -1,9 +1,9 @@
 # Werewolf packages
 
 Applications, libraries and hardened runtimes in one categorized ports tree.
-Each `CATEGORY/NAME/` is a complete build context. Names are unique across
-categories and remain stable when directories move. APK names remain compatible
-with Wolfi where we replace its packages; Caddy is `caddy`.
+Every `CATEGORY/NAME/` is a complete build context with one maintained
+[`package.yaml`](docs/package.md). It contains a native Melange recipe or guarded
+Wolfi derivation, one automatic update policy, tests and maintenance evidence.
 
 ```text
 devel/glibc/       lang/python/      net/curl/
@@ -12,73 +12,53 @@ devel/libffi/      lang/php/         www/caddy/
                   lang/openjdk/     multimedia/plex/
 ```
 
-## Maintain a package
-
-Every context has one [metadata.json](docs/metadata.md) describing its automatic
-update source, hardening evidence and divergence from Wolfi. CI rejects missing
-sources, unsupported handlers, unexplained divergences and invalid evidence.
-Applications track upstream releases; Wolfi overlays capture its exact recipes
-and independently advance to the latest upstream stable release with checked
-source and hardening changes. PostgreSQL follows the latest stable major through
-one unversioned context and package set. Deliberately vulnerable demonstrations retain
-real source metadata and an explicit update hold.
+Names are globally unique and stable across category moves. APK names remain
+compatible with Wolfi where we replace its packages. All commands run from the
+repository root; shared mechanics live in `internal/`, `pipelines/` and `tools/`.
 
 ```sh
-go run ./cmd/package catalog list
-go run ./cmd/package catalog show caddy
-make metadata                     # offline maintenance assertions
-make test check                   # tests and Melange recipe validation
-make PACKAGE=caddy updates        # discover an upstream release
-make PACKAGE=php updates          # capture a Wolfi snapshot
-make PACKAGE=caddy build          # build through ../werewolf
-make PACKAGE=php build            # build the Wolfi derivation
+make tools
+build/tools/package catalog list
+build/tools/package new --repo OWNER/PROJECT www/example
+build/tools/package check --package caddy
+build/tools/package render --package caddy
+build/tools/package updates --package caddy
+build/tools/package updates --package caddy --write
+build/tools/package discover --package python
+make PACKAGE=python build
+make test lint check
 ```
 
-Go 1.27+, git, pinned Melange and package-specific test tools are required.
-Plex provenance checks also require GnuPG (`gpg`). Install the pinned builder with:
+[Package definitions and maintenance](docs/package.md) is the format and workflow
+reference, including defaults, helper actions, guarded edits, generated paths and
+CI planning. [Application packaging](docs/applications.md) covers dependency locks
+and service consumers. [Wolfi packages](docs/wolfi.md) covers runtime policy,
+publication and native/guest build requirements. [Feed usage](docs/usage.md) covers
+installation, capability grants and denial logs.
 
-```sh
-go run ./cmd/package install-melange
-make test lint metadata check
-```
+Tooling requires Go 1.27+, git, pinned Melange and package-specific test tools.
+Install the builder with `build/tools/package install-melange`. Native builds use
+Linux bubblewrap; supported Wolfi builds can use QEMU guests. Local application
+builds may use a sibling Werewolf checkout by setting `WEREWOLF=/path/to/werewolf`.
+Plex provenance checks also require GnuPG.
 
-Local application builds also need the sibling Werewolf checkout.
-[Application packaging](docs/applications.md) covers dependency locks and native
-smoke tests. [Wolfi builds](wolfi/README.md) covers capture, derivation, patching,
-installed-package probes and local build tools.
+Both engines build x86_64 and aarch64 independently. CI discovers packages from
+their definitions and builds changed contexts without a maintained package list.
+Scheduled discovery checks all upstream sources. Captured Wolfi inputs are shared
+by both architecture jobs. Failed packages retain their previous publication and
+do not prevent other packages from publishing.
 
-Tooling is Go with one YAML dependency. Package changes live in
-[YAML overlays](docs/overlays.md) and `packaging/changes.yaml`; the shared Go
-helper applies them inside build guests. Python files remain only where they
-launch a Python application or exercise its interpreter and APIs.
+The application feed is `https://dist.werewolf-linux.org/apk/packages`; hardened
+Wolfi derivations use `https://dist.werewolf-linux.org/apk/hardened`. Both retain the
+trust root in `release/packages.pub`. Signing credentials stay in the `release`
+environment; application builders receive no signing credentials. Signed Wolfi
+packages retain their installed-test and recovery gates.
 
-## Publication
+All generated work lives under ignored `build/`. `package paths` reports exact
+locations. Dependency manifests and locks keep their native ecosystem formats;
+JSON reports are machine output, while maintained package definitions are YAML.
 
-Both engines build and validate x86_64 and aarch64 independently for each context.
-Failed contexts retain their previous publication and do not stop other packages.
-The application feed remains `https://dist.werewolf-linux.org/apk/packages`; Wolfi
-overlays use `https://dist.werewolf-linux.org/apk/hardened`. Both use the trust root
-in `release/packages.pub`. Signing credentials stay in the `release` environment.
-Application builders receive no signing credentials. Wolfi package tests require
-signed artifacts and retain their existing signing gates.
-
-Hourly `update.yml` updates application source pins and dispatches `publish.yml`.
-Every ten minutes `wolfi-refresh.yml` captures Wolfi changes and builds unpublished
-inputs through `wolfi-build.yml`. Pull requests run metadata checks, both engines'
-unit tests, recipe validation and Wolfi patch discovery. A directory move does
-not change a package's public release identity.
-
-## Layout and licensing
-
-Top-level categories describe what software does. Update origin and hardening
-status are metadata, so adding hardening never requires moving a package.
-`cmd/package` exposes maintenance commands; `internal/` holds the shared engines.
-`cmd/package-helper` runs YAML actions and probes inside build guests. `scripts/`
-and `wolfi/` retain runner helpers and Wolfi configuration. Tool pins and the signing trust root each
-have one maintained copy. Build outputs stay under ignored `build/` directories.
-
-The application recipes and original tools retain [Apache-2.0](LICENSE).
-Imported Wolfi engine tooling retains [GPL-3.0](wolfi/LICENSE); patches retain the
-licenses of the code they modify, recorded under `wolfi/LICENSES`. Packaged
-upstream code retains its declared license. [Import provenance](wolfi/IMPORT.json)
-records the source repository and commit.
+Original application recipes and tools retain [Apache-2.0](LICENSE). Imported
+Wolfi engine tooling retains [GPL-3.0](LICENSES/wolfi/LICENSE); patches retain their
+upstream licenses. [Import provenance](LICENSES/wolfi/IMPORT.json) and associated
+license notices remain under `LICENSES/wolfi/`.

@@ -1,0 +1,141 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: open-webui/open-webui
+    strip-prefix: v
+melange:
+  # Open WebUI for werewolf's open-webui form, in its slim build: upstream's
+  # own variant for a machine whose models are served elsewhere (here, by
+  # Ollama), its vectors kept in PostgreSQL with pgvector, without torch,
+  # local speech or document models. Retains S3 storage. Built by
+  # melange in Wolfi's environment, into a virtual environment on Wolfi's
+  # Python 3.12 at /usr/lib/open-webui: the Python packages upstream's slim
+  # image installs (backend/requirements-slim.txt at the tag), resolved as
+  # PyPI stood on the date below, and the release's wheel, which carries the
+  # web interface upstream builds. Wolfi's own open-webui is the full build
+  # (torch, 7 GB installed) and lags upstream; when Wolfi ships a slim one,
+  # the form names the package and this file goes.
+  package:
+    name: open-webui
+    version: 0.12.4
+    epoch: 2
+    description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
+    copyright:
+      - license: LicenseRef-Open-WebUI
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - build-base
+        - busybox
+        - ca-certificates-bundle
+        - python-3.12
+        - python-3.12-dev
+        - uv
+        - patch
+    environment:
+      UV_PYTHON_DOWNLOADS: never
+      UV_NO_CACHE: "1"
+      UV_LINK_MODE: copy
+      # A local wheel's uv_cache.json records its extraction mtime. This
+      # image never installs packages at runtime, so omit installer metadata.
+      UV_NO_INSTALLER_METADATA: "1"
+  pipeline:
+    - uses: fetch
+      with:
+        uri: https://raw.githubusercontent.com/open-webui/open-webui/v${{package.version}}/backend/requirements-slim.txt
+        expected-sha256: 3ad80df945b175a8a96968ab3433c6d79d04c3580809ea0d2a8c4325d32648dd
+        extract: false
+    - uses: fetch
+      with:
+        uri: https://files.pythonhosted.org/packages/py3/o/open-webui/open_webui-${{package.version}}-py3-none-any.whl
+        expected-sha256: 02e9caba96234db3fa17a92e56163b3f7f2b8ca8227fa886b85c178d696483f6
+        extract: false
+    # Built where it runs, since a virtual environment records its path.
+    # The requirements as upstream pins them, and what they pull in as PyPI
+    # stood on --exclude-newer, so a rebuild resolves the same; then the
+    # release itself, which needs nothing the slim list lacks: importing the
+    # whole application, as the slim build, proves it. Bytecode is compiled
+    # here: the machine's image is read-only.
+    - runs: |
+        werewolf-tools/package-helper --action requirements
+        uv venv --python /usr/bin/python3.12 /usr/lib/open-webui
+        export VIRTUAL_ENV=/usr/lib/open-webui
+        uv pip install --exclude-newer 2026-10-25T11:09:14Z \
+          -r requirements-slim.txt
+        uv pip install --no-deps \
+          open_webui-${{package.version}}-py3-none-any.whl
+        # LangSmith supports uncompressed traces; its declared zstandard dependency
+        # is optional in code and not needed by document splitting.
+        uv pip uninstall zstandard
+        werewolf-tools/package-helper --action metadata --root /usr/lib/open-webui/lib/python3.12/site-packages
+        patch --batch --fuzz=0 -p1 -d /usr/lib/open-webui/lib/python3.12/site-packages < optional-features.patch
+        d=$(mktemp -d)
+        DATA_DIR=$d STATIC_DIR=$d/static USE_SLIM_DOCKER=true WEBUI_SECRET_KEY=build \
+          PYTHONDONTWRITEBYTECODE=1 FROM_INIT_PY=true \
+          /usr/lib/open-webui/bin/python consumers.py
+        rm -rf "$d"
+    # uv's parallel workers compile files in an unpredictable order, which
+    # changes CPython's interned constants and the marshalled bytecode.
+    # compileall sorts its walk; one worker and hash invalidation make the
+    # installed bytecode independent of worker scheduling and source mtimes.
+    - runs: |
+        PYTHONHASHSEED=0 /usr/lib/open-webui/bin/python -m compileall \
+          -q -f -j 1 --invalidation-mode checked-hash /usr/lib/open-webui
+    - runs: |
+        cd /usr/lib/open-webui
+        rm -f bin/activate* bin/deactivate* .gitignore .lock
+        mkdir -p ${{targets.destdir}}/usr/lib
+        cp -a /usr/lib/open-webui ${{targets.destdir}}/usr/lib/open-webui
+changes:
+  - what: 'Open WebUI for werewolf''s open-webui form, in its slim build: upstream''s own variant for a machine whose models are served elsewhere (here, by Ollama), its vectors kept in PostgreSQL with pgvector, without torch, local speech or document models, or any cloud storage SDK. Built by melange in Wolfi''s environment, into a virtual environment on Wolfi''s Python 3.12 at /usr/lib/open-webui: the Python packages upstream''s slim image installs (backend/requirements-slim.txt at the tag), resolved as PyPI stood on the date below, and the release''s wheel, which carries the web interface upstream builds. Wolfi''s own open-webui is the full build (torch, 7 GB installed) and lags upstream; when Wolfi ships a slim one, the form names the package and this file goes.'
+    why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
+    evidence:
+      - package.yaml
+  - what: Remove Brotli, LDAP, Azure SDKs, OpenTelemetry exporters and c-ares DNS from the slim profile. Retain local and S3 storage, external model APIs, gzip and HTTP/2.
+    why: Reduce optional runtime dependencies while preserving tested common consumers.
+    evidence:
+      - package.yaml
+      - optional-features.patch
+      - consumers.py
+    claims:
+      - minimized
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+actions:
+  requirements:
+    requirements:
+      input: requirements-slim.txt
+      output: requirements-slim.txt
+      omit:
+        - aiodns
+        - starlette-compress
+        - brotli
+        - ldap3
+        - azure-ai-documentintelligence
+        - azure-identity
+        - azure-search-documents
+        - googleapis-common-protos
+      omit-prefixes:
+        - opentelemetry-
+      required:
+        - aiodns
+        - starlette-compress
+        - brotli
+        - ldap3
+        - azure-ai-documentintelligence
+        - azure-identity
+        - azure-search-documents
+        - googleapis-common-protos
+      required-prefixes:
+        - opentelemetry-
+      replace:
+        - old: httpx[socks,http2,zstd,cli,brotli]==0.28.1
+          new: httpx[http2]==0.28.1
+  metadata:
+    wheels:
+      - distribution: langsmith
+        remove-requirements:
+          - zstandard

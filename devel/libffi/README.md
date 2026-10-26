@@ -9,7 +9,7 @@ links `libffi.so.8` gets it.
 
 Werewolf: nothing to add. Every image lists the hardened feed, and Python's
 `ctypes`, cffi and any other libffi user take this build. Wolfi, after
-[feed setup](../../wolfi/docs/usage.md#install):
+[feed setup](../../docs/usage.md#install):
 
 ```sh
 apk add libffi@hardened
@@ -17,7 +17,7 @@ apk add libffi@hardened
 
 A Python service that uses `ctypes` still needs the interpreter's own grant,
 `allow: [python:native]` on Werewolf, or `/etc/runtime-hardening/allow/SERVICE/python/native`
-on Wolfi ([allowances](../../wolfi/docs/usage.md#grant-an-allowance)). There is no
+on Wolfi ([allowances](../../docs/usage.md#grant-an-allowance)). There is no
 `libffi:*` grant and no libffi denial record.
 
 ## Policy

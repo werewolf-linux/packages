@@ -1,8 +1,8 @@
 GO ?= go
-WEREWOLF ?= ../werewolf
+WEREWOLF ?=
 PACKAGE ?=
 ARCH ?= $(shell uname -m | sed 's/arm64/aarch64/;s/amd64/x86_64/')
-MELANGE ?= $(firstword $(wildcard $(CURDIR)/build/tools/melange $(CURDIR)/wolfi/build/tools/melange) melange)
+MELANGE ?= $(firstword $(wildcard $(CURDIR)/build/tools/melange) melange)
 export MELANGE
 .DEFAULT_GOAL := metadata
 
@@ -12,6 +12,7 @@ select = --package '$(PACKAGE)' --arch '$(ARCH)' $(if $(WOLFI),--wolfi '$(abspat
 
 $(ports): $(sources)
 	mkdir -p $(dir $@)
+	@test -e build/go.mod || printf 'module werewolf.generated\n\ngo 1.27.0\n' > build/go.mod
 	$(GO) build -o $@ ./cmd/package
 
 .PHONY: tools metadata build check test lint updates refresh discover verify derive prepare
@@ -22,9 +23,9 @@ metadata: $(ports)
 	$(ports) catalog validate
 
 build: metadata
-	$(ports) build $(select) --werewolf '$(abspath $(WEREWOLF))'
+	$(ports) build $(select) $(if $(WEREWOLF),--werewolf '$(abspath $(WEREWOLF))')
 
-check updates refresh discover verify derive: metadata
+check updates refresh discover verify derive render: metadata
 	$(ports) $@ $(select)
 
 prepare: metadata
@@ -34,6 +35,7 @@ test:
 	$(GO) test ./...
 
 lint:
-	@files="$$(git ls-files -z --cached --others --exclude-standard '*.go' | xargs -0 gofmt -l)"; if [ -n "$$files" ]; then printf '%s\n' "Run gofmt on:" "$$files"; exit 1; fi
+	$(GO) run ./cmd/package schema --dest docs/package.schema.json --offline
 	$(GO) vet ./...
-	@git ls-files -z --cached --others --exclude-standard '*.go' | xargs -0 awk 'FNR > 2000 { print FILENAME ": exceeds 2000 lines"; exit 1 }'
+	@git ls-files -z --cached --others --exclude-standard --deduplicate '*.go' | xargs -0 -I{} sh -c 'test ! -f "$$1" || gofmt -l "$$1"' sh '{}' | awk '{ print "Run gofmt on: " $$0; bad=1 } END { exit bad }'
+	@git ls-files -z --cached --others --exclude-standard --deduplicate '*.go' | xargs -0 -I{} sh -c 'test ! -f "$$1" || awk '"'"'FNR > 2000 { print FILENAME ": exceeds 2000 lines"; exit 1 }'"'"' "$$1"' sh '{}'

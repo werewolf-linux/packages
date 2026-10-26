@@ -49,7 +49,7 @@ func TestRefreshDispatchPreservesLiteralPackageSelector(t *testing.T) {
 			}
 			output := filepath.Join(root, "args")
 			command := exec.CommandContext(t.Context(), "bash", "-eu", "-c", discovery.Run)
-			command.Dir = filepath.Join(root, "wolfi")
+			command.Dir = root
 			command.Env = append(os.Environ(), "PACKAGE="+selector, "RECORDED_ARGS="+output)
 			if data, err := command.CombinedOutput(); err != nil {
 				t.Fatalf("discovery command: %v: %s", err, data)

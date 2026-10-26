@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,10 +17,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/werewolf-linux/packages/internal/catalog"
 	"github.com/werewolf-linux/packages/internal/packaging"
 	"github.com/werewolf-linux/packages/internal/plex"
 	"github.com/werewolf-linux/packages/internal/probe"
+	"github.com/werewolf-linux/packages/internal/smoke"
 	"github.com/werewolf-linux/packages/internal/update"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -39,7 +43,7 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: package COMMAND [flags]\ncommands: catalog, check, plan, updates, refresh, discover, derive, verify, prepare, build, fixture, install-melange, setup-runner, signing-key, provenance, stage, publish, feed, status, recover, probe")
+		return errors.New("usage: package COMMAND [flags]\ncommands: new, schema, render, paths, test, catalog, check, plan, release-plan, updates, refresh, discover, derive, verify, prepare, build, fixture, install-melange, setup-runner, signing-key, provenance, stage, publish, feed, status, recover, probe")
 	}
 	command := args[0]
 	if command == "probe" {
@@ -49,6 +53,12 @@ func run(ctx context.Context, args []string) error {
 		return packaging.RunnerProbe(ctx)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	base := flags.String("base", "", "base commit for changed-package CI selection")
+	head := flags.String("head", "", "head commit; empty includes working tree changes")
+	repo := flags.String("repo", "", "release repository OWNER/PROJECT for a new package")
+	fromWolfi := flags.String("from-wolfi", "", "reviewed local Wolfi recipe for a new package")
+	report := flags.String("report", "", "save the machine-readable report")
+	runner := flags.String("runner", "", "Melange test runner")
 	root := flags.String("root", ".", "repository root")
 	selected := flags.String("package", "", "one package; empty selects all applicable packages")
 	engine := flags.String("engine", "", "filter catalog entries by upstream or wolfi")
@@ -89,10 +99,37 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if filepath.Base(absolute) == "wolfi" {
-		absolute = filepath.Dir(absolute)
-	}
 	switch command {
+	case "schema":
+		data, err := catalog.Schema()
+		if err != nil {
+			return err
+		}
+		data = append(data, '\n')
+		if *destination != "" {
+			if *offline {
+				previous, err := os.ReadFile(*destination)
+				if err != nil {
+					return err
+				}
+				if !bytes.Equal(previous, data) {
+					return errors.New("schema is stale; run package schema --dest docs/package.schema.json")
+				}
+				return nil
+			}
+			return os.WriteFile(*destination, data, 0644)
+		}
+		_, err = os.Stdout.Write(data)
+		return err
+	case "new":
+		if flags.NArg() != 1 {
+			return errors.New("new needs CATEGORY/NAME and --repo OWNER/PROJECT")
+		}
+		path, err := catalog.New(absolute, flags.Arg(0), *repo, *fromWolfi)
+		if err == nil {
+			fmt.Println(path)
+		}
+		return err
 	case "plex-update":
 		return plex.Refresh(ctx, absolute, *expectedVersion)
 	case "plex-verify":
@@ -107,9 +144,6 @@ func run(ctx context.Context, args []string) error {
 		return packaging.SetupRunner(ctx, absolute)
 	case "signing-key":
 		directory := absolute
-		if *engine == "wolfi" {
-			directory = filepath.Join(absolute, "wolfi")
-		}
 		path, err := packaging.SigningKey(directory, *production)
 		if err != nil {
 			return err
@@ -162,7 +196,19 @@ func run(ctx context.Context, args []string) error {
 						fmt.Println(pkg.Path)
 						return nil
 					}
-					return json.NewEncoder(os.Stdout).Encode(pkg.Package)
+					data, err := os.ReadFile(filepath.Join(pkg.Directory, "package.yaml"))
+					if err != nil {
+						return err
+					}
+					if *jsonOutput {
+						var value map[string]any
+						if err := yaml.Unmarshal(data, &value); err != nil {
+							return err
+						}
+						return json.NewEncoder(os.Stdout).Encode(value)
+					}
+					_, err = os.Stdout.Write(data)
+					return err
 				}
 			}
 			return fmt.Errorf("unknown package: %s", flags.Arg(1))
@@ -171,7 +217,69 @@ func run(ctx context.Context, args []string) error {
 		}
 		return nil
 	}
+	if command == "paths" {
+		if *selected == "" {
+			return errors.New("paths requires --package")
+		}
+		paths := packaging.Paths(chosen[0], *arch)
+		if *github {
+			values := map[string]any{}
+			for k, v := range paths {
+				values[k] = v
+			}
+			if err := packaging.ActionsOutput(values); err != nil {
+				return err
+			}
+		}
+		return json.NewEncoder(os.Stdout).Encode(paths)
+	}
+	if command == "render" {
+		if *selected == "" {
+			return errors.New("render requires --package")
+		}
+		data, err := packaging.Render(chosen[0])
+		if err != nil {
+			return err
+		}
+		if *destination != "" {
+			return os.WriteFile(*destination, data, 0644)
+		}
+		_, err = os.Stdout.Write(data)
+		return err
+	}
+	if command == "test" {
+		if *selected == "" {
+			return errors.New("test requires --package")
+		}
+		if chosen[0].Engine == "wolfi" {
+			return packaging.BuildWolfi(ctx, chosen[0], *arch, true)
+		}
+		old, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		if err := os.Chdir(absolute); err != nil {
+			return err
+		}
+		defer os.Chdir(old)
+		return smoke.Check(ctx, *selected, *arch, *runner)
+	}
 	if command == "plan" {
+		result, err := packaging.PlanCI(ctx, chosen, *base, *head)
+		if err != nil {
+			return err
+		}
+		if err := packaging.SaveReport(*report, result); err != nil {
+			return err
+		}
+		if *github {
+			if err := packaging.ActionsOutput(map[string]any{"matrix": map[string]any{"include": result.Include}, "packages": result.Packages, "wolfi": result.Wolfi, "has_build": len(result.Include) > 0}); err != nil {
+				return err
+			}
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
+	if command == "release-plan" {
 		result, err := packaging.Plan(ctx, chosen, *offline)
 		if writeErr := json.NewEncoder(os.Stdout).Encode(result); writeErr != nil {
 			return writeErr
@@ -193,6 +301,11 @@ func run(ctx context.Context, args []string) error {
 		}
 		owners := map[string]string{}
 		for _, pkg := range chosen {
+			if pkg.Engine == "wolfi" {
+				if err := packaging.CheckFixtures(pkg); err != nil {
+					return err
+				}
+			}
 			if pkg.Engine == "upstream" {
 				meta, err := packaging.Metadata(ctx, pkg)
 				if err != nil {
@@ -214,16 +327,6 @@ func run(ctx context.Context, args []string) error {
 			needsCheckout = needsCheckout || pkg.Engine == "wolfi"
 		}
 	}
-	if slices.Contains([]string{"build", "verify", "derive", "prepare"}, command) && !*testOnly {
-		for _, pkg := range chosen {
-			if pkg.Engine != "wolfi" {
-				continue
-			}
-			if _, err := os.Stat(filepath.Join(pkg.Build, "inputs/upstream.lock.json")); os.IsNotExist(err) {
-				needsCheckout = true
-			}
-		}
-	}
 	if needsCheckout && *wolfi == "" {
 		directory, err := os.MkdirTemp("", "packages-wolfi-")
 		if err != nil {
@@ -242,6 +345,16 @@ func run(ctx context.Context, args []string) error {
 		}
 		return err
 	}
+	if command == "updates" {
+		results, updateErr := packaging.Updates(ctx, chosen, *wolfi, *write)
+		if err := packaging.SaveReport(*report, results); err != nil {
+			return err
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
+			return err
+		}
+		return updateErr
+	}
 	var failed []error
 	for _, pkg := range chosen {
 		var err error
@@ -251,30 +364,9 @@ func run(ctx context.Context, args []string) error {
 			}
 			continue
 		}
-		if pkg.Engine == "wolfi" && slices.Contains([]string{"build", "verify", "derive", "prepare"}, command) && !*testOnly {
-			if _, statErr := os.Stat(filepath.Join(pkg.Build, "inputs/upstream.lock.json")); os.IsNotExist(statErr) {
-				_, err = packaging.Capture(ctx, pkg, *wolfi)
-				if err != nil {
-					failed = append(failed, fmt.Errorf("%s: %w", pkg.Name, err))
-					continue
-				}
-			}
-		}
 		switch command {
 		case "refresh":
-			_, err = packaging.Capture(ctx, pkg, *wolfi)
-		case "updates":
-			if pkg.Engine == "wolfi" {
-				_, err = packaging.Capture(ctx, pkg, *wolfi)
-			} else {
-				result := update.NewClient(os.Getenv("GH_TOKEN")).Update(ctx, absolute, pkg.Name, pkg.Update, *write, update.RunCommand)
-				if result.Status == "failed" {
-					err = errors.New(result.Error)
-				}
-				if writeErr := json.NewEncoder(os.Stdout).Encode(result); writeErr != nil {
-					return writeErr
-				}
-			}
+			_, err = packaging.Capture(ctx, &pkg, *wolfi)
 		case "derive", "verify":
 			_, err = packaging.Derive(pkg)
 		case "prepare":
@@ -309,7 +401,7 @@ func run(ctx context.Context, args []string) error {
 			if err == nil {
 				directory := *destination
 				if directory == "" {
-					directory = filepath.Join(absolute, "build/artifacts", pkg.Name, *arch)
+					directory = packaging.Paths(pkg, *arch)["artifacts"]
 				}
 				_, err = packaging.ValidateApplication(directory, meta, *arch, os.Getenv("GITHUB_SHA"), os.Getenv("GITHUB_RUN_ID"))
 			}

@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  reason: Use the upstream mirror for release tags; recipe inputs come from the official musl release archive. New releases must apply the policy patch and pass the resolver probes.
+  github:
+    identifier: ifduyue/musl
+    strip-prefix: v
+    use-tag: true
+melange:
+  package:
+    name: musl-werewolf
+    version: 1.2.6
+    epoch: 3
+    description: musl with local resolver socket confinement
+    copyright:
+      - license: MIT
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - busybox
+        - gcc
+        - binutils
+        - make
+        - patch
+  pipeline:
+    - uses: fetch
+      with:
+        uri: https://musl.libc.org/releases/musl-${{package.version}}.tar.gz
+        expected-sha256: d585fd3b613c66151fc3249e8ed44f77020cb5e6c1e635a616d3f9f82460512a
+        # musl.libc.org takes 4-7 s to finish TLS and over 10 s to answer: past
+        # wget's default 5 s, which fails the handshake without a retry.
+        timeout: 60
+    - uses: patch
+      with:
+        patches: 0001-regcomp-overflow.patch
+    - uses: patch
+      with:
+        patches: 0002-local-resolver-bind.patch
+    - runs: |
+        ./configure --prefix=/usr/lib/werewolf-musl --syslibdir=/usr/lib/werewolf-musl --disable-static --disable-wrapper CFLAGS='-O2 -fstack-protector-strong' LDFLAGS='-Wl,-z,relro,-z,now,-z,noexecstack'
+        make -j$(nproc)
+        gcc -std=c99 -Wall -Wextra -Werror -nostdinc -Iarch/${{build.arch}} -Iarch/generic -Iobj/include -Iinclude -fPIE -pie -nostdlib -Wl,--dynamic-linker=/lib/libc.so lib/Scrt1.o lib/crti.o tests/resolver.c -Llib -lc -lgcc lib/crtn.o -o tests/probe
+        mkdir -p tests/root/lib tests/root/etc
+        cp lib/libc.so tests/root/lib/libc.so
+        cp tests/probe tests/root/probe
+        ./lib/libc.so tests/probe tests/root
+        install -Dm755 lib/libc.so "${{targets.destdir}}/usr/lib/werewolf-musl/libc.so"
+        install -Dm644 COPYRIGHT "${{targets.destdir}}/usr/share/licenses/musl-werewolf/COPYRIGHT"
+changes:
+  - what: An opt-in musl shared runtime with the upstream CVE-2026-107891 fix and loopback-bound UDP resolver sockets when all configured IPv4 nameservers are loopback.
+    why: Programs using musl with Werewolf’s local DNS proxy need no externally bound DNS socket. A private install path lets forms adopt this without replacing the system libc.
+    evidence:
+      - package.yaml
+      - 0001-regcomp-overflow.patch
+      - 0002-local-resolver-bind.patch
+      - tests/resolver.c
+drop-when: Upstream musl provides equivalent local resolver socket binding and a maintained runtime suitable for these forms.

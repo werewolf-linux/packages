@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: OISF/suricata
+    strip-prefix: suricata-
+    use-tag: true
+melange:
+  # Suricata for werewolf's suricata form, whole: the engine, its configuration
+  # in /etc/suricata and its bundled rules and reference files in
+  # /usr/share/suricata, but not suricatactl and suricatasc, the control
+  # socket's tools (the form turns the socket off), or suricata-update, which
+  # is Python. Wolfi withdrew suricata and suricata-update (wolfi-dev/os#76917):
+  # its last build, 8.0.4, links libhtp, whose upstream is archived, and was
+  # built with gcc -march=native, Suricata's configure default, so a builder
+  # with SVE emitted CNTB and the binary died with SIGILL on a machine without
+  # it. This one uses Suricata 8's own HTTP parser and the baseline
+  # architecture, and is named as Wolfi's, so werewolf's application feed,
+  # which a form's image prefers by name, replaces Wolfi's frozen build.
+  package:
+    name: suricata
+    version: 8.0.7
+    epoch: 4
+    description: Network IDS, IPS and security monitoring engine
+    copyright:
+      - license: GPL-2.0-only
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - build-base
+        - busybox
+        - ca-certificates-bundle
+        - cbindgen
+        - jansson-dev
+        - libcap-ng-dev
+        - libpcap-dev
+        - linux-headers
+        - pcre2-dev
+        - pkgconf
+        - rust-1.94
+        - yaml-dev
+        - zlib-dev
+  pipeline:
+    - uses: fetch
+      with:
+        uri: https://www.openinfosecfoundation.org/download/suricata-${{package.version}}.tar.gz
+        expected-sha256: a9d46a9c8f40e81f8a6df3ecc2c5a9a8e8da985876299108d92da547c013ba8c
+    # The release tarball vendors the Rust crates, so the build fetches
+    # nothing. Baseline CPU targets keep host-only instructions out.
+    # nfqueue, eBPF and Python stay off: this form uses AF_PACKET.
+    - runs: |
+        case ${{build.arch}} in
+          aarch64) march=armv8-a; cpu=generic ;;
+          x86_64) march=x86-64; cpu=x86-64 ;;
+          *) exit 1 ;;
+        esac
+        # Added to the toolchain's flags (its hardening and branch protection),
+        # not in place of them.
+        export CFLAGS="${CFLAGS:--O2} -march=$march"
+        export CXXFLAGS="${CXXFLAGS:--O2} -march=$march"
+        export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-cpu=$cpu"
+        ./configure \
+          --prefix=/usr \
+          --sysconfdir=/etc \
+          --localstatedir=/var \
+          --disable-gccmarch-native \
+          --disable-python \
+          --disable-suricata-update \
+          --disable-libmagic
+        make -j"$(nproc)"
+        make install install-conf DESTDIR="${{targets.destdir}}"
+        # A library for embedding Suricata, which nothing here does, the control
+        # socket's tools, and the log and run directories install-conf makes:
+        # the form writes /data.
+        rm -rf "${{targets.destdir}}/usr/include" "${{targets.destdir}}"/usr/lib/*.a \
+          "${{targets.destdir}}/usr/bin/libsuricata-config" "${{targets.destdir}}/var" \
+          "${{targets.destdir}}"/usr/bin/suricatactl "${{targets.destdir}}"/usr/bin/suricatasc \
+          "${{targets.destdir}}"/usr/share/man/man1/suricatactl* "${{targets.destdir}}"/usr/share/man/man1/suricatasc*
+        test -x "${{targets.destdir}}/usr/bin/suricata"
+        test -f "${{targets.destdir}}/usr/share/suricata/classification.config"
+        test -f "${{targets.destdir}}/etc/suricata/suricata.yaml"
+    - uses: strip
+  test:
+    pipeline:
+      - name: Installed package consumers
+        runs: |-
+          suricata -V | grep -F '${{package.version}}'
+          suricata --build-info
+          test -f /etc/suricata/suricata.yaml
+          test -f /usr/share/suricata/classification.config
+          test -f /usr/share/suricata/reference.config
+          test -f /usr/share/suricata/rules/decoder-events.rules
+changes:
+  - what: 'Suricata for werewolf''s suricata form, whole: the engine, its configuration in /etc/suricata and its bundled rules and reference files in /usr/share/suricata, but not suricatactl and suricatasc, the control socket''s tools (the form turns the socket off), or suricata-update, which is Python. Wolfi withdrew suricata and suricata-update (wolfi-dev/os#76917): its last build, 8.0.4, links libhtp, whose upstream is archived, and was built with gcc -march=native, Suricata''s configure default, so a builder with SVE emitted CNTB and the binary died with SIGILL on a machine without it. This one uses Suricata 8''s own HTTP parser and the baseline architecture, and is named as Wolfi''s, so werewolf''s application feed, which a form''s image prefers by name, replaces Wolfi''s frozen build.'
+    why: Continue native builds after Wolfi withdrew maintenance; keep runtime dependencies separately updatable.
+    evidence:
+      - package.yaml
+replaces:
+  - suricata.yaml
+drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true

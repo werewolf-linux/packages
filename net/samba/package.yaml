@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=../../docs/package.schema.json
+update:
+  github:
+    identifier: samba-team/samba
+    strip-prefix: samba-
+    use-tag: true
+wolfi:
+  # Checked changes to the captured Wolfi recipe (internal/overlay).
+  title: Samba
+  sources:
+    - https://github.com/samba-team/samba.git
+    - https://git.samba.org/samba.git
+  description-suffix: ' (Werewolf: no PAM)'
+  upstream-patches:
+    tinfo.patch:
+      sha256: f8d028dafd2106d30391c59e9cc264bb0e1774eee5ecc8ddf584816c0c860269
+      source: upstream-patches/tinfo.patch
+  checks:
+    - path: [pipeline, uses=git-checkout]
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/samba-team/samba
+          tag: samba-${{package.version}}
+          expected-commit: ${lock.source_commit}
+    - path: [pipeline]
+      shape:
+        - uses=git-checkout
+        - uses=patch
+        - uses=autoconf/configure
+        - uses=autoconf/make
+        - uses=autoconf/make-install
+        - runs
+        - uses=strip
+    - path: [subpackages]
+      shape:
+        - name=samba-common
+        - name=samba-dev
+        - name=samba-libs-py3
+        - name=samba-common-tools
+        - name=samba-common-server-libs
+        - name=libsmbclient
+        - name=samba-client
+        - name=samba-server-libs
+        - name=winbind
+        - name=samba-util-libs
+        - name=libwbclient
+        - name=samba-winbind-clients
+        - name=samba-libnss-winbind
+        - name=samba-winbind-krb5-locator
+        - name=samba-pam-winbind
+        - name=samba-server
+        - name=py${{vars.python-version}}-samba
+        - name=samba-test
+        - name=libauth-samba
+        - name=samba-libs
+  edits:
+    - path: [environment, contents, packages]
+      remove:
+        - linux-pam-dev
+    - path: [pipeline, uses=autoconf/configure, with, opts]
+      expect: |
+        --prefix=/usr \
+        --sbindir=/usr/bin \
+        --sysconfdir=/etc/${{package.name}} \
+        --with-configdir=/etc/${{package.name}} \
+        --localstatedir=/var \
+        --libexecdir=/usr/lib \
+        --enable-fhs \
+        --with-lockdir=/var/cache/${{package.name}} \
+        --with-piddir=/run/${{package.name}} \
+        --with-logfilebase=/var/log/${{package.name}} \
+        --with-pam \
+        --without-systemd \
+        --with-ads \
+        --with-shared-modules="$IDMAP_MODULES,$PDB_MODULES,$AUTH_MODULES,vfs_io_uring" \
+        --enable-cups \
+        --without-gettext \
+        --bundled-libraries=NONE,ntdb,roken,wind,hx509,asn1,heimbase,hcrypto,krb5,gssapi,heimntlm,hdb,kdc,cmocka \
+        --disable-rpath-install \
+        --without-gpgme \
+        --disable-fault-handling \
+        --private-libraries='!ldb,!samba-credentials' \
+        --without-regedit
+      replace:
+        - old: |
+            --with-pam \
+          new: |
+            --without-pam \
+    - path: [subpackages, name=samba-pam-winbind]
+      delete: true
+    - path: [test, pipeline]
+      append:
+        - name: No PAM module, and nothing Samba installs loads libpam
+          runs: |
+            cat > /tmp/samba-probe.sh <<'WEREWOLF_SAMBA_PROBE'
+            ${file:tests/probe.sh}WEREWOLF_SAMBA_PROBE
+            sh /tmp/samba-probe.sh
+  revision: 3
+  recipe: samba
+changes:
+  - what: Configure --without-pam, drop linux-pam-dev, and remove the samba-pam-winbind subpackage.
+    why: libauth-samba, which the server needs, linked libpam, bringing pam_unix and its unix_chkpwd helper into the file server's image. Werewolf's Samba authenticates users against its own password database, never through PAM.
+    evidence:
+      - package.yaml
+      - tests/probe.sh
+  - evidence:
+      - package.yaml
+      - tests/probe.sh
+    what: 'Build Samba without PAM: no pam_winbind module, and no Samba library depends on libpam.'
+    why: Establish the package's minimized policy.
+    claims:
+      - minimized
+drop-when: Wolfi ships a Samba whose server and libraries do not depend on libpam; review before retiring this overlay.

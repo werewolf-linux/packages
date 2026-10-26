@@ -6,7 +6,7 @@ Wolfi's newest glibc with fixed restrictions on environment configuration and dy
 
 Requires Linux **6.18 or later**, including the host kernel for containers.
 Werewolf's minimal form installs `glibc-neutered`. On Wolfi, use the same alias
-after [feed setup](../../wolfi/docs/usage.md#install):
+after [feed setup](../../docs/usage.md#install):
 
 ```sh
 apk add glibc-neutered@hardened
@@ -74,5 +74,5 @@ Provider priority is `10MAJORMINOR` (10244 for 2.44); epoch adds the policy revi
 `wolfi-origin` preserves CVE matching. Tests use explicit loader paths/locales,
 strict-option-compatible tooling, the full Wolfi suite, injection probes and ABI checks;
 raw failure ceiling is 5.5% rather than Wolfi's 2%.
-[Build instructions](../../wolfi/README.md#building-locally), [audit](docs/glibc-vuln-audit.md),
+[Build instructions](../../docs/wolfi.md#building-locally), [audit](docs/glibc-vuln-audit.md),
 [native validation](docs/audit/native-r16.md). Patches: LGPL-2.1-or-later.

@@ -18,7 +18,6 @@ import (
 
 	"github.com/werewolf-linux/packages/internal/catalog"
 	"github.com/werewolf-linux/packages/internal/overlay"
-	"github.com/werewolf-linux/packages/internal/transform"
 )
 
 func env(key, fallback string) string {
@@ -53,31 +52,15 @@ func Load(root string) ([]Package, error) {
 	}
 	packages := make([]Package, 0, len(entries))
 	for _, entry := range entries {
-		pkg := Package{Package: entry, Root: root, Directory: filepath.Join(root, entry.Path), Build: filepath.Join(root, "build", entry.Name)}
-		plan := filepath.Join(pkg.Directory, "packaging/changes.yaml")
-		if _, err := os.Stat(plan); err == nil {
-			if _, err := transform.Read(plan); err != nil {
-				return nil, fmt.Errorf("%s: %w", pkg.Name, err)
-			}
-		} else if !os.IsNotExist(err) {
-			return nil, err
-		}
+		pkg := Package{Package: entry, Root: root, Directory: filepath.Join(root, entry.Path), Build: filepath.Join(root, "build/packages", entry.Name)}
 		if entry.Engine == "wolfi" {
-			pkg.Build = filepath.Join(root, "wolfi", "build", entry.Name)
-			pkg.Spec, err = overlay.Read(filepath.Join(pkg.Directory, "overlay.yaml"))
-			if err != nil {
-				return nil, err
-			}
-			data, err := os.ReadFile(filepath.Join(pkg.Directory, "policy.json"))
-			if err != nil {
-				return nil, err
-			}
-			if err := catalog.Decode(data, &pkg.Policy); err != nil {
-				return nil, err
-			}
-			if pkg.Policy.Revision < 1 || pkg.Policy.MaxFailPerMille < 0 || pkg.Policy.MaxFailPerMille > 55 {
-				return nil, fmt.Errorf("%s: invalid policy revision or failure ceiling", pkg.Name)
-			}
+			pkg.Build = filepath.Join(root, "build/packages", entry.Name)
+			pkg.Spec = &entry.Config.Wolfi.Spec
+			pkg.Policy.Revision = entry.Config.Wolfi.Revision
+			pkg.Policy.MaxFailPerMille = entry.Config.Wolfi.MaxFailPerMille
+		}
+		if err := selectBuild(&pkg); err != nil {
+			return nil, err
 		}
 		packages = append(packages, pkg)
 	}

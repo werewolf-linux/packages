@@ -13,7 +13,7 @@ func ContextPath(root, name string) (string, error) {
 	if !catalog.Name.MatchString(name) || name == "." || name == ".." {
 		return "", fmt.Errorf("invalid context: %s", name)
 	}
-	paths, err := filepath.Glob(filepath.Join(root, "*", name, "metadata.json"))
+	paths, err := filepath.Glob(filepath.Join(root, "*", name, "package.yaml"))
 	if err != nil {
 		return "", err
 	}
@@ -23,8 +23,8 @@ func ContextPath(root, name string) (string, error) {
 	if len(paths) > 1 {
 		return "", fmt.Errorf("duplicate context: %s", name)
 	}
-	if _, err := os.Stat(filepath.Join(root, "wolfi")); err == nil {
-		return "", fmt.Errorf("missing metadata: %s", name)
+	if _, err := os.Stat(filepath.Join(root, "pipelines")); err == nil {
+		return "", fmt.Errorf("missing package.yaml: %s", name)
 	}
 	return filepath.Join(root, name), nil
 }

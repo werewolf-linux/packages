@@ -3,6 +3,7 @@ package update
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,6 +54,11 @@ func readRecipe(path string) (*recipe, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
+	}
+	if len(doc.Content) == 1 && filepath.Base(path) == "package.yaml" {
+		if native := field(doc.Content[0], "melange"); native != nil {
+			doc.Content[0] = native
+		}
 	}
 	if len(doc.Content) != 1 || field(doc.Content[0], "package") == nil {
 		return nil, fmt.Errorf("missing package in %s", path)
@@ -194,7 +200,8 @@ func LoadPolicies(root string) (map[string]Policy, error) {
 	var err error
 	var paths []string
 	policies := map[string]Policy{}
-	if _, statErr := os.Stat(filepath.Join(root, "wolfi")); statErr == nil {
+	definitions, _ := filepath.Glob(filepath.Join(root, "*/*/package.yaml"))
+	if _, statErr := os.Stat(filepath.Join(root, "pipelines")); statErr == nil || len(definitions) > 0 {
 		policies, paths, err = catalogPolicies(root)
 		if err != nil {
 			return nil, err
@@ -356,6 +363,10 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 	if err != nil {
 		return fail(err)
 	}
+	expected, err := contextDigest(directory)
+	if err != nil {
+		return fail(err)
+	}
 	paths, err := filepath.Glob(filepath.Join(directory, "*.yaml"))
 	if err != nil || len(paths) != 1 {
 		return fail(fmt.Errorf("expected one recipe"))
@@ -410,10 +421,10 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 		if value(field(prepared.root, "package"), "version") != release.Version {
 			return fail(fmt.Errorf("Plex update did not prepare the discovered release"))
 		}
-		if err := run(ctx, scratch, "melange", "query", prepared.path, "{{.Package.Version}}{{println}}"); err != nil {
+		if err := queryRecipe(ctx, scratch, prepared.path, run); err != nil {
 			return fail(err)
 		}
-		if err := installContext(scratch, directory); err != nil {
+		if err := installContext(scratch, directory, expected); err != nil {
 			return fail(err)
 		}
 		result.Status = "updated"
@@ -562,30 +573,81 @@ func (c *Client) Update(ctx context.Context, root, name string, p Policy, write 
 			return fail(err)
 		}
 	}
-	if err := run(ctx, scratch, "melange", "query", r.path, "{{.Package.Version}}{{println}}"); err != nil {
+	if err := queryRecipe(ctx, scratch, r.path, run); err != nil {
 		return fail(err)
 	}
 	// Nothing in the real context is touched until downloads, locks and parsing
 	// all succeed. Resolver failures leave even the recipe's bytes unchanged.
-	if err := installContext(scratch, directory); err != nil {
+	if err := installContext(scratch, directory, expected); err != nil {
 		return fail(err)
 	}
 	result.Status = "updated"
 	return result
 }
 
-func installContext(source, dest string) error {
-	return filepath.WalkDir(source, func(path string, d fs.DirEntry, err error) error {
+// Install a complete staged directory, checking that discovery did not race a
+// maintainer edit. Directory renames keep recipe and dependency locks together.
+func installContext(source, dest, expected string) error {
+	stage, err := os.MkdirTemp(filepath.Dir(dest), ".package-update-")
+	if err != nil {
+		return err
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			os.RemoveAll(stage)
+		}
+	}()
+	next := filepath.Join(stage, "next")
+	if err := copyContext(source, next); err != nil {
+		return err
+	}
+	current, err := contextDigest(dest)
+	if err != nil {
+		return err
+	}
+	if current != expected {
+		return fmt.Errorf("package changed during update; retry from the new inputs")
+	}
+	previous := filepath.Join(stage, "previous")
+	if err := os.Rename(dest, previous); err != nil {
+		return err
+	}
+	// Check again after taking ownership of the old directory, before promotion.
+	current, err = contextDigest(previous)
+	if err == nil && current != expected {
+		err = fmt.Errorf("package changed during update; retry from the new inputs")
+	}
+	if err == nil {
+		err = os.Rename(next, dest)
+	}
+	if err != nil {
+		if rollback := os.Rename(previous, dest); rollback != nil {
+			cleanup = false
+			return fmt.Errorf("update: %w; rollback: %v; preserved prior context at %s", err, rollback, previous)
+		}
+		return err
+	}
+	return nil
+}
+
+func contextDigest(directory string) (string, error) {
+	hash := sha256.New()
+	err := filepath.WalkDir(directory, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
-		if !d.Type().IsRegular() {
-			return fmt.Errorf("unexpected resolver output: %s", path)
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("nonregular package input: %s", path)
 		}
-		rel, err := filepath.Rel(source, path)
+		relative, err := filepath.Rel(directory, path)
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
@@ -593,36 +655,14 @@ func installContext(source, dest string) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dest, rel)
-		old, _ := os.ReadFile(target)
-		if bytes.Equal(old, data) {
-			return nil
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		tmp, err := os.CreateTemp(filepath.Dir(target), ".update-*")
-		if err != nil {
-			return err
-		}
-		defer os.Remove(tmp.Name())
-		if _, err := tmp.Write(data); err != nil {
-			tmp.Close()
-			return err
-		}
-		if err := tmp.Chmod(info.Mode().Perm()); err != nil {
-			tmp.Close()
-			return err
-		}
-		if err := tmp.Close(); err != nil {
-			return err
-		}
-		return os.Rename(tmp.Name(), target)
+		fmt.Fprintf(hash, "%s\x00%o\x00%d\x00", filepath.ToSlash(relative), info.Mode().Perm(), len(data))
+		hash.Write(data)
+		return nil
 	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 func Names(policies map[string]Policy) []string {
@@ -632,4 +672,29 @@ func Names(policies map[string]Policy) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Validate an extracted native recipe outside the update transaction directory.
+func queryRecipe(ctx context.Context, directory, path string, run Runner) error {
+	r, err := readRecipe(path)
+	if err != nil {
+		return err
+	}
+	if filepath.Base(path) != "package.yaml" {
+		return run(ctx, directory, "melange", "query", path, "{{.Package.Version}}{{println}}")
+	}
+	data, err := yaml.Marshal(r.root)
+	if err != nil {
+		return err
+	}
+	temp, err := os.MkdirTemp("", "package-query-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temp)
+	native := filepath.Join(temp, "recipe.yaml")
+	if err := os.WriteFile(native, data, 0644); err != nil {
+		return err
+	}
+	return run(ctx, directory, "melange", "query", native, "{{.Package.Version}}{{println}}")
 }

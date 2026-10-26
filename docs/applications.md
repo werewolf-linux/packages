@@ -160,16 +160,16 @@ those forms to published package dependencies is a separate migration.
 
 ## Tracking upstream releases
 
-Each context's `metadata.json` update record declares a policy for every recipe context. `make test` fails if a
+Each context's `package.yaml` update record declares a policy for every recipe context. `make test` fails if a
 new context lacks tracking or a production package is marked pinned. Metadata is excluded from APK build identities, so editing a discovery source
 does not invalidate an existing publication. The older Melange `update:` blocks remain portable upstream hints;
-this repository's automation uses each context's `metadata.json` update record as its complete policy.
+this repository's automation uses each context's `package.yaml` update record as its complete policy.
 
 ```sh
 make updates                       # read-only discovery for every context
 make PACKAGE=solr updates           # discover one upstream release
-go run ./cmd/package-update --write --package solr
-go run ./cmd/package-update --validate  # offline coverage check
+build/tools/package updates --engine upstream --write --package solr
+build/tools/package catalog validate  # offline coverage check
 ```
 
 The Go updater uses GitHub's stable releases or numeric release tags, non-yanked
@@ -244,7 +244,7 @@ same YAML parser as Melange, keeping wolfictl optional for manual maintenance.
 For an upstream version change, use the Go updater so source and lock pins move
 together, then commit and push through the regular publisher.
 
-Bundled upstream components are listed under `components` in each context's `metadata.json` update record,
+Bundled upstream components are listed under `components` in each context's `package.yaml` update record,
 keyed by the recipe variable holding their version. They use the same stable
 GitHub release resolver. For example, Vaultwarden's web vault is tracked
 independently of its server. A component-only update refreshes its archive hash
