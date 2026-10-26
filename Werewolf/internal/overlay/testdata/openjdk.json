@@ -104,7 +104,7 @@
     },
     {
       "name": "Permit effective root only in the build guest",
-      "runs": "mkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\n"
+      "runs": "mkdir -p /etc/runtime-hardening\n: > /etc/runtime-hardening/build-root\nchmod 600 /etc/runtime-hardening/build-root\n# The build runs its own tools with the JDK it builds, from the\n# writable build tree.\nmkdir -p /etc/runtime-hardening/allow/all/java\n: > /etc/runtime-hardening/allow/all/java/writable-source\n"
     },
     {
       "runs": "chmod +x configure"
