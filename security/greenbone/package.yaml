@@ -14,8 +14,8 @@ melange:
   # build tools and headers stay out of the runtime image.
   package:
     name: pg-gvm
-    version: 22.6.18
-    epoch: 9
+    version: "22.6.19"
+    epoch: 0
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later
@@ -47,7 +47,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/greenbone/pg-gvm/archive/refs/tags/v${{package.version}}.tar.gz
-        expected-sha256: ea6b943c804ff7c2ba3da87691a59de96a1a0d9d7597b26b6169efd84ebc2f2b
+        expected-sha256: "2f8715530175ac640660852fad9817094bbd9abed9f2432a2dd054206dbc7891"
         directory: pg-gvm
     - runs: |
         printf '\nadd_subdirectory(base)\n' >>gvm-libs/CMakeLists.txt
