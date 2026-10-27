@@ -100,7 +100,8 @@
       "oneOf": [
         {
           "required": [
-            "melange"
+            "melange",
+            "update"
           ]
         },
         {
@@ -156,7 +157,6 @@
         }
       },
       "required": [
-        "update",
         "changes"
       ],
       "type": "object"
@@ -517,6 +517,12 @@
         "hold": {
           "type": "string"
         },
+        "ignore-regex-patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "lock": {
           "type": "string"
         },
@@ -648,6 +654,12 @@
         },
         "hold": {
           "type": "string"
+        },
+        "ignore-regex-patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "lock": {
           "type": "string"

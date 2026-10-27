@@ -81,8 +81,9 @@ fit. Shared operations can be reusable pipelines under `Werewolf/pipelines/`. Or
 supporting files remain relative to the package context; fixtures for installed
 application tests are copied from its `tests/` directory.
 
-`update` belongs only at the document root. The renderer exports native build
-configuration without a competing release-discovery policy.
+`update` belongs only at the document root. Wolfi derivatives may omit it to inherit
+the captured recipe's release-discovery settings. Direct recipes must declare it.
+The renderer exports native build configuration without a competing release-discovery policy.
 
 ## Release discovery
 
@@ -135,8 +136,19 @@ changes:
 
 This example shows the shape; the actual libffi definition also checks the retained
 pipeline, package set and installed behavior. Declare exactly one baseline `recipe`
-or `family`. A family follows the newest stable recipe. `update` independently
-selects the latest upstream stable release, including new major releases.
+or `family`. A family follows the newest stable recipe. Release discovery independently
+selects upstream stable releases ahead of the baseline's packaged version. With no
+`update` override, it reads the newest stable Wolfi recipe's `update` stanza on each
+scheduled refresh. GitHub releases/tags and git tags support prefix/suffix removal,
+underscore version separators and ignored tag regexes. Only a tag prefix identical
+to the stripped prefix is inherited; series-specific filters require an override.
+
+Declare `update` explicitly for branch snapshots, release-monitor, version transforms,
+variable-expanded identifiers, or release-series restrictions. For example, Node and
+PHP override Wolfi's major/minor filters to follow the latest stable release across
+series, and OpenJDK retains its GA resolver. Disabled, missing or unsupported inherited
+settings fail discovery with an actionable error; they never silently stop updates.
+The normal scheduled native builds, tests and signed publication apply to either mode.
 
 Captured Wolfi recipes, upstream files and pipelines remain unchanged. The lock
 records their repository commit, version, epoch and source pin separately from the

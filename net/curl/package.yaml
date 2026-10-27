@@ -1,9 +1,4 @@
 # yaml-language-server: $schema=../../Werewolf/package.schema.json
-update:
-  separator: _
-  github:
-    identifier: curl/curl
-    strip-prefix: curl-
 wolfi:
   sources:
     - https://github.com/curl/curl.git

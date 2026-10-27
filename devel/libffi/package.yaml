@@ -1,8 +1,4 @@
 # yaml-language-server: $schema=../../Werewolf/package.schema.json
-update:
-  github:
-    identifier: libffi/libffi
-    strip-prefix: v
 wolfi:
   sources:
     - https://github.com/libffi/libffi.git

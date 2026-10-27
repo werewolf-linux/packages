@@ -1,8 +1,4 @@
 # yaml-language-server: $schema=../../Werewolf/package.schema.json
-update:
-  github:
-    identifier: libvips/libvips
-    strip-prefix: v
 wolfi:
   # Checked changes to the captured Wolfi recipe. See docs/overlays.md.
   title: libvips

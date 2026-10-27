@@ -167,6 +167,11 @@ wolfi:
   revision: 12
   family: nodejs-
 changes:
+  - what: Backport V8's supplementary Unicode case-equivalence handling.
+    why: Build with current ICU case data while preserving UTF-16 code-unit matching in legacy mode and code-point matching in Unicode mode.
+    evidence:
+      - patches/0009-unicode-supplementary-case-folding.patch
+      - tests/regexp.cjs
   - what: Omit npm/npx, inspector, SEA and unused subpackages.
     why: Keep the server runtime without package installation and debugging entrypoints.
     evidence:

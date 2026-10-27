@@ -161,3 +161,53 @@ func TestEffectiveReleaseKeepsCapturedRecipe(t *testing.T) {
 		t.Fatalf("pin = %s, %v", got, err)
 	}
 }
+
+func TestInheritedReleasePolicyAndExplicitOverride(t *testing.T) {
+	directory := t.TempDir()
+	recipe := "package: {name: fixture, version: '1.0'}\npipeline:\n- uses: git-checkout\n  with: {expected-commit: 1111111111111111111111111111111111111111}\nupdate:\n  enabled: true\n  github: {identifier: example/project, strip-prefix: v}\n"
+	path := filepath.Join(directory, "fixture.yaml")
+	if err := os.WriteFile(path, []byte(recipe), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pkg := Package{Spec: &overlay.Spec{}}
+	pkg.Update.Recipe = "fixture"
+	inherited, err := releasePolicy(pkg, directory)
+	if err != nil || inherited.Repo != "example/project" || inherited.Prefix != "v" {
+		t.Fatalf("%+v: %v", inherited, err)
+	}
+	// A newer upstream release still selects this older packaging baseline.
+	release := update.Release{Version: "2.0"}
+	if _, _, err := Latest(pkg, directory, &release); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("invalid baseline"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := releasePolicy(pkg, directory); err == nil {
+		t.Fatal("ignored invalid inherited policy")
+	}
+	override := update.Policy{Source: "github", Repo: "example/releases"}
+	pkg.Update.Upstream = &override
+	got, err := releasePolicy(pkg, directory)
+	if err != nil || got.Repo != override.Repo {
+		t.Fatalf("%+v: %v", got, err)
+	}
+}
+
+func TestInheritedPoliciesMatchReviewedFixtures(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packages, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range packages {
+		if pkg.Engine == "wolfi" && pkg.Update.Upstream == nil {
+			if err := CheckFixtures(pkg); err != nil {
+				t.Errorf("%s: %v", pkg.Name, err)
+			}
+		}
+	}
+}

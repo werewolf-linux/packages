@@ -19,11 +19,6 @@ func TestRepositoryCatalog(t *testing.T) {
 	if len(packages) == 0 {
 		t.Fatal("no packages")
 	}
-	for _, pkg := range packages {
-		if pkg.Engine == "wolfi" && pkg.Update.Upstream == nil {
-			t.Errorf("%s has no upstream release source", pkg.Name)
-		}
-	}
 }
 
 func TestEvidence(t *testing.T) {

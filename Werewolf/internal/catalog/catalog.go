@@ -16,6 +16,7 @@ import (
 // Policy describes an automatic release source. Wolfi recipes independently
 // track an upstream policy while retaining a captured packaging baseline.
 type Policy struct {
+	IgnorePatterns []string          `json:"ignore_regex_patterns,omitempty" yaml:"ignore-regex-patterns,omitempty"`
 	Source         string            `json:"source" yaml:"source,omitempty"`
 	Separator      string            `json:"separator,omitempty" yaml:"separator,omitempty"`
 	Repo           string            `json:"repo,omitempty" yaml:"repo,omitempty"`
@@ -170,11 +171,11 @@ func validate(directory string, m Definition) error {
 	if p.Source == "git" && p.Branch == "" {
 		return fmt.Errorf("snapshot source needs a branch")
 	}
-	if p.Source == "wolfi" {
-		if (p.Recipe == "") == (p.Family == "") {
-			return fmt.Errorf("choose exactly one Wolfi recipe or family")
-		}
-		if p.Upstream == nil || !slices.Contains([]string{"github", "github-tags", "openjdk", "git-tags"}, p.Upstream.Source) {
+	if p.Source == "wolfi" && (p.Recipe == "") == (p.Family == "") {
+		return fmt.Errorf("choose exactly one Wolfi recipe or family")
+	}
+	if p.Source == "wolfi" && p.Upstream != nil {
+		if !slices.Contains([]string{"github", "github-tags", "openjdk", "git-tags"}, p.Upstream.Source) {
 			return fmt.Errorf("Wolfi package needs an independent stable release source")
 		}
 		// A git-tags upstream, for a project without a GitHub mirror, names the

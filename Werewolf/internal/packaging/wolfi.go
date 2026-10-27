@@ -260,6 +260,19 @@ func rewrite(n *yaml.Node, change func(string) string) {
 	}
 }
 
+// releasePolicy uses a maintained override or the newest stable baseline's
+// update stanza, then queries upstream independently of that baseline's version.
+func releasePolicy(pkg Package, checkout string) (update.Policy, error) {
+	if pkg.Update.Upstream != nil {
+		return *pkg.Update.Upstream, nil
+	}
+	_, recipe, err := Latest(pkg, checkout, nil)
+	if err != nil {
+		return update.Policy{}, err
+	}
+	return update.WolfiPolicy(recipe)
+}
+
 // Capture stages a complete input snapshot and validates the effective recipe
 // before replacing previously usable inputs.
 func Capture(ctx context.Context, target *Package, checkout string) (Inputs, error) {
@@ -269,7 +282,11 @@ func Capture(ctx context.Context, target *Package, checkout string) (Inputs, err
 func capture(ctx context.Context, target *Package, checkout string, install bool) (Inputs, error) {
 	pkg := *target
 	var lock Inputs
-	release, err := update.NewClient(os.Getenv("GH_TOKEN")).ResolveRelease(ctx, *pkg.Update.Upstream)
+	policy, err := releasePolicy(pkg, checkout)
+	if err != nil {
+		return lock, err
+	}
+	release, err := update.NewClient(os.Getenv("GH_TOKEN")).ResolveRelease(ctx, policy)
 	if err != nil {
 		return lock, err
 	}

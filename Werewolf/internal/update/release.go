@@ -34,6 +34,11 @@ func (c *Client) ResolveRelease(ctx context.Context, p Policy) (Release, error) 
 			return Release{}, err
 		}
 	}
+	for _, pattern := range p.IgnorePatterns {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return Release{}, err
+		}
+	}
 	r, err := c.Discover(ctx, p, "0")
 	if err != nil {
 		return Release{}, err

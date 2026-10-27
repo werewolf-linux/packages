@@ -76,8 +76,8 @@ func Schema() ([]byte, error) {
 	}
 	schema(reflect.TypeFor[Definition]())
 	root := defs["Definition"].(map[string]any)
-	root["required"] = []string{"update", "changes"}
-	root["oneOf"] = []any{map[string]any{"required": []string{"melange"}}, map[string]any{"required": []string{"wolfi"}}}
+	root["required"] = []string{"changes"}
+	root["oneOf"] = []any{map[string]any{"required": []string{"melange", "update"}}, map[string]any{"required": []string{"wolfi"}}}
 	props := root["properties"].(map[string]any)
 	props["melange"] = map[string]any{"type": "object", "required": []string{"package", "pipeline"}, "description": "Native Melange configuration; validated by the repository's pinned Melange."}
 	source := defs["Source"].(map[string]any)

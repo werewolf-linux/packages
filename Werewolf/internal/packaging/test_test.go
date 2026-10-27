@@ -2,12 +2,59 @@ package packaging
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/werewolf-linux/packages/Werewolf/internal/apk"
 )
+
+func TestLocalAPKReuseAcceptsSignedArtifactsAndChecksIdentityAndPayload(t *testing.T) {
+	directory := t.TempDir()
+	payload := testTarMember(t, "usr/bin/example", []byte("example payload"))
+	sum := sha256.Sum256(payload)
+	control := testTarMember(t, ".PKGINFO", []byte("pkgname = example\npkgver = 1-r0\narch = aarch64\ndatahash = "+hex.EncodeToString(sum[:])+"\n"))
+	unsigned := filepath.Join(directory, "unsigned.apk")
+	if err := os.WriteFile(unsigned, append(control, payload...), 0644); err != nil {
+		t.Fatal(err)
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed := filepath.Join(directory, "signed.apk")
+	if err := apk.SignPackage(unsigned, signed, "example", "1-r0", "aarch64", key); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{unsigned, signed} {
+		if err := checkTestAPK(path, "example", "1-r0", "aarch64"); err != nil {
+			t.Fatalf("valid local artifact %s: %v", path, err)
+		}
+		for _, identity := range [][3]string{{"other", "1-r0", "aarch64"}, {"example", "2-r0", "aarch64"}, {"example", "1-r0", "x86_64"}} {
+			if err := checkTestAPK(path, identity[0], identity[1], identity[2]); err == nil {
+				t.Fatalf("accepted mismatched identity %v for %s", identity, path)
+			}
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data[len(data)-1] ^= 1
+		corrupt := filepath.Join(directory, "corrupt.apk")
+		if err := os.WriteFile(corrupt, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := checkTestAPK(corrupt, "example", "1-r0", "aarch64"); err == nil {
+			t.Fatal("accepted corrupted local payload")
+		}
+	}
+}
 
 func TestPackageSuitesKeepRunningAndReportEveryFailure(t *testing.T) {
 	root := t.TempDir()

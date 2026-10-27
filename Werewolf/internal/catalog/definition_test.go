@@ -81,3 +81,22 @@ func TestGeneratedEditorSchemaMatchesLoader(t *testing.T) {
 		t.Fatal("regenerate the schema with package schema --dest Werewolf/package.schema.json")
 	}
 }
+
+func TestWolfiDefinitionInheritsUpdateUnlessOverridden(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "package.yaml")
+	baseline := "wolfi: {recipe: example, revision: 1, sources: [https://example.org/project.git]}\nchanges: []\n"
+	for _, config := range []string{baseline, "update: {github: {identifier: example/releases}}\n" + baseline} {
+		if err := os.WriteFile(path, []byte(config), 0644); err != nil {
+			t.Fatal(err)
+		}
+		definition, err := Read(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		policy := definition.Policy()
+		if (policy.Upstream == nil) != (config == baseline) {
+			t.Fatalf("wrong inheritance: %+v", policy)
+		}
+	}
+}

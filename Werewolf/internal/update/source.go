@@ -182,6 +182,12 @@ func Compare(a, b string) int {
 }
 
 func candidate(tag string, p Policy) (Release, bool) {
+	for _, pattern := range p.IgnorePatterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil || re.MatchString(tag) {
+			return Release{}, false
+		}
+	}
 	if !strings.HasPrefix(tag, p.Prefix) || !strings.HasSuffix(tag, p.Suffix) {
 		return Release{}, false
 	}

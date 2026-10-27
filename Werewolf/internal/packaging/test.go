@@ -185,7 +185,7 @@ func localTestArtifacts(ctx context.Context, pkg Package, arch string) (bool, er
 		} else if err != nil {
 			return false, err
 		}
-		if _, err := apk.Check(path, name, version, arch, nil); err != nil {
+		if err := checkTestAPK(path, name, version, arch); err != nil {
 			return false, err
 		}
 		found++
@@ -194,4 +194,18 @@ func localTestArtifacts(ctx context.Context, pkg Package, arch string) (bool, er
 		return false, fmt.Errorf("incomplete APK set: %d/%d outputs", found, len(names))
 	}
 	return found > 0, nil
+}
+
+// Local artifacts can be unsigned application outputs or signed Wolfi outputs.
+// Inspect checks their payload hash; the selected identity must still match.
+// Melange verifies Wolfi signatures when installing the actual test environment.
+func checkTestAPK(path, name, version, arch string) error {
+	info, err := apk.Inspect(path)
+	if err != nil {
+		return err
+	}
+	if info.Name != name || info.Version != version || info.Arch != arch {
+		return fmt.Errorf("APK metadata differs from expected package: %s", path)
+	}
+	return nil
 }

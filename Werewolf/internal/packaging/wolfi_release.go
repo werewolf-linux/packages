@@ -580,7 +580,7 @@ func PublishWolfi(ctx context.Context, pkg Package, assets string) error {
 	if manifest.Package != pkg.Name || manifest.BuildID != lock.BuildID || !exactCommit.MatchString(manifest.SourceSHA) || len(manifest.SHA256) != len(Arches) || manifest.RunNumber < 1 {
 		return fmt.Errorf("release manifest differs from captured inputs")
 	}
-	keyPath, err := SigningKey(filepath.Join(pkg.Root, "wolfi"), true)
+	keyPath, err := SigningKey(pkg.Root, true)
 	if err != nil {
 		return err
 	}
@@ -757,7 +757,7 @@ func Feed(ctx context.Context, packages []Package) error {
 		return nil
 	}
 	root := packages[0].Root
-	keyPath, err := SigningKey(filepath.Join(root, "wolfi"), true)
+	keyPath, err := SigningKey(root, true)
 	if err != nil {
 		return err
 	}

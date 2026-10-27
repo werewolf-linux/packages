@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/werewolf-linux/packages/Werewolf/internal/overlay"
@@ -70,7 +71,7 @@ type Check struct {
 
 type Definition struct {
 	Checks   []Check                     `yaml:"checks,omitempty"`
-	Update   Source                      `yaml:"update"`
+	Update   Source                      `yaml:"update,omitempty"`
 	Melange  yaml.Node                   `yaml:"melange,omitempty"`
 	Wolfi    *Derivation                 `yaml:"wolfi,omitempty"`
 	Changes  []Change                    `yaml:"changes"`
@@ -85,7 +86,11 @@ type Definition struct {
 func (d Definition) Policy() Policy {
 	p, _ := d.Update.policy() // Read validates before callers receive a definition.
 	if d.Wolfi != nil {
-		return Policy{Source: "wolfi", Recipe: d.Wolfi.Recipe, Family: d.Wolfi.Family, Upstream: &p, Hold: p.Hold}
+		policy := Policy{Source: "wolfi", Recipe: d.Wolfi.Recipe, Family: d.Wolfi.Family, Hold: p.Hold}
+		if !reflect.ValueOf(d.Update).IsZero() {
+			policy.Upstream = &p
+		}
+		return policy
 	}
 	return p
 }

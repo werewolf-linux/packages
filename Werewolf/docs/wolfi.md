@@ -4,8 +4,10 @@ Commands in this guide run from the repository root. Package definitions and
 maintenance commands are documented in [package.md](package.md).
 
 The common engine captures Wolfi recipes unchanged as packaging baselines and
-independently selects the latest stable upstream releases. Its checked derivations
-apply the source/version update and our hardening changes. Discovery runs every ten
+independently selects the latest stable upstream releases. Derivatives inherit
+supported Wolfi `update` stanzas unless their package definition declares an override;
+Wolfi's packaged version does not cap the selected upstream release. Its checked
+derivations apply the source/version update and our hardening changes. Discovery runs every ten
 minutes; successful native builds publish with Werewolf's package key.
 
 Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with

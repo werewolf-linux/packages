@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/werewolf-linux/packages/Werewolf/internal/update"
 )
 
 type CIJob struct {
@@ -127,6 +129,15 @@ func CheckFixtures(pkg Package) error {
 		return fmt.Errorf("%s: missing reviewed Wolfi fixture", pkg.Name)
 	}
 	for _, path := range fixtures {
+		if pkg.Update.Upstream == nil {
+			recipe, err := readRecipe(path)
+			if err != nil {
+				return err
+			}
+			if _, err := update.WolfiPolicy(recipe); err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+		}
 		// Multiple snapshots may represent released streams. Every retained baseline
 		// must either derive successfully or be an explicitly older informational file.
 		if _, err := Fixture(pkg, path); err != nil {

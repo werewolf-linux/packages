@@ -1,9 +1,4 @@
 # yaml-language-server: $schema=../../Werewolf/package.schema.json
-update:
-  github:
-    identifier: samba-team/samba
-    strip-prefix: samba-
-    use-tag: true
 wolfi:
   # Checked changes to the captured Wolfi recipe (internal/overlay).
   title: Samba
