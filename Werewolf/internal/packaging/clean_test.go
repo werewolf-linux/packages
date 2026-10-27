@@ -54,11 +54,22 @@ func TestCleanPreservesArtifactsInputsLogsAndOtherArchitectures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Clean(root, []Package{pkg}, "aarch64"); err == nil {
+	if err := Clean(root, []Package{pkg}, "aarch64", true); err == nil {
 		t.Fatal("cleanup must refuse to run during builds or tests")
 	}
 	unlock()
-	if err := Clean(root, []Package{pkg}, "aarch64"); err != nil {
+	if err := Clean(root, []Package{pkg}, "aarch64", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(work, "cache/apk/download")); err != nil {
+		t.Fatalf("shared cache removed despite keep-cache: %v", err)
+	}
+	for _, name := range removed[1:] {
+		if _, err := os.Stat(filepath.Join(work, name)); !os.IsNotExist(err) {
+			t.Errorf("generated scratch remains: %s: %v", name, err)
+		}
+	}
+	if err := Clean(root, []Package{pkg}, "aarch64", false); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range removed {

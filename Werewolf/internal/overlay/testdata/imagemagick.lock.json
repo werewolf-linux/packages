@@ -1,7 +1,7 @@
 {
   "recipe": "imagemagick-7.yaml",
   "version": "7.1.2.34",
-  "epoch": 1,
+  "epoch": 2,
   "revision": 2,
   "source_commit": "a0c4bf729a26a5c2feb28b0365b47a8db736078a"
 }

@@ -39,6 +39,10 @@ melange:
         expected-commit: 6bbc7e56db2b7a64eee589324efe5813245e3a28
     # Upstream's --version prints build details but omits the injected release tag.
     - runs: patch -p1 < version.patch
+    - uses: go-deps
+      with:
+        packages: ./cmd/zot
+        experiments: jsonv2
     - runs: |
         b=zotregistry.dev/zot/v2/pkg/buildinfo
         CGO_ENABLED=0 GOEXPERIMENT=jsonv2 go build -buildmode=pie -trimpath -ldflags="-s -w \

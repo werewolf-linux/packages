@@ -592,6 +592,7 @@ func BuildApplication(ctx context.Context, pkg Package, arch string, repositorie
 		return err
 	}
 	args := []string{"build", recipe, "--runner", "bubblewrap", "--arch", arch, "--source-dir", directory, "--out-dir", out, "--cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/melange"), "--apk-cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/apk"), "--generate-index=false", "--namespace", "werewolf", "--git-commit", commit, "--cpu", env("MELANGE_CPU", strconv.Itoa(runtime.NumCPU())), "--memory", env("MELANGE_MEMORY", "8Gi"), "--timeout", "5h"}
+	args = append(args, "--pipeline-dirs", sourcePath(pkg.Root, "Werewolf/pipelines"))
 	for _, repository := range repositories {
 		args = append(args, "--repository-append", repository)
 	}
@@ -656,6 +657,19 @@ func BuildLocalApplication(ctx context.Context, pkg Package, arch, werewolf stri
 		return err
 	}
 	recipe = filepath.Join(directory, filepath.Base(recipe))
+	// Give the sibling builder a standalone recipe using Melange's own compiler.
+	// Its VM does not have this checkout's shared pipeline search path.
+	tool, _, err := melange(ctx, pkg.Root)
+	if err != nil {
+		return err
+	}
+	compiled, err := output(ctx, pkg.Root, tool, "compile", recipe, "--arch", arch, "--runner", "qemu", "--pipeline-dirs", sourcePath(pkg.Root, "Werewolf/pipelines"))
+	if err != nil {
+		return err
+	}
+	if err := writeFile(recipe, []byte(compiled+"\n"), 0644); err != nil {
+		return err
+	}
 	if err := Run(ctx, werewolf, "make", "howl"); err != nil {
 		return err
 	}

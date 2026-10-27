@@ -20,8 +20,8 @@ wolfi:
         - uses=git-checkout
         - uses=meson/configure
         - uses=meson/compile
-        - uses=upstream-tests/meson-test
         - uses=meson/install
+        - uses=upstream-tests/meson-test
         - uses=strip
     - path: [subpackages]
       shape:

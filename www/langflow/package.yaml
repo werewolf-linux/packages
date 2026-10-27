@@ -11,14 +11,15 @@ melange:
   package:
     name: langflow
     version: 1.13.0
-    epoch: 10
+    epoch: 11
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
       - license: MIT
     dependencies:
       runtime:
         - python-3.15>=3.15.0_git20261010-r2000
-        - py3.15-onnxruntime>=1.31.1-r0
+        # Minimum compatible build; newer ONNX releases can publish independently.
+        - py3.15-onnxruntime>=1.31.0-r1
         - libstdc++
   environment:
     contents:
@@ -45,6 +46,8 @@ melange:
       PATH: /usr/lib/ninja-build/bin:/usr/local/bin:/usr/bin:/bin
       UV_PYTHON_DOWNLOADS: never
       UV_LINK_MODE: copy
+      # Pip's guest-local wheel cache would duplicate the installed environment.
+      PIP_NO_CACHE_DIR: "1"
   pipeline:
     - uses: fetch
       with:

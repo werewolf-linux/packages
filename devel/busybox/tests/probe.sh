@@ -18,3 +18,11 @@ for manifest in /etc/busybox-paths.d/*; do
         exit 1
     fi
 done
+
+# No variant builds wget, telnet or telnetd, so no manifest links them.
+for applet in wget telnet telnetd; do
+    if /usr/bin/busybox --list | /usr/bin/busybox grep -qx "$applet"; then
+        echo "BusyBox builds $applet" >&2
+        exit 1
+    fi
+done

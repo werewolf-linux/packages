@@ -2,6 +2,8 @@
 update:
   github:
     identifier: opensearch-project/OpenSearch
+test:
+  confined: true
 melange:
   # OpenSearch for werewolf's opensearch form: upstream's minimal release
   # for each arch, pinned by sha256, without its bundled JDK (the form runs
@@ -111,8 +113,6 @@ melange:
         EOF
   test:
     environment:
-      accounts:
-        run-as: "1000"
       contents:
         packages:
           - openjdk-27-default-jvm

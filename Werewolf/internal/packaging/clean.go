@@ -58,9 +58,9 @@ func CleanRepositoryCache(cache, repository string) error {
 	return nil
 }
 
-// Clean removes disposable scratch and shared download caches. Captures, source
+// Clean removes disposable scratch and optionally shared download caches. Captures, source
 // checkouts, APKs, signing keys, reports and diagnostic logs remain available.
-func Clean(root string, packages []Package, arch string) error {
+func Clean(root string, packages []Package, arch string, keepCache bool) error {
 	if !slices.Contains(Arches, arch) {
 		return fmt.Errorf("unsupported architecture %q", arch)
 	}
@@ -119,5 +119,8 @@ func Clean(root string, packages []Package, arch string) error {
 			}
 		}
 	}
-	return remove("cache")
+	if !keepCache {
+		return remove("cache")
+	}
+	return nil
 }

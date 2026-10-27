@@ -1,0 +1,23 @@
+name: Download the selected Go packages' verified dependencies
+inputs:
+  packages:
+    description: Space-separated package paths passed to go list.
+    required: true
+  tags:
+    description: Build tags used by the selected packages.
+    default: ""
+  experiments:
+    description: Go experiments used by the selected packages.
+    default: ""
+pipeline:
+  - runs: |
+      # Reuse completed downloads if the module proxy interrupts a stream.
+      # Resolve the selected build graph, avoiding unrelated optional modules.
+      for delay in 0 5 15; do
+        sleep "$delay"
+        if CGO_ENABLED=0 GOEXPERIMENT="${{inputs.experiments}}" go list -mod=readonly \
+          -deps -tags="${{inputs.tags}}" ${{inputs.packages}} >/dev/null; then
+          exit 0
+        fi
+      done
+      exit 1

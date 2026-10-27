@@ -29,7 +29,9 @@ There are no source patches of ours; Wolfi's two apply unchanged.
 
 ## Tests
 
-Wolfi's tests run unchanged. Ours ([tests/probe.sh](tests/probe.sh)) requires
+Wolfi's client and server tests use port 1445 and stop their test daemon on exit,
+so native CI needs no permission to bind privileged SMB ports. The shipped server
+configuration is unchanged. Ours ([tests/probe.sh](tests/probe.sh)) requires
 no `pam_winbind.so` and no installed server program or Samba library naming
 `libpam`.
 

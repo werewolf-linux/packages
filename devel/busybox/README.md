@@ -1,8 +1,9 @@
 # busybox
 
-Wolfi's busybox recipe, `busybox.yaml`, with `CONFIG_FEATURE_PREFER_APPLETS` on in all
-three variants (`busybox`, `busybox-full`, `busybox-static`); currently 1.38.0. It keeps
-Wolfi's names and outranks Wolfi's build, so every Werewolf image with busybox gets it.
+Wolfi's busybox recipe, `busybox.yaml`, with `CONFIG_FEATURE_PREFER_APPLETS` on and
+`wget`, `telnet` and `telnetd` left out in all three variants (`busybox`, `busybox-full`,
+`busybox-static`); currently 1.38.0. It keeps Wolfi's names and outranks Wolfi's build,
+so every Werewolf image with busybox gets it.
 
 ## Use
 
@@ -24,6 +25,7 @@ was unaffected: ash searches `PATH` itself.
 | Build option | Change from Wolfi | Effect |
 |---|---|---|
 | `CONFIG_FEATURE_PREFER_APPLETS=y` | A name that is an applet runs through `CONFIG_BUSYBOX_EXEC_PATH`, `/usr/bin/busybox`, which Wolfi already sets | `env true`, `timeout 5 sh -c …` and `xargs grep` work; `timeout 5 ssh` still needs `/usr/bin/ssh`, as glibc's rule intends |
+| `CONFIG_WGET`, `CONFIG_TELNET`, `CONFIG_TELNETD` off | Wolfi builds all three | A machine has no BusyBox downloader or plain-text login server; `nc` stays |
 
 The option also lets busybox run some applets in-process (no fork) or re-exec itself,
 both through that absolute path. There are no source patches: `patches/series` is
