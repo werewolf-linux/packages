@@ -52,13 +52,14 @@ async function checkPdf() {
   for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
   pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   const { getDocument } = await import(pathToFileURL(req.resolve('pdfjs-dist/legacy/build/pdf.mjs')).href);
-  const document = await getDocument({ data: new Uint8Array(Buffer.from(pdf)), useSystemFonts: true }).promise;
+  const loadingTask = getDocument({ data: new Uint8Array(Buffer.from(pdf)), useSystemFonts: true });
   try {
+    const document = await loadingTask.promise;
     const page = await document.getPage(1);
     const text = await page.getTextContent();
     assert.match(text.items.map(item => item.str).join(' '), /Invoice 12345/);
   } finally {
-    await document.destroy();
+    await loadingTask.destroy();
   }
   console.log('PASS: n8n native canvas and PDF text extraction');
 }
