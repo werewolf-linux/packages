@@ -86,9 +86,6 @@ wolfi:
         - brotli-dev
         - cyrus-sasl-dev
         - krb5-dev
-        - nghttp2-dev
-        - nghttp3-dev
-        - ngtcp2-dev
         - openldap-dev
     - path: [pipeline]
       append:
@@ -120,7 +117,7 @@ wolfi:
             --without-libssh2 \
             --with-libpsl \
             $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_getpass_r='no' ac_cv_header_stdatomic_h='no')
-          new: --enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls --with-zlib --with-libpsl --with-pic --disable-static --without-brotli --without-zstd --without-nghttp2 --without-nghttp3 --without-ngtcp2 --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_getpass_r='no' ac_cv_header_stdatomic_h='no')
+          new: --enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls --with-zlib --with-libpsl --with-pic --disable-static --without-brotli --without-zstd --with-nghttp2 --with-nghttp3 --with-ngtcp2 --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_getpass_r='no' ac_cv_header_stdatomic_h='no')
     - path: [subpackages, 'name=${{package.name}}-oci-entrypoint']
       delete: true
     - path: [subpackages, name=libcurl-openssl4, dependencies, provides]
@@ -131,7 +128,6 @@ wolfi:
     - path: [subpackages, name=curl-dev, dependencies, runtime]
       remove:
         - brotli-dev
-        - nghttp2-dev
     - path: [subpackages, name=curl-static]
       delete: true
     - path: [test, pipeline]
@@ -152,10 +148,10 @@ wolfi:
         runs: |
           curl --version | grep -F "ldap ldaps"
           curl --version | grep -F "HTTP3"
-  revision: 10
+  revision: 11
   recipe: curl
 changes:
-  - what: Build HTTP(S)-only curl/libcurl with TLS, cookies and gzip/deflate; omit other protocols, proxying, HTTP/2, HTTP/3 and unused authentication backends.
+  - what: Build HTTP(S)-only curl/libcurl with TLS, cookies and gzip/deflate; retain HTTP/2 and HTTP/3; omit non-HTTP protocols, proxying and unused authentication backends.
     why: Limit the client to the features required by Werewolf consumers; retained library ABI does not imply all Wolfi features remain available.
     evidence:
       - package.yaml
@@ -170,6 +166,8 @@ actions:
   probe:
     curl:
       binary: curl
+      http2: true
+      http3: true
       psl: true
       cookies: true
       netrc-disabled: true

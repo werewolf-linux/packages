@@ -27,11 +27,15 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/quic-go/quic-go/http3"
 )
 
 // CurlOptions describes the intentionally small supported curl feature set.
 type CurlOptions struct {
 	Binary        string `yaml:"binary"`
+	HTTP2         bool   `yaml:"http2,omitempty"`
+	HTTP3         bool   `yaml:"http3,omitempty"`
 	PSL           bool   `yaml:"psl,omitempty"`
 	Cookies       bool   `yaml:"cookies,omitempty"`
 	NetrcDisabled bool   `yaml:"netrc-disabled,omitempty"`
@@ -95,7 +99,12 @@ func Curl(ctx context.Context, options CurlOptions) error {
 	if slices.Contains(features, "PSL") != options.PSL {
 		return fmt.Errorf("curl PSL policy differs: %s", version)
 	}
-	for _, feature := range []string{"brotli", "zstd", "HTTP2", "HTTP3", "GSS-API", "Kerberos", "SPNEGO", "NTLM", "UnixSockets", "HTTPS-proxy", "alt-svc", "HSTS"} {
+	for feature, enabled := range map[string]bool{"HTTP2": options.HTTP2, "HTTP3": options.HTTP3} {
+		if slices.Contains(features, feature) != enabled {
+			return fmt.Errorf("curl %s policy differs: %s", feature, version)
+		}
+	}
+	for _, feature := range []string{"brotli", "zstd", "GSS-API", "Kerberos", "SPNEGO", "NTLM", "UnixSockets", "HTTPS-proxy", "alt-svc", "HSTS"} {
 		if slices.Contains(features, feature) {
 			return fmt.Errorf("unexpected curl feature %s", feature)
 		}
@@ -169,6 +178,7 @@ func Curl(ctx context.Context, options CurlOptions) error {
 		return err
 	}
 	secure := httptest.NewUnstartedServer(handler)
+	secure.EnableHTTP2 = options.HTTP2
 	secure.Config.ErrorLog = slog.NewLogLogger(slog.Default().Handler(), slog.LevelDebug)
 	secure.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{certificate}, PrivateKey: private}}, MinVersion: tls.VersionTLS12}
 	secure.StartTLS()
@@ -196,6 +206,33 @@ func Curl(ctx context.Context, options CurlOptions) error {
 		{[]string{https + "/hello"}, 60, "", false},
 		{[]string{"--cacert", certPath, "--resolve", "localhost:" + port + ":127.0.0.1", https + "/hello"}, 0, "hello", true},
 		{[]string{"--cacert", certPath, secure.URL + "/hello"}, 60, "", false},
+	}
+	if options.HTTP2 {
+		checks = append(checks, check{[]string{"--http2-prior-knowledge", "--cacert", certPath,
+			"--resolve", "localhost:" + port + ":127.0.0.1", "-w", "\n%{http_version}", https + "/hello"}, 0, "hello\n2", true})
+	}
+	if options.HTTP3 {
+		packet, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		defer packet.Close()
+		quicServer := &http3.Server{Handler: handler, TLSConfig: http3.ConfigureTLSConfig(secure.TLS.Clone())}
+		served := make(chan error, 1)
+		go func() { served <- quicServer.Serve(packet) }()
+		defer func() {
+			quicServer.Close()
+			<-served
+		}()
+		_, quicPort, err := net.SplitHostPort(packet.LocalAddr().String())
+		if err != nil {
+			return err
+		}
+		quicURL := "https://localhost:" + quicPort + "/hello"
+		resolve := "localhost:" + quicPort + ":127.0.0.1"
+		checks = append(checks,
+			check{[]string{"--http3-only", "--cacert", certPath, "--resolve", resolve, "-w", "\n%{http_version}", quicURL}, 0, "hello\n3", true},
+			check{[]string{"--http3-only", "--resolve", resolve, quicURL}, 60, "", false})
 	}
 	upload := filepath.Join(directory, "upload")
 	if err := os.WriteFile(upload, []byte("uploaded"), 0644); err != nil {

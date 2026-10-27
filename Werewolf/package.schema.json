@@ -83,6 +83,12 @@
         "cookies": {
           "type": "boolean"
         },
+        "http2": {
+          "type": "boolean"
+        },
+        "http3": {
+          "type": "boolean"
+        },
         "musl": {
           "type": "boolean"
         },

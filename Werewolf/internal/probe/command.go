@@ -49,6 +49,8 @@ func Command(ctx context.Context, args []string) error {
 		var options CurlOptions
 		flags.StringVar(&options.Binary, "binary", "", "installed curl executable")
 		flags.BoolVar(&options.Musl, "musl", false, "require the private musl linkage")
+		flags.BoolVar(&options.HTTP2, "http2", false, "require and exercise HTTP/2")
+		flags.BoolVar(&options.HTTP3, "http3", false, "require and exercise HTTP/3")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
