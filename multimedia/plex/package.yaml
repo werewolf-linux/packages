@@ -9,7 +9,7 @@ melange:
   package:
     name: plexmediaserver
     version: 1.43.5.11079
-    epoch: 3
+    epoch: 4
     description: Plex Media Server with build-time codec dependencies
     # The vendor tree carries its private musl ABI and Python Script Host.
     # Resource-script shebangs must not pull an unrelated system Python 2.
@@ -131,14 +131,6 @@ melange:
         chmod -R go-w "$home"
         install -Dm644 sources.json "${{targets.destdir}}/usr/share/plexmediaserver/sources.json"
   test:
-    environment:
-      contents:
-        repositories:
-          - https://packages.wolfi.dev/os
-        keyring:
-          - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
-        packages:
-          - busybox
     pipeline:
       - runs: |
           /usr/lib/plexmediaserver/"Plex Media Server" --version | grep -Fx 'v1.43.5.11079-b3b13e506'
