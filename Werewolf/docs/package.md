@@ -213,6 +213,10 @@ also need the appropriate source context and any declared helper operations.
 For local application builds through a sibling Werewolf checkout, set
 `WEREWOLF=/path/to/werewolf make PACKAGE=example build`. Otherwise the common builder
 uses native Linux bubblewrap, or the supported Wolfi guest runner.
+Shared Melange pipelines live in `Werewolf/pipelines/`. Native application builds
+and tests supply that search path; sibling builds use `melange compile` to produce
+a standalone recipe before handing it to the VM builder. `go-deps` resolves only
+the selected Go packages and retries interrupted downloads before compilation.
 
 ## Installed tests
 

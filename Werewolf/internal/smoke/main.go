@@ -247,6 +247,7 @@ func Check(ctx context.Context, name, arch, runner string, repositories ...strin
 		}
 	}
 	args := []string{"test", path, "--arch", arch, "--runner", runner, "--ignore-signatures", "--source-dir", fixtures, "--cpu", "2", "--memory", "4Gi", "--timeout", "10m", "--apk-cache-dir", cache}
+	args = append(args, "--pipeline-dirs", filepath.Join(root, "Werewolf/pipelines"))
 	for _, repository := range repositories {
 		args = append(args, "--repository-append", repository)
 	}

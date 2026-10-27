@@ -39,9 +39,13 @@ melange:
         repository: https://github.com/caddyserver/caddy
         tag: v${{package.version}}
         expected-commit: 72dd0fb067f6d7826c7f79907670ba4a713bfe37
+    - runs: patch --batch --fuzz=0 -p1 < optional-modules.patch
+    - uses: go-deps
+      with:
+        packages: ./cmd/caddy
+        tags: netgo,osusergo
     # The binary says how it was built; a build that lost PIE stops here.
     - runs: |
-        patch --batch --fuzz=0 -p1 < optional-modules.patch
         CGO_ENABLED=0 go build -buildmode=pie -trimpath -tags netgo,osusergo \
           -ldflags='-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v${{package.version}}' \
           -o caddy ./cmd/caddy
