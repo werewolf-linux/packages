@@ -24,7 +24,7 @@
       ]
     },
     "resources": {
-      "cpu": "25",
+      "cpu": "8",
       "memory": "23Gi"
     },
     "test-resources": {
@@ -112,11 +112,11 @@
     {
       "uses": "autoconf/configure",
       "with": {
-        "opts": "--with-boot-jdk=/usr/lib/jvm/default-jvm \\\n--prefix=/usr/lib/jvm/java-${{vars.java-version}}-openjdk \\\n--with-vendor-name=wolfi \\\n--with-vendor-url=https://wolfi.dev \\\n--with-vendor-bug-url=https://github.com/wolfi-dev/os/issues \\\n--with-version-opt=\"wolfi-r${{package.epoch}}\" \\\n--with-vendor-version-string=\"${{package.name}}-${{package.full-version}}\" \\\n--disable-warnings-as-errors \\\n--disable-precompiled-headers \\\n--enable-dtrace=no \\\n--with-zlib=system \\\n--with-debug-level=release \\\n--with-native-debug-symbols=external \\\n--with-external-symbols-in-bundles=none \\\n--with-cacerts-file=/etc/ssl/certs/java/cacerts \\\n--with-jvm-variants=server \\\n--with-jtreg=no  \\\n--with-libpng=system \\\n--with-jvm-variants=server \\\n--with-libjpeg=system \\\n--with-giflib=system \\\n--with-lcms=system \\\n--enable-linkable-runtime \\\n--with-gtest=\"/usr/src/googletest\" \\\n--with-version-pre=\"no\" \\\n--with-version-string=\"\" --enable-headless-only"
+        "opts": "--with-boot-jdk=/usr/lib/jvm/default-jvm \\\n--prefix=/usr/lib/jvm/java-${{vars.java-version}}-openjdk \\\n--with-vendor-name=wolfi \\\n--with-vendor-url=https://wolfi.dev \\\n--with-vendor-bug-url=https://github.com/wolfi-dev/os/issues \\\n--with-version-opt=\"wolfi-r${{package.epoch}}\" \\\n--with-vendor-version-string=\"${{package.name}}-${{package.full-version}}\" \\\n--disable-warnings-as-errors \\\n--disable-precompiled-headers \\\n--enable-dtrace=no \\\n--with-zlib=system \\\n--with-debug-level=release \\\n--with-native-debug-symbols=external \\\n--with-external-symbols-in-bundles=none \\\n--with-cacerts-file=/etc/ssl/certs/java/cacerts \\\n--with-jvm-variants=server \\\n--with-jtreg=no  \\\n--with-libpng=system \\\n--with-jvm-variants=server \\\n--with-libjpeg=system \\\n--with-giflib=system \\\n--with-lcms=system \\\n--enable-linkable-runtime \\\n--with-gtest=\"/usr/src/googletest\" \\\n--with-version-pre=\"no\" \\\n--with-version-string=\"\" --enable-headless-only --with-num-cores=8 --with-memory-size=23552 --with-jobs=8"
       }
     },
     {
-      "runs": "make jdk-image legacy-jre-image\n"
+      "runs": "make JOBS=8 jdk-image legacy-jre-image\n"
     },
     {
       "runs": "_java_bin=\"./build/*-server-release/images/jdk/bin\"\n\n# Check we built something valid\n$_java_bin/javac -d . HelloWorld.java\n$_java_bin/java HelloWorld\n\n# run the gtest unittest suites\n# Temporarily disable G1HeapRegion.apply_to_marked_object_other_vm\n# due to a segfault that's been reported to (but\n# not acknowledged yet by) upstream.\nmake test-hotspot-gtest \\\n  GTEST='OPTIONS=--gtest_filter=-G1HeapRegion.apply_to_marked_object_other_vm'\n"

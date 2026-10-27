@@ -79,6 +79,12 @@ wolfi:
           patches: |
             JDK-8312267.patch
   edits:
+    - path: [package, resources, cpu]
+      exists: true
+      set: "8"
+    - path: [package, resources, memory]
+      exists: true
+      set: 23Gi
     - path: [vars, cacert-entrypoint-hash]
       delete: true
       exists: true
@@ -91,12 +97,12 @@ wolfi:
       replace:
         - old: make jdk-image legacy-jre-image jmods
           new: |
-            make jdk-image legacy-jre-image
+            make JOBS=8 jdk-image legacy-jre-image
     - path: [pipeline, uses=autoconf/configure, with, opts]
       replace:
         - old: |
             --with-version-string=""
-          new: --with-version-string="" --enable-headless-only
+          new: --with-version-string="" --enable-headless-only --with-num-cores=8 --with-memory-size=23552 --with-jobs=8
     - path: [pipeline]
       append:
         - name: Permit effective root only in the build guest
@@ -148,9 +154,13 @@ wolfi:
   suite-setup:
     name: Permit effective root only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 16
+  revision: 17
   family: openjdk-
 changes:
+  - what: Limit OpenJDK's configured CPU count and build jobs to eight, with a 23 GiB memory budget.
+    why: Host-wide CPU discovery otherwise starts 128 compilers and stalls the runner in memory reclaim.
+    evidence:
+      - package.yaml
   - what: Omit jmods, demos and the OCI entrypoint.
     why: Keep the runtime and supported development packages without unused distribution artifacts.
     evidence:
