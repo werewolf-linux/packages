@@ -183,7 +183,10 @@ func Check(ctx context.Context, name, arch, runner string, repositories ...strin
 		}
 		overlay.Put(contents, "repositories", repositories)
 		if definition.Test.Confined {
-			accounts, _ := overlay.Node(map[string]string{"run-as": "0"})
+			// Keep the runner's bootstrap identity. Explicit run-as: 0 makes
+			// Melange create another user namespace before binding its private
+			// guest root on hosted runners. smokeCommand drops to UID 1000.
+			accounts, _ := overlay.Node(map[string]string{})
 			overlay.Put(environment, "accounts", accounts)
 			paths, _ := overlay.Node(mutations)
 			if old := overlay.Field(environment, "paths"); old != nil {

@@ -15,7 +15,7 @@ melange:
   package:
     name: pg-gvm
     version: "22.6.19"
-    epoch: 0
+    epoch: 1
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later
@@ -33,8 +33,8 @@ melange:
         - ca-certificates-bundle
         - cmake
         - glib-dev
-        # pg-gvm uses libical 3's recurrence API; libical 4 changed its ABI.
-        - libical-dev~3.0
+        - libical-dev~4
+        - patch
         - pkgconf
         - postgresql-dev~18
   pipeline:
@@ -49,6 +49,7 @@ melange:
         uri: https://github.com/greenbone/pg-gvm/archive/refs/tags/v${{package.version}}.tar.gz
         expected-sha256: "2f8715530175ac640660852fad9817094bbd9abed9f2432a2dd054206dbc7891"
         directory: pg-gvm
+    - runs: patch --batch --fuzz=0 -p1 -d pg-gvm < libical4.patch
     - runs: |
         printf '\nadd_subdirectory(base)\n' >>gvm-libs/CMakeLists.txt
         cmake -S gvm-libs -B build-base \
@@ -67,8 +68,6 @@ melange:
     - uses: strip
   test:
     environment:
-      accounts:
-        run-as: "1000"
       contents:
         packages:
           - postgresql~18
@@ -85,9 +84,17 @@ melange:
           expected=${expected%.*}
           actual=$(psql -h "$root" -U tester -d postgres -Atc "SELECT extversion FROM pg_extension WHERE extname='pg-gvm'")
           test "$actual" = "$expected"
+          psql -h "$root" -U tester -d postgres -v ON_ERROR_STOP=1 -f recurrence.sql
 changes:
   - what: PostgreSQL's Greenbone extension, built for PostgreSQL 18 as the form uses. Only gvm-libs' base library is needed; scanner libraries, build tools and headers stay out of the runtime image.
     why: Provide an independently maintained application context with immutable sources and separately updatable Wolfi dependencies.
     evidence:
       - package.yaml
+  - what: Use libical 4's reference-counted recurrence rules and counted BY arrays.
+    why: Build against the supported Wolfi library without carrying a retired libical 3 runtime.
+    evidence:
+      - libical4.patch
+      - tests/recurrence.sql
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
+test:
+  confined: true

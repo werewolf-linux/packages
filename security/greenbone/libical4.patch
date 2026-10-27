@@ -1,0 +1,159 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+Subject: [PATCH] Use libical 4 recurrence pointers and counted BY arrays
+Upstream-Status: Pending
+Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.h
+
+--- a/src/ical_utils.c
++++ b/src/ical_utils.c
+@@ -179,7 +179,7 @@
+  * @brief Try to seek a recurrence iterator past historical occurrences.
+  *
+  * @param[in]     recurrence     The recurrence rule to evaluate.
+- * @param[in]     dtstart        The original start time of the recurrence.
++ * @param[in]     dtstart        The original start time of the recurrence->
+  * @param[in]     reference_time The reference time.
+  * @param[in]     tz             The icaltimezone to use.
+  * @param[in]     exdates        EXDATE dates or datetimes to skip.
+@@ -190,7 +190,7 @@
+  *         unsupported or fails.  On failure, recur_time is unchanged.
+  */
+ static icalrecur_iterator *
+-icalendar_seek_recurrence_x (struct icalrecurrencetype recurrence,
++icalendar_seek_recurrence_x (struct icalrecurrencetype *recurrence,
+                              icaltimetype dtstart, icaltimetype reference_time,
+                              icaltimezone *tz, array_x *exdates,
+                              int periods_offset, icaltimetype *recur_time)
+@@ -198,32 +198,32 @@
+   /* Plain non-UTC rules require INTERVAL=1: skipping DST transitions
+    * can change the phase of larger intervals.  UTC intervals must repeat
+    * every day.  Keep DTSTART so libical retains its lower time fields. */
+-  if (recurrence.count == 0 && recurrence.interval > 0
+-      && recurrence.rscale == NULL && dtstart.is_date == 0
+-      && (icaltime_is_utc (dtstart) || recurrence.interval == 1)
++  if (recurrence->count == 0 && recurrence->interval > 0
++      && recurrence->rscale == NULL && dtstart.is_date == 0
++      && (icaltime_is_utc (dtstart) || recurrence->interval == 1)
+       && (periods_offset == 0 || exdates->len == 0)
+-      && recurrence.by_second[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_minute[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_hour[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_day[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_month_day[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_year_day[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_week_no[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_month[0] == ICAL_RECURRENCE_ARRAY_MAX
+-      && recurrence.by_set_pos[0] == ICAL_RECURRENCE_ARRAY_MAX)
++      && recurrence->by[ICAL_BY_SECOND].size == 0
++      && recurrence->by[ICAL_BY_MINUTE].size == 0
++      && recurrence->by[ICAL_BY_HOUR].size == 0
++      && recurrence->by[ICAL_BY_DAY].size == 0
++      && recurrence->by[ICAL_BY_MONTH_DAY].size == 0
++      && recurrence->by[ICAL_BY_YEAR_DAY].size == 0
++      && recurrence->by[ICAL_BY_WEEK_NO].size == 0
++      && recurrence->by[ICAL_BY_MONTH].size == 0
++      && recurrence->by[ICAL_BY_SET_POS].size == 0)
+     {
+       gint64 interval_seconds = 0;
+ 
+-      switch (recurrence.freq)
++      switch (recurrence->freq)
+         {
+         case ICAL_SECONDLY_RECURRENCE:
+-          interval_seconds = recurrence.interval;
++          interval_seconds = recurrence->interval;
+           break;
+         case ICAL_MINUTELY_RECURRENCE:
+-          interval_seconds = (gint64) recurrence.interval * 60;
++          interval_seconds = (gint64) recurrence->interval * 60;
+           break;
+         case ICAL_HOURLY_RECURRENCE:
+-          interval_seconds = (gint64) recurrence.interval * 3600;
++          interval_seconds = (gint64) recurrence->interval * 3600;
+           break;
+         default:
+           break;
+@@ -235,11 +235,11 @@
+           icaltimetype seek_time;
+ 
+           /* Anchor expired rules at UNTIL to retain their last occurrence. */
+-          if (!icaltime_is_null_time (recurrence.until))
++          if (!icaltime_is_null_time (recurrence->until))
+             {
+               icaltimetype until;
+ 
+-              until = icaltime_convert_to_zone (recurrence.until, tz);
++              until = icaltime_convert_to_zone (recurrence->until, tz);
+               if (icaltime_compare (until, anchor) < 0)
+                 anchor = until;
+             }
+@@ -271,9 +271,9 @@
+                    * local date can otherwise seek past the anchor. */
+                   if (!icaltime_is_null_time (candidate)
+                       && icaltime_compare (candidate, anchor) <= 0
+-                      && (recurrence.freq == ICAL_SECONDLY_RECURRENCE
++                      && (recurrence->freq == ICAL_SECONDLY_RECURRENCE
+                           || candidate.second == recur_time->second)
+-                      && (recurrence.freq != ICAL_HOURLY_RECURRENCE
++                      && (recurrence->freq != ICAL_HOURLY_RECURRENCE
+                           || candidate.minute == recur_time->minute))
+                     {
+                       *recur_time = candidate;
+@@ -293,7 +293,7 @@
+  * @brief Calculate the next time of a recurrence
+  *
+  * @param[in]  recurrence     The recurrence rule to evaluate.
+- * @param[in]  dtstart        The start time of the recurrence.
++ * @param[in]  dtstart        The start time of the recurrence->
+  * @param[in]  reference_time The reference time (usually the current time).
+  * @param[in]  tz             The icaltimezone to use.
+  * @param[in]  exdates        GList of EXDATE dates or datetimes to skip.
+@@ -303,7 +303,7 @@
+  * @return  The next time.
+  */
+ static time_t
+-icalendar_next_time_from_recurrence_x (struct icalrecurrencetype recurrence,
++icalendar_next_time_from_recurrence_x (struct icalrecurrencetype *recurrence,
+                                        icaltimetype dtstart,
+                                        icaltimetype reference_time,
+                                        icaltimezone *tz,
+@@ -467,7 +467,7 @@
+   icaltimetype dtstart, dtstart_with_tz, ical_reference_time;
+   icaltimezone *tz;
+   icalproperty *rrule_prop;
+-  struct icalrecurrencetype recurrence;
++  struct icalrecurrencetype *recurrence;
+   array_x *exdates, *rdates;
+   time_t next_time = 0;
+ 
+@@ -520,10 +520,21 @@
+   // Try to get the recurrence from the RRULE property
+   rrule_prop = icalcomponent_get_first_property (vevent, ICAL_RRULE_PROPERTY);
+   if (rrule_prop)
+-    recurrence = icalproperty_get_rrule (rrule_prop);
++    {
++      recurrence = icalproperty_get_rrule (rrule_prop);
++      if (recurrence)
++        icalrecurrencetype_ref (recurrence);
++    }
+   else
+-    icalrecurrencetype_clear (&recurrence);
++    recurrence = icalrecurrencetype_new ();
+ 
++  if (recurrence == NULL)
++    {
++      free_array_x (exdates);
++      free_array_x (rdates);
++      return 0;
++    }
++
+   // Calculate next time.
+   next_time = icalendar_next_time_from_recurrence_x (recurrence,
+                                                      dtstart_with_tz,
+@@ -532,6 +543,7 @@
+                                                      periods_offset);
+ 
+   // Cleanup
++  icalrecurrencetype_unref (recurrence);
+   free_array_x (exdates);
+   free_array_x (rdates);
+ 

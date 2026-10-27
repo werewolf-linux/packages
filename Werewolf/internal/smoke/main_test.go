@@ -129,8 +129,8 @@ exit 0
 	if len(recipe.Subpackages) != 1 || recipe.Subpackages[0].Name != "${{package.name}}-extra" || len(recipe.Subpackages[0].Test.Pipeline) != 1 {
 		t.Fatal("native subpackage test was lost")
 	}
-	if recipe.Test.Environment.Accounts.RunAs != "0" {
-		t.Fatal("bootstrap identity changed")
+	if recipe.Test.Environment.Accounts.RunAs != "" {
+		t.Fatal("bootstrap must retain the runner identity before the confined privilege drop")
 	}
 	if !slices.Contains(recipe.Test.Environment.Contents.Packages, "mksh") {
 		t.Fatal("test root needs a shell when hardened BusyBox omits /bin/sh")
