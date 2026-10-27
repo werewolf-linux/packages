@@ -168,6 +168,17 @@ func advisories(data []byte, stream, previous, current string) (securityNotes, e
 	return found, nil
 }
 
+func notePatches(pkg Package) ([]string, error) {
+	series, err := os.ReadFile(filepath.Join(pkg.Directory, "patches/series"))
+	if os.IsNotExist(err) && pkg.Spec.Patches == "" {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(string(series)), nil
+}
+
 func releaseNotes(ctx context.Context, pkg Package, artifacts, assets string, lock Inputs, manifest WolfiManifest) error {
 	notes := releaseNote{Format: "hardened-packages-release-notes/2", Title: pkg.Spec.Title, Package: pkg.Name, Version: manifest.Version, BuildID: lock.BuildID, Commit: manifest.SourceSHA, Date: time.Now().UTC().Format("2006-01-02"), Run: env("GITHUB_SERVER_URL", "https://github.com") + "/" + os.Getenv("GITHUB_REPOSITORY") + "/actions/runs/" + os.Getenv("GITHUB_RUN_ID"), WolfiInputs: lock.SHA256, Architectures: map[string]architectureNotes{}}
 	notes.Source.SourceCommit = lock.SourceCommit
@@ -193,11 +204,10 @@ func releaseNotes(ctx context.Context, pkg Package, artifacts, assets string, lo
 	if err != nil {
 		return err
 	}
-	series, err := os.ReadFile(filepath.Join(pkg.Directory, "patches/series"))
+	notes.Patches, err = notePatches(pkg)
 	if err != nil {
 		return err
 	}
-	notes.Patches = strings.Fields(string(series))
 	base := "https://dist.werewolf-linux.org/apk/" + pkg.Name + "/"
 	data, err := download(ctx, base+"current.json")
 	if err != nil {
