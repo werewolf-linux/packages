@@ -21,7 +21,7 @@ Consumers use one feed: **https://dist.werewolf-linux.org/apk/hardened**, with
 | [openjdk](../../lang/openjdk/README.md) | newest `openjdk-*` | object deserialization and native access restricted; code only from read-only mounts; see manifest exception |
 | [python](../../lang/python/README.md) | newest `python-3.*` | no user site; environment, ctypes, pickle globals, inline and writable main scripts gated |
 | [node](../../lang/node/README.md) | newest `nodejs-*` | no npm, inspector or SEA; exec, native, inline and writable modules require allowances |
-| [curl](../../net/curl/README.md) | `curl` | HTTP(S) only; no Brotli, Zstd, HTTP/2/3, proxy, SSH, LDAP or Kerberos libraries |
+| [curl](../../net/curl/README.md) | `curl` | HTTP/1.1, HTTP/2 and HTTP/3; no Brotli, Zstd, proxy, SSH, LDAP or Kerberos libraries |
 | [openssh](../../net/openssh/README.md) | `openssh` | no PAM, SELinux, zlib or PKCS#11; OpenSSL stays for P-256 security keys |
 | [vips](../../graphics/vips/README.md) | `libvips` | Mastodon image formats only; no HEIF, SVG, PDF, TIFF or external loader modules |
 | [ffmpeg](../../multimedia/ffmpeg/README.md) | newest `ffmpeg-*` | local media only; no network protocols, display, devices or font rendering |

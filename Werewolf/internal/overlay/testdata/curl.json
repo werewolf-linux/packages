@@ -44,6 +44,9 @@
         "glibc-2.44-dev",
         "libpsl-dev",
         "libtool",
+        "nghttp2-dev",
+        "nghttp3-dev",
+        "ngtcp2-dev",
         "openssl-${{vars.openssl-version}}",
         "openssl-${{vars.openssl-version}}-dev",
         "perl",
@@ -75,7 +78,7 @@
     {
       "uses": "autoconf/configure",
       "with": {
-        "opts": "--enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls --with-zlib --with-libpsl --with-pic --disable-static --without-brotli --without-zstd --without-nghttp2 --without-nghttp3 --without-ngtcp2 --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_getpass_r='no' ac_cv_header_stdatomic_h='no')"
+        "opts": "--enable-ipv6 --enable-threaded-resolver --disable-ares --with-openssl --without-rustls --with-zlib --with-libpsl --with-pic --disable-static --without-brotli --without-zstd --with-nghttp2 --with-nghttp3 --with-ngtcp2 --without-quiche --without-libssh --without-libssh2 --without-gssapi --without-gsasl --without-libidn2 --without-libuv --disable-ldap --disable-ldaps --disable-ftp --disable-file --disable-ipfs --disable-rtsp --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smtp --disable-gopher --disable-mqtt --disable-websockets --disable-kerberos-auth --disable-negotiate-auth --disable-ntlm --disable-digest-auth --disable-aws --disable-proxy --disable-doh --disable-unix-sockets --disable-netrc --disable-alt-svc --disable-hsts --disable-docs --disable-manual --disable-libcurl-option --without-fish-functions-dir --without-zsh-functions-dir $([ -d /usr/lib/oldglibc ] && echo ac_cv_func_getpass_r='no' ac_cv_header_stdatomic_h='no')"
       }
     },
     {
@@ -114,6 +117,7 @@
       "dependencies": {
         "runtime": [
           "libpsl-dev",
+          "nghttp2-dev",
           "openssl-${{vars.openssl-version}}-dev"
         ],
         "provides": [

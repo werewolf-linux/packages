@@ -41,8 +41,9 @@ codecs and negotiation; n8n's native SQLite/isolate probes and Mastodon's
 streaming server are exercised on this runtime. Removing `--shared-brotli` alone
 would bundle Brotli; the maintained source patch instead removes the codec.
 
-The HTTP(S)-only curl profile removes Brotli/Zstd, unused protocols and optional
-authentication backends. Pi-hole uses a separate musl build inside its OCI tree;
+The HTTP(S)-only curl profile supports HTTP/1.1, HTTP/2 and HTTP/3 while removing
+Brotli/Zstd, unused protocols and optional authentication backends.
+Pi-hole uses a separate musl build inside its OCI tree;
 its original curl and now-unused libraries are pruned by the form. Blocklist,
 login and DNS checks cover first boot and restart.
 
