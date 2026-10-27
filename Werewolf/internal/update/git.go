@@ -80,8 +80,9 @@ func newestTag(tags map[string]string, p Policy) (Release, error) {
 	return best, nil
 }
 
-// gitCommitTime fetches tag alone, at depth one, into a scratch repository,
-// checks it still names commit, and returns that commit's committer time.
+// gitCommitTime fetches tag alone, at depth one and without its tree, into a
+// scratch repository, checks it still names commit, and returns that commit's
+// committer time. A server without partial clone sends the tree regardless.
 func gitCommitTime(ctx context.Context, address, tag, commit string) (int64, error) {
 	if !gitURL.MatchString(address) || !gitTag.MatchString(tag) || !commitID.MatchString(commit) {
 		return 0, fmt.Errorf("invalid git release %s %s", address, tag)
@@ -94,7 +95,7 @@ func gitCommitTime(ctx context.Context, address, tag, commit string) (int64, err
 	if _, err := git(ctx, dir, "init", "-q"); err != nil {
 		return 0, err
 	}
-	if _, err := git(ctx, dir, "fetch", "-q", "--no-tags", "--depth=1", "--", address, "refs/tags/"+tag); err != nil {
+	if _, err := git(ctx, dir, "fetch", "-q", "--no-tags", "--depth=1", "--filter=tree:0", "--", address, "refs/tags/"+tag); err != nil {
 		return 0, err
 	}
 	got, err := git(ctx, dir, "rev-parse", "--verify", "FETCH_HEAD^{commit}")

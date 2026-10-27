@@ -20,16 +20,18 @@ import (
 type TestOptions struct {
 	Arch, Runner, Report string
 	Build, Fresh         bool
+	Repositories         []string
 }
 
 type TestResult struct {
-	Package string `json:"package"`
-	Arch    string `json:"arch"`
-	Inputs  string `json:"inputs"`
-	Status  string `json:"status"`
-	Stage   string `json:"stage,omitempty"`
-	Log     string `json:"log"`
-	Error   string `json:"error,omitempty"`
+	Package      string   `json:"package"`
+	Arch         string   `json:"arch"`
+	Inputs       string   `json:"inputs"`
+	Status       string   `json:"status"`
+	Stage        string   `json:"stage,omitempty"`
+	Log          string   `json:"log"`
+	Error        string   `json:"error,omitempty"`
+	Repositories []string `json:"repositories,omitempty"`
 }
 
 // TestPackages runs the existing single-package commands, isolating failures
@@ -48,7 +50,7 @@ func testPackages(ctx context.Context, packages []Package, options TestOptions, 
 	}
 	results := make([]TestResult, len(packages))
 	for i, pkg := range packages {
-		results[i] = TestResult{Package: pkg.Name, Arch: options.Arch, Inputs: filepath.Base(pkg.Build), Status: "pending", Log: filepath.Join(Paths(pkg, options.Arch)["logs"], "test.log")}
+		results[i] = TestResult{Package: pkg.Name, Arch: options.Arch, Inputs: filepath.Base(pkg.Build), Status: "pending", Log: filepath.Join(Paths(pkg, options.Arch)["logs"], "test.log"), Repositories: options.Repositories}
 	}
 	if err := SaveReport(options.Report, results); err != nil {
 		return results, err
@@ -100,6 +102,9 @@ func testPackage(ctx context.Context, pkg Package, options TestOptions, tool str
 		args := []string{stage, "--root", pkg.Root, "--package", pkg.Name, "--arch", options.Arch}
 		if options.Runner != "" {
 			args = append(args, "--runner", options.Runner)
+		}
+		for _, repository := range options.Repositories {
+			args = append(args, "--repository-append", repository)
 		}
 		command := exec.CommandContext(ctx, tool, args...)
 		command.Dir = pkg.Root

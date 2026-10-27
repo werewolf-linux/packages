@@ -25,7 +25,7 @@ type spec struct {
 	PreserveMtimes []string `json:"preserve_mtimes,omitempty"`
 }
 
-func Check(ctx context.Context, name, arch, runner string) (result error) {
+func Check(ctx context.Context, name, arch, runner string, repositories ...string) (result error) {
 	if runner == "" {
 		runner = "qemu"
 		if runtime.GOOS == "linux" {
@@ -247,6 +247,9 @@ func Check(ctx context.Context, name, arch, runner string) (result error) {
 		}
 	}
 	args := []string{"test", path, "--arch", arch, "--runner", runner, "--ignore-signatures", "--source-dir", fixtures, "--cpu", "2", "--memory", "4Gi", "--timeout", "10m", "--apk-cache-dir", cache}
+	for _, repository := range repositories {
+		args = append(args, "--repository-append", repository)
+	}
 	names, err := overlay.OutputNames(config)
 	if err != nil {
 		return err

@@ -87,8 +87,9 @@ configuration without a competing release-discovery policy.
 ## Release discovery
 
 GitHub releases use `github.identifier`, `strip-prefix`, and `strip-suffix`.
-`use-tag: true` selects tags instead of GitHub releases. Keep release discovery
-separate from source checkout: forks and upstream release repositories may differ.
+`use-tag: true` selects tags, read with git, instead of GitHub releases. Keep
+release discovery separate from source checkout: forks and upstream release
+repositories may differ.
 
 Other adapters use `source`: `pypi`, `npm`, `minecraft`, `git`, `content`, `plex`,
 `openjdk` and `git-tags` where supported by their engine. Registry adapters name
@@ -220,6 +221,19 @@ Add `--build` to build missing APK sets first. Complete existing sets are checke
 for the selected names, versions and architecture before being tested again.
 `--build --fresh` rebuilds the selected architecture's generated work. Wolfi
 inputs must already be captured; testing never selects newer sources implicitly.
+Use Melange's repeatable `--repository-append URL_OR_DIRECTORY` option to make
+unpublished dependencies available to a build or test. For example, after building
+ONNX, set `repo` to the absolute directory containing its `aarch64` APK directory:
+
+```sh
+Werewolf/.work/tools/melange index --arch aarch64 \
+  --output "$repo/aarch64/APKINDEX.tar.gz" "$repo"/aarch64/*.apk
+Werewolf/.work/tools/package test --package langflow --repository-append "$repo"
+```
+
+Application tests already ignore signatures for their temporary local packages;
+builds retain Melange's normal signature checks. Reports record the additional
+repositories used by the test.
 The equivalent Make targets build missing packages and save a JSON report:
 
 ```sh

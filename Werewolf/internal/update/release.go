@@ -39,11 +39,17 @@ func (c *Client) ResolveRelease(ctx context.Context, p Policy) (Release, error) 
 		return Release{}, err
 	}
 	if p.Source == "git-tags" {
-		r.Timestamp, err = gitCommitTime(ctx, p.URL, r.Tag, r.Commit)
+		r.Timestamp, err = c.commitTime(ctx, p.URL, r.Tag, r.Commit)
 		return r, err
 	}
 	if r.Repository == "" {
 		r.Repository = p.Repo
+	}
+	// A tag read with git already names its commit; git gives its time too,
+	// without the REST API.
+	if r.Commit != "" && gitTag.MatchString(r.Tag) {
+		r.Timestamp, err = c.commitTime(ctx, "https://github.com/"+r.Repository, r.Tag, r.Commit)
+		return r, err
 	}
 	var commit struct {
 		SHA    string

@@ -105,10 +105,21 @@ wolfi:
             : > /etc/runtime-hardening/build-root
             chmod 600 /etc/runtime-hardening/build-root
             # The build runs its own tools with the JDK it builds, from the
-            # writable build tree.
+            # writable build tree, and they run programs.
             mkdir -p /etc/runtime-hardening/allow/all/java
             : > /etc/runtime-hardening/allow/all/java/writable-source
+            : > /etc/runtime-hardening/allow/all/java/exec
       before: "3"
+    - path: [subpackages, 'name=${{package.name}}-jre', pipeline]
+      append:
+        - name: The JRE has no remote debugger, JMX remote agent or RMI naming
+          runs: |
+            _java_home="usr/lib/jvm/java-${{vars.java-version}}-openjdk"
+            rm -f "${{targets.subpkgdir}}"/$_java_home/bin/rmiregistry
+            if ${{targets.destdir}}/$_java_home/bin/jimage list "${{targets.subpkgdir}}"/$_java_home/lib/modules |
+              grep -E '^Module: (jdk\.jdwp\.agent|jdk\.management\.agent|jdk\.naming\.rmi)$'; then
+              exit 1
+            fi
     - path: [subpackages, 'name=${{package.name}}-oci-entrypoint-compat']
       delete: true
     - path: [subpackages, 'name=${{package.name}}-demos']
@@ -137,7 +148,7 @@ wolfi:
   suite-setup:
     name: Permit effective root only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 15
+  revision: 16
   family: openjdk-
 changes:
   - what: Omit jmods, demos and the OCI entrypoint.
@@ -154,6 +165,15 @@ changes:
       - patches/0001-ignore-environment-options.patch
       - patches/0009-writable-source.patch
       - patches/0010-command-hooks-exec.patch
+      - tests/probe.sh
+  - what: Refuse running programs unless exec is granted, refuse XML external references the JDK catalog does not resolve, default perf data off, and build the JRE without the remote debugger, JMX remote agent, RMI naming or rmiregistry.
+    why: Close the usual ways a Java exploit becomes code execution, by a spawned program, a fetched document, or a remote control interface, and the local monitoring file.
+    evidence:
+      - patches/0002-disable-attach-by-default.patch
+      - patches/0011-exec-refused.patch
+      - patches/0012-xml-external-references.patch
+      - patches/0013-jre-without-remote-agents.patch
+      - tests/Probe.java
       - tests/probe.sh
   - what: Grant Unsafe.invokeCleaner alone through the unmap group.
     why: Let servers such as Kafka release mapped files without the whole native group, as freeing a buffer reads and writes none of its memory.

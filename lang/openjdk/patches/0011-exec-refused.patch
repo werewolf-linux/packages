@@ -1,0 +1,22 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Refuse running programs unless exec is allowed
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/src/java.base/unix/classes/java/lang/ProcessImpl.java b/src/java.base/unix/classes/java/lang/ProcessImpl.java
+--- a/src/java.base/unix/classes/java/lang/ProcessImpl.java
++++ b/src/java.base/unix/classes/java/lang/ProcessImpl.java
+@@ -138,6 +138,12 @@
+             throws IOException
+     {
+         assert cmdarray != null && cmdarray.length > 0;
++        // Werewolf: a Java program runs no other program, by ProcessBuilder or
++        // Runtime.exec, unless the image grants java:exec.
++        if (!jdk.internal.misc.WerewolfAllowance.allowed("exec")) {
++            jdk.internal.misc.WerewolfAllowance.denied("exec", "ProcessBuilder.start", cmdarray[0]);
++            throw new IOException("refused: the image must grant java:exec: " + cmdarray[0]);
++        }
+ 
+         // Convert arguments to a contiguous block; it's easier to do
+         // memory management in Java than in C.

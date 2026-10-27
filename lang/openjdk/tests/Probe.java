@@ -16,15 +16,19 @@ public class Probe {
         if (args.length > 0 && args[0].equals("hide-stderr")) {
             System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
         }
-        String attach = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class)
-                .getVMOption("DisableAttachMechanism").getValue();
+        HotSpotDiagnosticMXBean vm = ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean.class);
+        String attach = vm.getVMOption("DisableAttachMechanism").getValue();
+        String perfData = vm.getVMOption("UsePerfData").getValue();
         System.out.println("{\"options\":\"" + System.getProperty("werewolf.probe", "none")
                 + "\",\"attach\":\"" + ("true".equals(attach) ? "disabled" : "enabled")
+                + "\",\"perf_data\":\"" + ("true".equals(perfData) ? "on" : "off")
                 + "\",\"deserialize\":\"" + deserialize(Integer.valueOf(7))
                 + "\",\"primitive_array\":\"" + deserialize(new int[] {7})
                 + "\",\"unsafe\":\"" + unsafe()
                 + "\",\"unmap\":\"" + unmap()
-                + "\",\"native\":\"" + nativeAccess() + "\"}");
+                + "\",\"native\":\"" + nativeAccess()
+                + "\",\"exec\":\"" + exec()
+                + "\",\"xml_external\":\"" + xmlExternal() + "\"}");
     }
 
     static String deserialize(Object value) throws IOException {
@@ -63,6 +67,30 @@ public class Probe {
             unsafe.invokeCleaner(java.nio.ByteBuffer.allocateDirect(8));
             return "allowed";
         } catch (UnsupportedOperationException e) {
+            return "refused";
+        }
+    }
+
+    static String exec() {
+        try {
+            new ProcessBuilder("true").start().waitFor();
+            return "allowed";
+        } catch (IOException | InterruptedException e) {
+            return "refused";
+        }
+    }
+
+    // An external entity naming a file: read, or refused unresolved.
+    static String xmlExternal() throws IOException {
+        java.nio.file.Path entity = java.nio.file.Path.of("xml-entity.txt").toAbsolutePath();
+        java.nio.file.Files.writeString(entity, "werewolf");
+        String file = entity.toUri().toString();
+        String doc = "<!DOCTYPE r [<!ENTITY e SYSTEM \"" + file + "\">]><r>&e;</r>";
+        try {
+            javax.xml.parsers.DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                    .parse(new ByteArrayInputStream(doc.getBytes()));
+            return "read";
+        } catch (Exception e) {
             return "refused";
         }
     }

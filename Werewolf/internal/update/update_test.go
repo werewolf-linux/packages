@@ -24,6 +24,15 @@ func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f
 func mockClient(t *testing.T, routes map[string]string) *Client {
 	t.Helper()
 	c := NewClient("secret")
+	// No test reaches git on the network: one that reads tags stubs them.
+	c.Tags = func(_ context.Context, address string) (map[string]string, error) {
+		t.Fatal("tags read from the network:", address)
+		return nil, nil
+	}
+	c.CommitTime = func(_ context.Context, address, tag, _ string) (int64, error) {
+		t.Fatal("commit time read from the network:", address, tag)
+		return 0, nil
+	}
 	c.HTTP.Transport = transport(func(r *http.Request) (*http.Response, error) {
 		if (r.URL.Host == "api.github.com") != (r.Header.Get("Authorization") == "Bearer secret") {
 			t.Fatal("wrong credential scope", r.URL)
@@ -72,6 +81,11 @@ func TestStableSelection(t *testing.T) {
 				routes["https://api.github.com/repos/a/b/releases/latest"] = `{"tag_name":"v1.10.2"}`
 			}
 			c := mockClient(t, routes)
+			tags := map[string]string{}
+			for _, item := range items {
+				tags[item["tag_name"].(string)] = commitA
+			}
+			c.Tags = tagsAt(t, tags)
 			r, err := c.Discover(context.Background(), Policy{Source: source, Repo: "a/b", Prefix: "v"}, "1.0.0")
 			if err != nil || r.Version != "1.10.2" {
 				t.Fatalf("%+v %v", r, err)
@@ -88,25 +102,41 @@ func TestStableSelection(t *testing.T) {
 	}
 }
 
+// tagsAt stubs git's ref advertisement for repository a/b on GitHub.
+func tagsAt(t *testing.T, tags map[string]string) func(context.Context, string) (map[string]string, error) {
+	return func(_ context.Context, address string) (map[string]string, error) {
+		if address != "https://github.com/a/b" {
+			t.Fatal("tags read from", address)
+		}
+		return tags, nil
+	}
+}
+
 func TestPaginationAndNonVersionTags(t *testing.T) {
 	var page []map[string]string
 	for range 100 {
-		page = append(page, map[string]string{"name": "development"})
+		page = append(page, map[string]string{"tag_name": "development"})
 	}
 	data, _ := json.Marshal(page)
 	c := mockClient(t, map[string]string{
-		"https://api.github.com/repos/a/b/tags?per_page=100&page=1": string(data),
-		"https://api.github.com/repos/a/b/tags?per_page=100&page=2": `[{"name":"releases/solr/10.1.0"}]`,
+		"https://api.github.com/repos/a/b/releases?per_page=100&page=1": string(data),
+		"https://api.github.com/repos/a/b/releases?per_page=100&page=2": `[{"tag_name":"releases/solr/10.1.0"}]`,
 	})
-	r, err := c.Discover(context.Background(), Policy{Source: "github-tags", Repo: "a/b", Prefix: "releases/solr/"}, "10.0.0")
+	r, err := c.Discover(context.Background(), Policy{Source: "github-releases", Repo: "a/b", Prefix: "releases/solr/"}, "10.0.0")
 	if err != nil || r.Version != "10.1.0" {
+		t.Fatalf("%+v %v", r, err)
+	}
+	c.Tags = tagsAt(t, map[string]string{"development": commitA, "releases/solr/10.1.0": commitB})
+	r, err = c.Discover(context.Background(), Policy{Source: "github-tags", Repo: "a/b", Prefix: "releases/solr/"}, "10.0.0")
+	if err != nil || r.Version != "10.1.0" || r.Commit != commitB {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
 
 func TestNamedCompatibilityStreamStillTracksNewStablePatches(t *testing.T) {
-	c := mockClient(t, map[string]string{
-		"https://api.github.com/repos/a/b/tags?per_page=100&page=1": `[{"name":"2026.09.0"},{"name":"5.0.0"},{"name":"4.40.0"},{"name":"4.4.44-rc1"},{"name":"4.4.43"},{"name":"4.4.42"}]`,
+	c := mockClient(t, nil)
+	c.Tags = tagsAt(t, map[string]string{
+		"2026.09.0": commitA, "5.0.0": commitA, "4.40.0": commitA, "4.4.44-rc1": commitA, "4.4.43": commitB, "4.4.42": commitA,
 	})
 	r, err := c.Discover(context.Background(), Policy{Source: "github-tags", Repo: "a/b", Series: "4.4"}, "4.4.42")
 	if err != nil || r.Version != "4.4.43" {

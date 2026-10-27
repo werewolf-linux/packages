@@ -60,6 +60,14 @@ func run(ctx context.Context, args []string) error {
 	fromWolfi := flags.String("from-wolfi", "", "reviewed local Wolfi recipe for a new package")
 	report := flags.String("report", "", "save the machine-readable report")
 	runner := flags.String("runner", "", "Melange test runner")
+	var repositories []string
+	flags.Func("repository-append", "additional Melange APK repository for builds and tests (repeatable)", func(value string) error {
+		if value == "" {
+			return errors.New("repository-append requires a repository")
+		}
+		repositories = append(repositories, value)
+		return nil
+	})
 	root := flags.String("root", ".", "repository root")
 	selected := flags.String("package", "", "one package; empty selects all applicable packages")
 	category := flags.String("category", "", "select a package category")
@@ -87,6 +95,12 @@ func run(ctx context.Context, args []string) error {
 	expectedVersion := flags.String("expected-version", "", "expected signed Plex vendor release")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
+	}
+	if len(repositories) != 0 && command != "build" && command != "test" {
+		return errors.New("repository-append applies to build and test")
+	}
+	if len(repositories) != 0 && *werewolf != "" {
+		return errors.New("repository-append requires the native Melange builder")
 	}
 	if command == "chroot-probe" {
 		err := syscall.Chroot("/")
@@ -271,7 +285,7 @@ func run(ctx context.Context, args []string) error {
 			return errors.New("test --fresh requires --build")
 		}
 		if len(chosen) > 1 || *buildTests || *report != "" || *jsonOutput {
-			results, testErr := packaging.TestPackages(ctx, chosen, packaging.TestOptions{Arch: *arch, Runner: *runner, Build: *buildTests, Fresh: *fresh, Report: *report})
+			results, testErr := packaging.TestPackages(ctx, chosen, packaging.TestOptions{Arch: *arch, Runner: *runner, Build: *buildTests, Fresh: *fresh, Report: *report, Repositories: repositories})
 			if *jsonOutput {
 				if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
 					return err
@@ -288,7 +302,7 @@ func run(ctx context.Context, args []string) error {
 			return testErr
 		}
 		if chosen[0].Engine == "wolfi" {
-			return packaging.BuildWolfi(ctx, chosen[0], *arch, true, *runner)
+			return packaging.BuildWolfi(ctx, chosen[0], *arch, true, *runner, repositories...)
 		}
 		old, err := os.Getwd()
 		if err != nil {
@@ -298,7 +312,7 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		defer os.Chdir(old)
-		return smoke.Check(ctx, chosen[0].Name, *arch, *runner)
+		return smoke.Check(ctx, chosen[0].Name, *arch, *runner, repositories...)
 	}
 	if command == "plan" {
 		result, err := packaging.PlanCI(ctx, chosen, *base, *head)
@@ -420,12 +434,12 @@ func run(ctx context.Context, args []string) error {
 			err = packaging.Prepare(ctx, pkg, target, *source)
 		case "build":
 			if pkg.Engine == "wolfi" {
-				err = packaging.BuildWolfi(ctx, pkg, *arch, *testOnly, *runner)
+				err = packaging.BuildWolfi(ctx, pkg, *arch, *testOnly, *runner, repositories...)
 			} else {
 				if *werewolf != "" {
 					err = packaging.BuildLocalApplication(ctx, pkg, *arch, *werewolf)
 				} else {
-					err = packaging.BuildApplication(ctx, pkg, *arch)
+					err = packaging.BuildApplication(ctx, pkg, *arch, repositories...)
 				}
 			}
 		case "artifact-verify":

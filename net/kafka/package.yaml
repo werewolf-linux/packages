@@ -10,7 +10,7 @@ melange:
   package:
     name: kafka
     version: 4.4.0
-    epoch: 0
+    epoch: 1
     description: Apache Kafka, directly launched with hardened OpenJDK 27
     copyright:
       - license: Apache-2.0
@@ -40,6 +40,10 @@ melange:
         # kafka.Kafka and the tools' classes directly.
         cp -a libs config licenses LICENSE NOTICE "$dest/"
   test:
+    environment:
+      contents:
+        packages:
+          - openjdk-27-default-jvm
     pipeline:
       - name: The broker and its tools run on hardened OpenJDK 27
         runs: |

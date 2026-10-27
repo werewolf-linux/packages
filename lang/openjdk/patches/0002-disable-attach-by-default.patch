@@ -1,5 +1,5 @@
 SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
-Subject: [PATCH 2/6] Disable the attach mechanism by default
+Subject: [PATCH 2/6] Disable the attach mechanism and perf data by default
 Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
 Reference: werewolf docs/design/hardened-interpreters.md
 Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
@@ -7,6 +7,15 @@ Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
 diff --git a/src/hotspot/share/runtime/globals.hpp b/src/hotspot/share/runtime/globals.hpp
 --- a/src/hotspot/share/runtime/globals.hpp
 +++ b/src/hotspot/share/runtime/globals.hpp
+@@ -1707,7 +1707,7 @@
+                                                                             \
+   /* flags for performance data collection */                               \
+                                                                             \
+-  product(bool, UsePerfData, true,                                          \
++  product(bool, UsePerfData, false,  /* Werewolf */                         \
+           "Flag to disable jvmstat instrumentation for performance testing "\
+           "and problem isolation purposes")                                 \
+                                                                             \
 @@ -1747,7 +1747,7 @@
    product(bool, ManagementServer, false,                                    \
            "Create JMX Management Server")                                   \
@@ -16,3 +25,24 @@ diff --git a/src/hotspot/share/runtime/globals.hpp b/src/hotspot/share/runtime/g
            "Disable mechanism that allows tools to attach to this VM")       \
                                                                              \
    product(bool, StartAttachListener, false,                                 \
+diff --git a/test/hotspot/gtest/runtime/test_perfdata.cpp b/test/hotspot/gtest/runtime/test_perfdata.cpp
+--- a/test/hotspot/gtest/runtime/test_perfdata.cpp
++++ b/test/hotspot/gtest/runtime/test_perfdata.cpp
+@@ -21,6 +21,7 @@
+  * questions.
+  */
+ 
++#include "runtime/globals.hpp"
+ #include "runtime/perfMemory.hpp"
+ #include "unittest.hpp"
+ 
+@@ -31,6 +32,9 @@
+ };
+ 
+ TEST_VM_F(PerfMemoryTest, destroy) {
++  if (!UsePerfData) {
++    GTEST_SKIP() << "perf data is off, Werewolf's default";
++  }
+   PerfMemory::destroy();
+ 
+   ASSERT_NE(PerfMemory::start(), (char*)nullptr) << "PerfMemory::_start should not be null";

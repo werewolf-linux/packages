@@ -1,0 +1,150 @@
+SPDX-License-Identifier: BSD-3-Clause
+Subject: Handle supplementary Unicode case equivalents in V8
+Upstream-Status: Backport [V8 f607706154eabc4a949628a88b38dbe95cd2274c]
+Reference: https://github.com/v8/v8/commit/f607706154eabc4a949628a88b38dbe95cd2274c
+
+Adapt the upstream repair to Node 26's older RegExpCaseFolding API. Preserve
+UTF-16 code-unit matching in legacy mode and desugar Unicode-mode BMP
+literals whose case equivalents include supplementary code points.
+
+diff --git a/deps/v8/src/regexp/gen-regexp-special-case.cc b/deps/v8/src/regexp/gen-regexp-special-case.cc
+--- a/deps/v8/src/regexp/gen-regexp-special-case.cc
++++ b/deps/v8/src/regexp/gen-regexp-special-case.cc
+@@ -17,6 +17,16 @@
+ static const base::uc32 kSurrogateEnd = 0xdfff;
+ static const base::uc32 kNonBmpStart = 0x10000;
+ 
++// Backport V8 f607706154eabc4a949628a88b38dbe95cd2274c. Unicode 18 adds
++// case classes spanning BMP and supplementary code points. Legacy matching
++// compares UTF-16 code units, so Canonicalize must see BMP values only.
++bool RemoveSupplementary(icu::UnicodeSet& set) {
++  constexpr UChar32 first = static_cast<UChar32>(kNonBmpStart);
++  if (!set.containsSome(first, UCHAR_MAX_VALUE)) return false;
++  set.remove(first, UCHAR_MAX_VALUE);
++  return true;
++}
++
+ // The following code generates "src/regexp/special-case.cc".
+ void PrintSet(std::ofstream& out, const char* name,
+               const icu::UnicodeSet& set) {
+@@ -51,6 +61,7 @@
+   icu::UnicodeSet current;
+   icu::UnicodeSet special_add;
+   icu::UnicodeSet ignore;
++  icu::UnicodeSet supplementary_equivalents;
+   UErrorCode status = U_ZERO_ERROR;
+   icu::UnicodeSet upper("[\\p{Lu}]", status);
+   CHECK(U_SUCCESS(status));
+@@ -63,6 +74,7 @@
+     }
+     current.set(i, i);
+     current.closeOver(USET_CASE_INSENSITIVE);
++    if (RemoveSupplementary(current)) supplementary_equivalents.add(i);
+ 
+     // Check to see if all characters in the case-folding equivalence
+     // class as defined by UnicodeSet::closeOver all map to the same
+@@ -112,6 +124,7 @@
+       UChar32 canonical = RegExpCaseFolding::Canonicalize(c);
+       current.set(c, c);
+       current.closeOver(USET_CASE_INSENSITIVE);
++      RemoveSupplementary(current);
+       current.removeAll(ignore);
+       for (int32_t j = 0; j < current.getRangeCount(); j++) {
+         for (UChar32 c2 = current.getRangeStart(j);
+@@ -124,6 +137,7 @@
+ 
+   PrintSet(out, "IgnoreSet", ignore);
+   PrintSet(out, "SpecialAddSet", special_add);
++  PrintSet(out, "SupplementaryEquivalentsSet", supplementary_equivalents);
+ }
+ 
+ void WriteHeader(const char* header_filename) {
+diff --git a/deps/v8/src/regexp/special-case.h b/deps/v8/src/regexp/special-case.h
+--- a/deps/v8/src/regexp/special-case.h
++++ b/deps/v8/src/regexp/special-case.h
+@@ -7,6 +7,7 @@
+ 
+ #ifdef V8_INTL_SUPPORT
+ #include "src/base/logging.h"
++#include "src/base/strings.h"
+ #include "src/common/globals.h"
+ 
+ #include "unicode/uchar.h"
+@@ -76,6 +77,10 @@
+  public:
+   static const icu::UnicodeSet& IgnoreSet();
+   static const icu::UnicodeSet& SpecialAddSet();
++  static const icu::UnicodeSet& SupplementaryEquivalentsSet();
++  static bool HasSupplementaryEquivalents(base::uc16 c) {
++    return SupplementaryEquivalentsSet().contains(c);
++  }
+ 
+   // This implements ECMAScript 2020 21.2.2.8.2 (Runtime Semantics:
+   // Canonicalize) step 3, which is used to determine whether
+diff --git a/deps/v8/src/regexp/regexp-parser.cc b/deps/v8/src/regexp/regexp-parser.cc
+--- a/deps/v8/src/regexp/regexp-parser.cc
++++ b/deps/v8/src/regexp/regexp-parser.cc
+@@ -10,6 +10,7 @@
+ #include "src/regexp/regexp-ast.h"
+ #include "src/regexp/regexp-macro-assembler.h"
+ #include "src/regexp/regexp.h"
++#include "src/regexp/special-case.h"
+ #include "src/strings/char-predicates-inl.h"
+ #include "src/utils/ostreams.h"
+ #include "src/utils/utils.h"
+@@ -156,6 +157,10 @@
+ 
+ void RegExpTextBuilder::AddCharacter(base::uc16 c) {
+   FlushPendingSurrogate();
++  if (NeedsDesugaringForIgnoreCase(c)) {
++    AddClassRangesForDesugaring(c);
++    return;
++  }
+   if (characters_ == nullptr) {
+     characters_ = zone()->New<ZoneList<base::uc16>>(4, zone());
+   }
+@@ -238,15 +243,17 @@
+   return false;
+ }
+ 
+-// We only use this for characters made of surrogate pairs.  All other
+-// characters outside of character classes are made case independent in the
+-// code generation.
++// Desugar supplementary characters with case equivalents and BMP characters
++// with supplementary equivalents. Other atoms fold during code generation.
+ bool RegExpTextBuilder::NeedsDesugaringForIgnoreCase(base::uc32 c) {
+ #ifdef V8_INTL_SUPPORT
+   if (IsUnicodeMode() && ignore_case()) {
++    if (c <= unibrow::Utf16::kMaxNonSurrogateCharCode) {
++      return RegExpCaseFolding::HasSupplementaryEquivalents(
++          static_cast<base::uc16>(c));
++    }
+     icu::UnicodeSet set(c, c);
+-    set.closeOver(USET_CASE_INSENSITIVE);
+-    set.removeAllStrings();
++    set.closeOver(USET_SIMPLE_CASE_INSENSITIVE);
+     return set.size() > 1;
+   }
+   // In the case where ICU is not included, we act as if the unicode flag is
+diff --git a/deps/v8/src/regexp/regexp-compiler.cc b/deps/v8/src/regexp/regexp-compiler.cc
+--- a/deps/v8/src/regexp/regexp-compiler.cc
++++ b/deps/v8/src/regexp/regexp-compiler.cc
+@@ -918,6 +918,7 @@
+   set.add(character);
+   set = set.closeOver(unicode ? USET_SIMPLE_CASE_INSENSITIVE
+                               : USET_CASE_INSENSITIVE);
++  if (!unicode) set.remove(0x10000, 0x10ffff);
+ 
+   UChar32 canon = 0;
+   if (in_special_add_set && !unicode) {
+diff --git a/deps/v8/src/regexp/regexp-compiler-tonode.cc b/deps/v8/src/regexp/regexp-compiler-tonode.cc
+--- a/deps/v8/src/regexp/regexp-compiler-tonode.cc
++++ b/deps/v8/src/regexp/regexp-compiler-tonode.cc
+@@ -1705,6 +1705,7 @@
+   icu::UnicodeSet already_added(others);
+   others.removeAll(RegExpCaseFolding::IgnoreSet());
+   others.closeOver(USET_CASE_INSENSITIVE);
++  others.remove(0x10000, 0x10ffff);
+   others.removeAll(RegExpCaseFolding::IgnoreSet());
+   others.removeAll(already_added);
+ 

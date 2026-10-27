@@ -72,7 +72,18 @@ func TestSmokeKeepsExplicitScratchAndConfinesApplication(t *testing.T) {
 	if err := json.Unmarshal(pinData, &pin); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nif [ \"$1\" = version ]; then echo v" + pin["melange"]["version"] + "; fi\nexit 0\n"
+	script := "#!/bin/sh\nif [ \"$1\" = version ]; then echo v" + pin["melange"]["version"] + "; fi\n" + `if [ "$1" = test ]; then
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = --repository-append ]; then
+      test "$2" = "/repo with spaces" || exit 1
+      exit 0
+    fi
+    shift
+  done
+  exit 1
+fi
+exit 0
+`
 	if err := os.WriteFile(filepath.Join(root, "fake-tools/melange"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +92,7 @@ func TestSmokeKeepsExplicitScratchAndConfinesApplication(t *testing.T) {
 	t.Setenv("MELANGE", filepath.Join(root, "fake-tools/melange"))
 	t.Setenv("PATH", filepath.Join(root, "fake-tools")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Chdir(root)
-	if err := Check(t.Context(), "wordpress-sqlite", "aarch64", "bubblewrap"); err != nil {
+	if err := Check(t.Context(), "wordpress-sqlite", "aarch64", "bubblewrap", "/repo with spaces"); err != nil {
 		t.Fatal(err)
 	}
 	if os.Getenv("TMPDIR") != scratch {

@@ -167,11 +167,12 @@ Werewolf/.work/tools/package catalog validate  # offline coverage check
 The Go updater uses GitHub's stable releases or numeric release tags, non-yanked
 PyPI releases, npm's `latest` channel and Mojang's stable server manifest. Numeric
 comparison handles versions such as `26.3` and `1.10.0`; previews, drafts and
-downgrades are rejected. Tag sources paginate instead of assuming tag order is
-version order. Continuwuity and Nextcloud use tags because their GitHub latest
-release metadata can lag their stable tags. GitHub requests accept `GH_TOKEN` to
-avoid anonymous rate limits; the token is never sent to download hosts or child
-processes. endoflife.date is useful for lifecycle information, but direct release
+downgrades are rejected. Tag sources weigh every tag instead of assuming tag order
+is version order. Continuwuity and Nextcloud use tags because their GitHub latest
+release metadata can lag their stable tags. GitHub tags come from git's ref
+advertisement, every tag in one request, outside the REST API's rate limit.
+Release requests accept `GH_TOKEN` to avoid anonymous rate limits; the token is
+never sent to download hosts or child processes. endoflife.date is useful for lifecycle information, but direct release
 sources also cover the applications it does not track.
 
 A stream policy, a package that follows one named release stream, requires an

@@ -18,7 +18,7 @@ melange:
   package:
     name: open-webui
     version: 0.12.4
-    epoch: 4
+    epoch: 5
     description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
     copyright:
       - license: LicenseRef-Open-WebUI
@@ -128,6 +128,8 @@ actions:
         - azure-search-documents
         - googleapis-common-protos
       omit-prefixes:
+        # MCP still requires opentelemetry-api transitively; omit SDKs/exporters,
+        # while allowing that API-only dependency in the resolved slim profile.
         - opentelemetry-
       required:
         - aiodns

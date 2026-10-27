@@ -52,6 +52,7 @@ grant writable-source
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
     -addext subjectAltName=DNS:localhost -keyout "$work/key.pem" -out "$work/cert.pem" >/dev/null 2>&1
 "$node" "$work/codecs.cjs" "$work/cert.pem" "$work/key.pem"
+"$node" "$work/regexp.cjs"
 closed='{"exec":false,"native":false,"sqlite":false,"inspector":false}'
 report() { "$node" "$work/probe.cjs" report "$work/addon.node"; }
 expect 'default capability floor' "$closed" report

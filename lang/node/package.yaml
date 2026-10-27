@@ -146,6 +146,8 @@ wolfi:
             ${file:tests/probe.sh}WEREWOLF_NODE_PROBE_SH
             cat > "$work/codecs.cjs" <<'WEREWOLF_NODE_PROBE_JS'
             ${file:tests/codecs.cjs}WEREWOLF_NODE_PROBE_JS
+            cat > "$work/regexp.cjs" <<'WEREWOLF_NODE_PROBE_JS'
+            ${file:tests/regexp.cjs}WEREWOLF_NODE_PROBE_JS
             sh "$work/probe.sh" "$work"
     - path: [subpackages, 'name=${{package.name}}-minimal-doc']
       delete: true
@@ -162,7 +164,7 @@ wolfi:
   suite-setup:
     name: Permit capabilities only in the build guest
     runs: ${file:tests/build-grants.sh}
-  revision: 11
+  revision: 12
   family: nodejs-
 changes:
   - what: Omit npm/npx, inspector, SEA and unused subpackages.

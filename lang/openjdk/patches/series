@@ -8,3 +8,6 @@
 0008-log-denials-to-stderr.patch
 0009-writable-source.patch
 0010-command-hooks-exec.patch
+0011-exec-refused.patch
+0012-xml-external-references.patch
+0013-jre-without-remote-agents.patch

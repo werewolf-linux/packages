@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +38,26 @@ type Release struct {
 type Client struct {
 	HTTP  *http.Client
 	Token string
+	// Tags lists a git repository's tags and the commit each names; nil
+	// reads git's ref advertisement (gitTags).
+	Tags func(ctx context.Context, address string) (map[string]string, error)
+	// CommitTime returns the committer time of the commit tag names; nil
+	// fetches that commit alone with git (gitCommitTime).
+	CommitTime func(ctx context.Context, address, tag, commit string) (int64, error)
+}
+
+func (c *Client) tags(ctx context.Context, address string) (map[string]string, error) {
+	if c.Tags != nil {
+		return c.Tags(ctx, address)
+	}
+	return gitTags(ctx, address)
+}
+
+func (c *Client) commitTime(ctx context.Context, address, tag, commit string) (int64, error) {
+	if c.CommitTime != nil {
+		return c.CommitTime(ctx, address, tag, commit)
+	}
+	return gitCommitTime(ctx, address, tag, commit)
 }
 
 func NewClient(token string) *Client {
@@ -250,33 +272,43 @@ func (c *Client) Discover(ctx context.Context, p Policy, current string) (Releas
 			return Release{}, fmt.Errorf("upstream latest release is not stable: %s", item.Tag)
 		}
 		return r, nil
-	case "github-releases", "github-tags":
-		var best Release
-		endpoint := "releases"
-		if p.Source == "github-tags" {
-			endpoint = "tags"
+	case "github-tags":
+		// Every tag, and the commit it names, in one request to git's ref
+		// advertisement: no REST pagination, and no API rate limit.
+		tags, err := c.tags(ctx, "https://github.com/"+p.Repo)
+		if err != nil {
+			return Release{}, err
 		}
-		// Pagination is mandatory: tag order is not version order, and old
+		var best Release
+		for _, tag := range slices.Sorted(maps.Keys(tags)) {
+			r, ok := candidate(tag, p)
+			if ok && (best.Version == "" || Compare(r.Version+"+"+r.Build, best.Version+"+"+best.Build) > 0) {
+				r.Commit = tags[tag]
+				best = r
+			}
+		}
+		if best.Version == "" {
+			return Release{}, fmt.Errorf("no stable release found for %s", p.Repo)
+		}
+		return best, nil
+	case "github-releases":
+		var best Release
+		// Pagination is mandatory: release order is not version order, and old
 		// maintenance releases may be published after a newer major release.
 		for page := 1; ; page++ {
 			var list []struct {
-				Name       string `json:"name"`
 				Tag        string `json:"tag_name"`
 				Draft      bool   `json:"draft"`
 				Prerelease bool   `json:"prerelease"`
 			}
-			if err := c.json(ctx, fmt.Sprintf("https://api.github.com/repos/%s/%s?per_page=100&page=%d", p.Repo, endpoint, page), &list); err != nil {
+			if err := c.json(ctx, fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=100&page=%d", p.Repo, page), &list); err != nil {
 				return Release{}, err
 			}
 			for _, item := range list {
 				if item.Draft || item.Prerelease {
 					continue
 				}
-				tag := item.Tag
-				if endpoint == "tags" {
-					tag = item.Name
-				}
-				r, ok := candidate(tag, p)
+				r, ok := candidate(item.Tag, p)
 				if ok && (best.Version == "" || Compare(r.Version+"+"+r.Build, best.Version+"+"+best.Build) > 0) {
 					best = r
 				}
@@ -369,7 +401,7 @@ func (c *Client) Discover(ctx context.Context, p Policy, current string) (Releas
 	case "content":
 		return Release{Version: current}, nil
 	case "git-tags":
-		tags, err := gitTags(ctx, p.URL)
+		tags, err := c.tags(ctx, p.URL)
 		if err != nil {
 			return Release{}, err
 		}

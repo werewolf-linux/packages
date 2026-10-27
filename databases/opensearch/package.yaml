@@ -15,7 +15,7 @@ melange:
   package:
     name: opensearch
     version: 3.9.0
-    epoch: 5
+    epoch: 6
     description: Open source distributed and RESTful search engine, with its security plugin
     copyright:
       - license: Apache-2.0
@@ -119,7 +119,12 @@ melange:
     pipeline:
       - name: Installed OpenSearch classes and security plugin
         runs: |
-          java -cp '/usr/share/opensearch/lib/*' org.opensearch.Version | grep -F '${{package.version}}'
+          # Version.main has a missing format argument in 3.9. Use the server CLI.
+          mkdir -p /tmp/opensearch-config
+          java -Dopensearch.path.home=/usr/share/opensearch \
+            -Dopensearch.path.conf=/tmp/opensearch-config \
+            -cp '/usr/share/opensearch/lib/*' org.opensearch.bootstrap.OpenSearch --version \
+            | grep -F 'Version: ${{package.version}},'
           test -s /usr/share/opensearch/native/libjnidispatch.so
           grep -F 'version=${{package.version}}.0' /usr/share/opensearch/plugins/opensearch-security/plugin-descriptor.properties
 changes:

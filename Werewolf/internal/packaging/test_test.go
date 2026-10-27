@@ -20,9 +20,15 @@ mkdir "$TMPDIR/guest"
 stage=$1
 shift
 name=
+repository=
 while [ "$#" -gt 0 ]; do
-    case $1 in --package) name=$2; shift 2;; *) shift;; esac
+    case $1 in
+      --package) name=$2; shift 2;;
+      --repository-append) repository=$2; shift 2;;
+      *) shift;;
+    esac
 done
+test "$repository" = "/repo with spaces"
 echo "$stage $name"
 test "$name" != broken
 `
@@ -38,7 +44,7 @@ test "$name" != broken
 		packages = append(packages, pkg)
 	}
 	report := filepath.Join(root, "report.json")
-	results, err := testPackages(t.Context(), packages, TestOptions{Arch: "aarch64", Report: report}, tool)
+	results, err := testPackages(t.Context(), packages, TestOptions{Arch: "aarch64", Report: report, Repositories: []string{"/repo with spaces"}}, tool)
 	if err == nil || len(results) != 3 || results[0].Status != "passed" || results[1].Status != "failed" || results[2].Status != "passed" {
 		t.Fatalf("results=%+v error=%v", results, err)
 	}
@@ -47,7 +53,7 @@ test "$name" != broken
 		t.Fatal(err)
 	}
 	var saved []TestResult
-	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 3 || saved[1].Error == "" {
+	if err := json.Unmarshal(data, &saved); err != nil || len(saved) != 3 || saved[1].Error == "" || len(saved[1].Repositories) != 1 || saved[1].Repositories[0] != "/repo with spaces" {
 		t.Fatalf("saved report=%s error=%v", data, err)
 	}
 	for _, result := range results {

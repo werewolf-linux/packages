@@ -234,7 +234,7 @@ func RunMelange(ctx context.Context, root, tool string, env []string, args []str
 }
 
 // BuildWolfi builds and tests one derived recipe with signed local packages.
-func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, runner string) error {
+func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, runner string, repositories ...string) error {
 	if !slices.Contains(Arches, arch) {
 		return fmt.Errorf("unsupported architecture %q", arch)
 	}
@@ -355,6 +355,9 @@ func BuildWolfi(ctx context.Context, pkg Package, arch string, testOnly bool, ru
 		return err
 	}
 	common := []string{"--runner", runner, "--arch", arch, "--cpu", cpu, "--memory", memory}
+	for _, repository := range repositories {
+		common = append(common, "--repository-append", repository)
+	}
 	pipelines := filepath.Join(pkg.Build, "inputs/pipelines")
 	wolfiKey := filepath.Join(pkg.Build, "inputs/wolfi-signing.rsa.pub")
 	if !testOnly {
@@ -548,7 +551,7 @@ func Metadata(ctx context.Context, pkg Package) (AppMetadata, error) {
 }
 
 // BuildApplication runs the native builder with a minimal credential-free environment.
-func BuildApplication(ctx context.Context, pkg Package, arch string) error {
+func BuildApplication(ctx context.Context, pkg Package, arch string, repositories ...string) error {
 	if runtime.GOOS != "linux" || arch != Architecture() {
 		return fmt.Errorf("application CI build requires a native Linux %s runner", arch)
 	}
@@ -589,6 +592,9 @@ func BuildApplication(ctx context.Context, pkg Package, arch string) error {
 		return err
 	}
 	args := []string{"build", recipe, "--runner", "bubblewrap", "--arch", arch, "--source-dir", directory, "--out-dir", out, "--cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/melange"), "--apk-cache-dir", filepath.Join(pkg.Root, "Werewolf/.work/cache/apk"), "--generate-index=false", "--namespace", "werewolf", "--git-commit", commit, "--cpu", env("MELANGE_CPU", strconv.Itoa(runtime.NumCPU())), "--memory", env("MELANGE_MEMORY", "8Gi"), "--timeout", "5h"}
+	for _, repository := range repositories {
+		args = append(args, "--repository-append", repository)
+	}
 	if err := RunMelange(ctx, pkg.Root, tool, buildEnv(map[string]string{"TMPDIR": scratch, "SOURCE_DATE_EPOCH": strconv.FormatInt(date, 10)}), args); err != nil {
 		return err
 	}

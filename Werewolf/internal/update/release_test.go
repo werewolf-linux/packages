@@ -29,11 +29,24 @@ func TestReleaseVersionEncodings(t *testing.T) {
 }
 
 func TestOpenJDKSelectsLatestReleasedFeatureAndItsGAUpdate(t *testing.T) {
-	c := mockClient(t, map[string]string{
-		"https://api.github.com/repos/openjdk/jdk/tags?per_page=100&page=1":     `[{"name":"jdk-28+21"},{"name":"jdk-27-ga"},{"name":"jdk-26-ga"}]`,
-		"https://api.github.com/repos/openjdk/jdk27u/tags?per_page=100&page=1":  `[{"name":"jdk-27.0.2+1"},{"name":"jdk-27.0.1.0.3-ga"},{"name":"jdk-27.0.1.0.2-ga"}]`,
-		"https://api.github.com/repos/openjdk/jdk27u/commits/jdk-27.0.1.0.3-ga": `{"sha":"` + strings.Repeat("b", 40) + `","commit":{"committer":{"date":"2026-10-22T12:00:00Z"}}}`,
-	})
+	c := mockClient(t, nil)
+	b, z := strings.Repeat("b", 40), strings.Repeat("0", 40)
+	c.Tags = func(_ context.Context, address string) (map[string]string, error) {
+		switch address {
+		case "https://github.com/openjdk/jdk":
+			return map[string]string{"jdk-28+21": z, "jdk-27-ga": z, "jdk-26-ga": z}, nil
+		case "https://github.com/openjdk/jdk27u":
+			return map[string]string{"jdk-27.0.2+1": z, "jdk-27.0.1.0.3-ga": b, "jdk-27.0.1.0.2-ga": z}, nil
+		}
+		t.Fatal("tags read from", address)
+		return nil, nil
+	}
+	c.CommitTime = func(_ context.Context, address, tag, commit string) (int64, error) {
+		if address != "https://github.com/openjdk/jdk27u" || tag != "jdk-27.0.1.0.3-ga" || commit != b {
+			t.Fatal("commit time of", address, tag, commit)
+		}
+		return 1792670400, nil
+	}
 	r, err := c.ResolveRelease(context.Background(), Policy{Source: "openjdk"})
 	if err != nil || r.Version != "27.0.1.0.3" || r.Repository != "openjdk/jdk27u" || r.Commit != strings.Repeat("b", 40) || r.Timestamp == 0 {
 		t.Fatalf("%+v %v", r, err)

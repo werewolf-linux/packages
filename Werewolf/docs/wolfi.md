@@ -75,7 +75,7 @@ actual execution paths. Current differences remain explicit:
 |---|---|---|---|---|
 | Effective-root startup refusal | yes | yes | yes | yes |
 | `native` | ctypes | `dl`, SQLite loaders, optional FFI | Unsafe, JNI, FFM | addons, FFI, WASI, native loaders |
-| `exec` runtime floor | leash only | yes | VM command hooks; leash otherwise | yes, including package scripts |
+| `exec` runtime floor | leash only | yes | programs and the VM's command hooks | yes, including package scripts |
 | `inline` | argv/stdin | argv/stdin, eval, generated streams | none in the JRE (jshell and the source launcher are the JDK's) | argv/stdin, worker eval, data-URL code |
 | `writable-source` | main script | compiled files | class path entries, JARs and agents | ordinary main/dependency code, disk cache |
 | `deserialize` | pickle globals | `unserialize()` objects | ObjectInputStream | no equivalent object-gadget API |

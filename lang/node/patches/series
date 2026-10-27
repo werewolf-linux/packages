@@ -6,3 +6,4 @@
 0006-gate-disk-compilation-caches-with-writable-source.patch
 0007-log-denials-to-stderr.patch
 0008-omit-optional-compression-libraries.patch
+0009-unicode-supplementary-case-folding.patch

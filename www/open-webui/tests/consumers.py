@@ -17,7 +17,10 @@ names = {d.metadata['Name'].lower().replace('_', '-') for d in importlib.metadat
 omitted = names.intersection({'brotli', 'brotlicffi', 'aiodns', 'pycares', 'ldap3',
                               'starlette-compress', 'zstandard', 'socksio'})
 assert not omitted, omitted
-assert not any(n.startswith(('opentelemetry-', 'azure-')) for n in names)
+# MCP requires the API, which has no SDK or exporters of its own.
+unexpected = {n for n in names if n.startswith('azure-') or
+              (n.startswith('opentelemetry-') and n != 'opentelemetry-api')}
+assert not unexpected, unexpected
 with TestClient(app) as client:
     response = client.get('/health')
     assert response.status_code == 200, response.text

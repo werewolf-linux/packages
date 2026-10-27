@@ -1,0 +1,22 @@
+SPDX-License-Identifier: GPL-2.0-only WITH Classpath-exception-2.0
+Subject: [PATCH] Build the JRE without remote debugging, JMX remote or RMI naming
+Upstream-Status: Inappropriate [fixed Werewolf appliance policy]
+Reference: werewolf docs/design/hardened-interpreters.md
+Base-Commit: 815ff4dc327fe17f2433c7d115a5a503af10f3c4
+
+diff --git a/make/Images.gmk b/make/Images.gmk
+--- a/make/Images.gmk
++++ b/make/Images.gmk
+@@ -43,8 +43,10 @@
+ 
+ $(eval $(call ReadImportMetaData))
+ 
+-JRE_MODULES += $(filter $(ALL_MODULES), $(BOOT_MODULES) \
+-    $(PLATFORM_MODULES) jdk.jdwp.agent)
++# Werewolf: the JRE carries no remote debugger (jdk.jdwp.agent), JMX remote
++# agent (jdk.management.agent) or RMI naming (jdk.naming.rmi); the JDK does.
++JRE_MODULES += $(filter-out jdk.management.agent jdk.naming.rmi, \
++    $(filter $(ALL_MODULES), $(BOOT_MODULES) $(PLATFORM_MODULES)))
+ JDK_MODULES += $(ALL_MODULES)
+ 
+ JRE_MODULES_LIST := $(call CommaList, $(JRE_MODULES))
