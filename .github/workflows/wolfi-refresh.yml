@@ -21,11 +21,12 @@ on:
     branches: [main]
 permissions:
   contents: read
-# One run at a time. A run that would start behind a long build waits, and a
-# newer one replaces it; either way it discovers after the running one has
-# published, so nothing builds twice. Recovery runs keep their own group.
+# Bulk refreshes stay serialized and discover after the prior run publishes.
+# A focused refresh need not wait for unrelated packages. Recoveries retain
+# their own slot, keyed by source run, and every publication still validates
+# both native architectures before updating the signed feed.
 concurrency:
-  group: wolfi-refresh-${{ github.ref }}-${{ inputs.recover_run }}
+  group: wolfi-refresh-${{ github.ref }}-${{ inputs.recover_run || (inputs.package && format('package-{0}', inputs.package)) || '' }}
   cancel-in-progress: false
 defaults:
   run:
