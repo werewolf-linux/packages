@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
+update:
+  github:
+    identifier: restic/restic
+    strip-prefix: v
+wolfi:
+  recipe: restic
+  revision: 1
+  description-suffix: ' (position independent)'
+  sources:
+    - https://github.com/restic/restic
+  checks:
+    - path:
+        - pipeline
+        - uses=git-checkout
+      expect:
+        uses: git-checkout
+        with:
+          repository: https://github.com/restic/restic
+          tag: v${{package.version}}
+          expected-commit: ${lock.source_commit}
+    - path:
+        - pipeline
+      shape:
+        - uses=git-checkout
+        - uses=bump
+        - uses=go/build
+    - path: [pipeline, uses=go/build, with]
+      expect:
+        packages: ./cmd/restic
+        output: restic
+        ldflags: '-X main.version=${{package.version}}'
+        go-package: go-1.27
+  edits:
+    - path: [pipeline, uses=go/build, with, buildmode]
+      absent: true
+      set: pie
+    - path: [pipeline]
+      append:
+        - name: Verify position independent build
+          runs: |
+            go version -m "${{targets.destdir}}/usr/bin/restic" |
+              grep -q '^[[:space:]]*build[[:space:]]*-buildmode=pie$'
+    - path: [test, environment]
+      absent: true
+      set:
+        contents:
+          packages: [binutils]
+    - path: [test, pipeline]
+      append:
+        - name: Installed executable is position independent
+          runs: |
+            readelf -h /usr/bin/restic | grep -E 'Type:[[:space:]]+DYN '
+changes:
+  - what: Build Restic as PIE and verify the installed ELF type while retaining Wolfi's backup and restore tests.
+    why: Let ASLR relocate the backup client used by Werewolf's Restic server integration tests.
+    evidence:
+      - package.yaml
+drop-when: Wolfi builds Restic as PIE and its installed backup and restore tests pass unchanged.

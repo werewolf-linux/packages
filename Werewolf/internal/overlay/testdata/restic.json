@@ -1,0 +1,134 @@
+{
+  "environment": {
+    "contents": {
+      "packages": [
+        "go-1.27"
+      ]
+    }
+  },
+  "package": {
+    "copyright": [
+      {
+        "license": "BSD-2-Clause"
+      }
+    ],
+    "dependencies": {
+      "provides": [
+        "upstream-origin:restic:0.19.1-r12"
+      ]
+    },
+    "description": "restic is a backup program which allows saving multiple revisions of files and directories in an encrypted repository stored on different backends (position independent)",
+    "epoch": 1012,
+    "name": "restic",
+    "resources": {
+      "cpu": "2",
+      "memory": "5Gi"
+    },
+    "test-resources": {
+      "cpu": "1",
+      "disk": "1Gi",
+      "memory": "1Gi"
+    },
+    "version": "0.19.1"
+  },
+  "pipeline": [
+    {
+      "name": "Fetch the locked source commit",
+      "needs": {
+        "packages": [
+          "git"
+        ]
+      },
+      "runs": "git init -q .\nfor delay in 0 15 45; do\n  sleep \"$delay\"\n  for source in https://github.com/restic/restic; do\n    if git -c core.hooksPath=/dev/null -c fetch.fsckObjects=true fetch --no-tags --depth=1 \"$source\" 6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf; then\n      test \"$(git rev-parse FETCH_HEAD)\" = 6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf\n      git -c core.hooksPath=/dev/null checkout -q --detach 6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf\n      exit 0\n    fi\n  done\ndone\necho \"6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf: every source failed, three times\" \u003e\u00262\nexit 1\n"
+    },
+    {
+      "uses": "bump",
+      "with": {
+        "deps": "go.opentelemetry.io/otel@v1.45.0\ngo.opentelemetry.io/otel/metric@v1.45.0\ngo.opentelemetry.io/otel/sdk@v1.45.0\ngo.opentelemetry.io/otel/sdk/metric@v1.45.0\ngo.opentelemetry.io/otel/trace@v1.45.0\ngoogle.golang.org/grpc@v1.83.2\ngolang.org/x/net@v0.60.0\ngolang.org/x/sync@v0.22.0\ngolang.org/x/sys@v0.48.0\ngolang.org/x/text@v0.42.0\ngolang.org/x/crypto@v0.57.0\ngolang.org/x/term@v0.46.0",
+        "language": "go"
+      }
+    },
+    {
+      "uses": "go/build",
+      "with": {
+        "buildmode": "pie",
+        "go-package": "go-1.27",
+        "ldflags": "-X main.version=${{package.version}}",
+        "output": "restic",
+        "packages": "./cmd/restic"
+      }
+    },
+    {
+      "name": "Verify position independent build",
+      "runs": "go version -m \"${{targets.destdir}}/usr/bin/restic\" |\n  grep -q '^[[:space:]]*build[[:space:]]*-buildmode=pie$'\n"
+    }
+  ],
+  "subpackages": [
+    {
+      "dependencies": {
+        "provides": [
+          "upstream-origin:restic:0.19.1-r12"
+        ]
+      },
+      "description": "Compatibility package to place binaries in the location expected by upstream helm charts",
+      "name": "${{package.name}}-compat",
+      "pipeline": [
+        {
+          "runs": "# The helm chart expects the binaries to be in / instead of /usr/bin\nmkdir -p \"${{targets.subpkgdir}}\"\nln -sf /usr/bin/restic ${{targets.subpkgdir}}/restic\n"
+        }
+      ],
+      "test": {
+        "environment": {
+          "contents": {
+            "packages": [
+              "${{package.name}}"
+            ]
+          }
+        },
+        "pipeline": [
+          {
+            "uses": "test/tw/symlink-check",
+            "with": {
+              "allow-absolute": true
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "test": {
+    "environment": {
+      "contents": {
+        "packages": [
+          "binutils"
+        ]
+      }
+    },
+    "pipeline": [
+      {
+        "uses": "test/tw/ver-check",
+        "with": {
+          "bins": "restic",
+          "version": "${{package.version}}"
+        }
+      },
+      {
+        "uses": "test/tw/help-check",
+        "with": {
+          "bins": "restic"
+        }
+      },
+      {
+        "name": "Test backup and restore workflow",
+        "runs": "set -euo pipefail\n\nexport RESTIC_PASSWORD=testpassword\nexport RESTIC_REPOSITORY=/tmp/test-repo\n\n# Initialize a local repository\nrestic init\nstat /tmp/test-repo/config\n\n# Create test data\nmkdir -p /tmp/testdata/subdir\necho 'test content' \u003e /tmp/testdata/file.txt\necho 'nested content' \u003e /tmp/testdata/subdir/nested.txt\n\n# Create a backup\nrestic backup /tmp/testdata\n\n# List snapshots and verify the backup exists\nrestic snapshots | grep -F \"/tmp/testdata\"\n\n# Verify repository integrity\nrestic check\n\n# Restore data and verify integrity\nrestic restore latest --target /tmp/restored\ngrep -F 'test content' /tmp/restored/tmp/testdata/file.txt\ngrep -F 'nested content' /tmp/restored/tmp/testdata/subdir/nested.txt\n\necho \"SUCCESS: Backup and restore workflow completed\"\n"
+      },
+      {
+        "name": "Installed executable is position independent",
+        "runs": "readelf -h /usr/bin/restic | grep -E 'Type:[[:space:]]+DYN '\n"
+      }
+    ]
+  },
+  "update": {
+    "enabled": false
+  }
+}
