@@ -9,12 +9,12 @@ melange:
   package:
     name: mariadb
     version: 13.0.2
-    epoch: 3
+    epoch: 4
     description: 'The MariaDB open source relational database (Werewolf: newest stable, no PAM)'
     copyright:
       - license: GPL-3.0-or-later
     resources:
-      cpu: 33
+      cpu: "8"
       memory: 24Gi
     dependencies:
       runtime:
@@ -127,7 +127,9 @@ melange:
           -DSKIP_TESTS=ON
     - name: Install
       runs: |
-        DESTDIR="${{targets.destdir}}" ninja install
+        # Ninja otherwise sizes its worker pool from the host's CPU count,
+        # which can exhaust a memory-limited bubblewrap builder.
+        DESTDIR="${{targets.destdir}}" ninja -j8 install
     - name: Remove extras
       runs: |
         rm -rf "${{targets.destdir}}"/usr/local/mysql/sql-bench/
