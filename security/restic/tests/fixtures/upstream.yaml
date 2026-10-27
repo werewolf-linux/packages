@@ -1,0 +1,117 @@
+package:
+  name: restic
+  version: "0.19.1"
+  epoch: 12 # toolchain rebuild for  go-1.27-1.27.3
+  description: restic is a backup program which allows saving multiple revisions of files and directories in an encrypted repository stored on different backends
+  copyright:
+    - license: BSD-2-Clause
+  resources:
+    cpu: "2"
+    memory: 5Gi
+  test-resources:
+    cpu: "1"
+    memory: 1Gi
+    disk: 1Gi
+
+pipeline:
+  - uses: git-checkout
+    with:
+      repository: https://github.com/restic/restic
+      tag: v${{package.version}}
+      expected-commit: 6aa3a516ce654808a1f28f9fa21e9b7c8e6e90bf
+
+  - uses: bump
+    with:
+      deps: |-
+        go.opentelemetry.io/otel@v1.45.0
+        go.opentelemetry.io/otel/metric@v1.45.0
+        go.opentelemetry.io/otel/sdk@v1.45.0
+        go.opentelemetry.io/otel/sdk/metric@v1.45.0
+        go.opentelemetry.io/otel/trace@v1.45.0
+        google.golang.org/grpc@v1.83.2
+        golang.org/x/net@v0.60.0
+        golang.org/x/sync@v0.22.0
+        golang.org/x/sys@v0.48.0
+        golang.org/x/text@v0.42.0
+        golang.org/x/crypto@v0.57.0
+        golang.org/x/term@v0.46.0
+      language: go
+
+  - uses: go/build
+    with:
+      packages: ./cmd/restic
+      output: restic
+      ldflags: "-X main.version=${{package.version}}"
+      go-package: go-1.27
+
+subpackages:
+  - name: ${{package.name}}-compat
+    description: "Compatibility package to place binaries in the location expected by upstream helm charts"
+    pipeline:
+      - runs: |
+          # The helm chart expects the binaries to be in / instead of /usr/bin
+          mkdir -p "${{targets.subpkgdir}}"
+          ln -sf /usr/bin/restic ${{targets.subpkgdir}}/restic
+    test:
+      environment:
+        contents:
+          packages:
+            # -compat packages can be satisfied by multiple source packages; install here for test only, not as a runtime dep
+            - ${{package.name}}
+      pipeline:
+        - uses: test/tw/symlink-check
+          with:
+            allow-absolute: true
+
+update:
+  enabled: true
+  github:
+    identifier: restic/restic
+    strip-prefix: v
+
+test:
+  pipeline:
+    - uses: test/tw/ver-check
+      with:
+        bins: restic
+        version: ${{package.version}}
+    - uses: test/tw/help-check
+      with:
+        bins: restic
+    - name: Test backup and restore workflow
+      runs: |
+        set -euo pipefail
+
+        export RESTIC_PASSWORD=testpassword
+        export RESTIC_REPOSITORY=/tmp/test-repo
+
+        # Initialize a local repository
+        restic init
+        stat /tmp/test-repo/config
+
+        # Create test data
+        mkdir -p /tmp/testdata/subdir
+        echo 'test content' > /tmp/testdata/file.txt
+        echo 'nested content' > /tmp/testdata/subdir/nested.txt
+
+        # Create a backup
+        restic backup /tmp/testdata
+
+        # List snapshots and verify the backup exists
+        restic snapshots | grep -F "/tmp/testdata"
+
+        # Verify repository integrity
+        restic check
+
+        # Restore data and verify integrity
+        restic restore latest --target /tmp/restored
+        grep -F 'test content' /tmp/restored/tmp/testdata/file.txt
+        grep -F 'nested content' /tmp/restored/tmp/testdata/subdir/nested.txt
+
+        echo "SUCCESS: Backup and restore workflow completed"
+
+environment:
+  contents:
+    packages:
+      - go-1.27
+
