@@ -90,6 +90,7 @@ func run(ctx context.Context, args []string) error {
 	werewolf := flags.String("werewolf", "", "sibling Werewolf checkout for local application builds")
 	write := flags.Bool("write", false, "write complete application source updates")
 	fresh := flags.Bool("fresh", false, "replace the generated source checkout before patch preparation")
+	keepCache := flags.Bool("keep-cache", false, "preserve shared download caches during cleanup")
 	expectDenied := flags.Bool("expect-denied", false, "require the chroot probe to fail with EPERM")
 	archive := flags.String("archive", "", "captured input archive to restore")
 	expectedVersion := flags.String("expected-version", "", "expected signed Plex vendor release")
@@ -275,7 +276,7 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	if command == "clean" {
-		return packaging.Clean(absolute, chosen, *arch)
+		return packaging.Clean(absolute, chosen, *arch, *keepCache)
 	}
 	if command == "test" {
 		if flags.NArg() != 0 {

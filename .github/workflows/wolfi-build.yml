@@ -118,6 +118,9 @@ jobs:
             ${{ steps.paths.outputs.inputs }}
             ${{ steps.paths.outputs.build }}/*.yaml
           if-no-files-found: warn
+      - name: Release disposable guest roots after saving diagnostics
+        if: always() && steps.paths.outcome == 'success'
+        run: Werewolf/runner/ci-root Werewolf/.work/tools/package clean --package "$PACKAGE" --arch '${{ matrix.arch }}' --keep-cache
       - name: Restore build ownership for the next checkout
         if: always()
         run: |

@@ -132,7 +132,13 @@ func Keycloak(ctx context.Context) error {
 		case <-tick.C:
 		}
 	}
-	return keycloakFlows(ctx, client, base)
+	// Discovery becomes ready before the first realm creation has warmed the
+	// JVM and database. Give administrative operations their own request budget.
+	client.Timeout = 30 * time.Second
+	if err := keycloakFlows(ctx, client, base); err != nil {
+		return keycloakFailure(log, err)
+	}
+	return nil
 }
 
 // An optimized server records provider mtimes during kc.sh build. Check the

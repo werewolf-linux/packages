@@ -91,6 +91,25 @@ wolfi:
             cat > /tmp/samba-probe.sh <<'WEREWOLF_SAMBA_PROBE'
             ${file:tests/probe.sh}WEREWOLF_SAMBA_PROBE
             sh /tmp/samba-probe.sh
+  # Namespace root cannot bind the host network's privileged SMB ports.
+  # Keep the upstream assertions, using a private test port and stopping smbd.
+  test-edits:
+    - path: [subpackages, name=samba-client, test, pipeline, name=Test Samba client, runs]
+      replace:
+        - old: |
+            smbd
+          new: |
+            smbd --port=1445
+            trap 'kill "$(cat /run/samba/smbd.pid)"' EXIT
+        - old: smbclient -L 127.0.0.1 -N
+          new: smbclient -p 1445 -L 127.0.0.1 -N
+    - path: [subpackages, name=samba-server, test, pipeline, name=Test smbd starts and serves shares, runs]
+      replace:
+        - old: |
+            smbd
+          new: |
+            smbd --port=1445
+            trap 'kill "$(cat /run/samba/smbd.pid)"' EXIT
   revision: 5
   recipe: samba
 changes:

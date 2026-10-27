@@ -99,3 +99,6 @@ jobs:
           name: log-${{ inputs.package }}-${{ inputs.arch }}
           path: ${{ steps.paths.outputs.logs }}
           if-no-files-found: ignore
+      - name: Release disposable guest roots after saving diagnostics
+        if: always() && steps.paths.outcome == 'success'
+        run: Werewolf/runner/ci-root Werewolf/.work/tools/package clean --package "$PACKAGE" --arch "$ARCH" --keep-cache

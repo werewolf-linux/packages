@@ -269,6 +269,8 @@ workspaces and shared download caches. `PACKAGE`, `CATEGORY` and `ARCH` select
 which package scratch is removed; download caches are shared and always cleared.
 Built APKs, captured inputs, source checkouts, signing keys, reports and logs are
 retained. Cleanup refuses to run while a package build or test command is active.
+Add `--keep-cache` to retain shared downloads. Native CI uses this after uploading
+artifacts and logs, including failed builds, so guest roots are released promptly.
 
 `test.confined: true` runs shell probes as UID 1000 with no capabilities, read-only
 runtime and fixtures, and writable `/tmp`. Build/test allowances belong only to this
