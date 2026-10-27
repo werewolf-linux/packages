@@ -9,8 +9,8 @@ melange:
   # Bash, BusyBox, and OpenJDK 21; none belongs in this package or its runtime deps.
   package:
     name: solr
-    version: 10.0.0
-    epoch: 6
+    version: "10.1.0"
+    epoch: 0
     description: Apache Solr, directly launched with hardened OpenJDK 27
     copyright:
       - license: Apache-2.0
@@ -31,7 +31,7 @@ melange:
     - uses: fetch
       with:
         uri: https://archive.apache.org/dist/solr/solr/${{package.version}}/solr-${{package.version}}-slim.tgz
-        expected-sha256: 95850910d4084a197d9aa5b225d499ac82857eec5cbb54d0511c82a413aa8b17
+        expected-sha256: "046e0974ab27c0403a4e7bed2d00a394470a9e702933604b051c8f7cbff2bbe5"
         strip-components: 1
     - runs: |
         dest=${{targets.destdir}}/usr/lib/solr
