@@ -5,26 +5,21 @@ Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.
 
 --- a/src/ical_utils.c
 +++ b/src/ical_utils.c
-@@ -179,7 +179,7 @@
-  * @brief Try to seek a recurrence iterator past historical occurrences.
+@@ -180,5 +180,5 @@
   *
   * @param[in]     recurrence     The recurrence rule to evaluate.
 - * @param[in]     dtstart        The original start time of the recurrence.
 + * @param[in]     dtstart        The original start time of the recurrence->
   * @param[in]     reference_time The reference time.
   * @param[in]     tz             The icaltimezone to use.
-  * @param[in]     exdates        EXDATE dates or datetimes to skip.
-@@ -190,7 +190,7 @@
-  *         unsupported or fails.  On failure, recur_time is unchanged.
+@@ -191,5 +191,5 @@
   */
  static icalrecur_iterator *
 -icalendar_seek_recurrence_x (struct icalrecurrencetype recurrence,
 +icalendar_seek_recurrence_x (struct icalrecurrencetype *recurrence,
                               icaltimetype dtstart, icaltimetype reference_time,
                               icaltimezone *tz, array_x *exdates,
-                              int periods_offset, icaltimetype *recur_time)
-@@ -198,32 +198,32 @@
-   /* Plain non-UTC rules require INTERVAL=1: skipping DST transitions
+@@ -199,30 +199,30 @@
     * can change the phase of larger intervals.  UTC intervals must repeat
     * every day.  Keep DTSTART so libical retains its lower time fields. */
 -  if (recurrence.count == 0 && recurrence.interval > 0
@@ -71,9 +66,7 @@ Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.
 +          interval_seconds = (gint64) recurrence->interval * 3600;
            break;
          default:
-           break;
-@@ -235,11 +235,11 @@
-           icaltimetype seek_time;
+@@ -236,9 +236,9 @@
  
            /* Anchor expired rules at UNTIL to retain their last occurrence. */
 -          if (!icaltime_is_null_time (recurrence.until))
@@ -85,9 +78,7 @@ Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.
 +              until = icaltime_convert_to_zone (recurrence->until, tz);
                if (icaltime_compare (until, anchor) < 0)
                  anchor = until;
-             }
-@@ -271,9 +271,9 @@
-                    * local date can otherwise seek past the anchor. */
+@@ -272,7 +272,7 @@
                    if (!icaltime_is_null_time (candidate)
                        && icaltime_compare (candidate, anchor) <= 0
 -                      && (recurrence.freq == ICAL_SECONDLY_RECURRENCE
@@ -97,36 +88,28 @@ Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.
 +                      && (recurrence->freq != ICAL_HOURLY_RECURRENCE
                            || candidate.minute == recur_time->minute))
                      {
-                       *recur_time = candidate;
-@@ -293,7 +293,7 @@
-  * @brief Calculate the next time of a recurrence
+@@ -294,5 +294,5 @@
   *
   * @param[in]  recurrence     The recurrence rule to evaluate.
 - * @param[in]  dtstart        The start time of the recurrence.
 + * @param[in]  dtstart        The start time of the recurrence->
   * @param[in]  reference_time The reference time (usually the current time).
   * @param[in]  tz             The icaltimezone to use.
-  * @param[in]  exdates        GList of EXDATE dates or datetimes to skip.
-@@ -303,7 +303,7 @@
-  * @return  The next time.
+@@ -304,5 +304,5 @@
   */
  static time_t
 -icalendar_next_time_from_recurrence_x (struct icalrecurrencetype recurrence,
 +icalendar_next_time_from_recurrence_x (struct icalrecurrencetype *recurrence,
                                         icaltimetype dtstart,
                                         icaltimetype reference_time,
-                                        icaltimezone *tz,
-@@ -467,7 +467,7 @@
-   icaltimetype dtstart, dtstart_with_tz, ical_reference_time;
+@@ -468,5 +468,5 @@
    icaltimezone *tz;
    icalproperty *rrule_prop;
 -  struct icalrecurrencetype recurrence;
 +  struct icalrecurrencetype *recurrence;
    array_x *exdates, *rdates;
    time_t next_time = 0;
- 
-@@ -520,10 +520,21 @@
-   // Try to get the recurrence from the RRULE property
+@@ -521,8 +521,19 @@
    rrule_prop = icalcomponent_get_first_property (vevent, ICAL_RRULE_PROPERTY);
    if (rrule_prop)
 -    recurrence = icalproperty_get_rrule (rrule_prop);
@@ -148,12 +131,9 @@ Reference: https://github.com/libical/libical/blob/v4.0.2/src/libical/icalrecur.
 +
    // Calculate next time.
    next_time = icalendar_next_time_from_recurrence_x (recurrence,
-                                                      dtstart_with_tz,
-@@ -532,6 +543,7 @@
-                                                      periods_offset);
+@@ -533,4 +544,5 @@
  
    // Cleanup
 +  icalrecurrencetype_unref (recurrence);
    free_array_x (exdates);
    free_array_x (rdates);
- 

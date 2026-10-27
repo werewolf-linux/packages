@@ -49,7 +49,7 @@ melange:
         uri: https://github.com/greenbone/pg-gvm/archive/refs/tags/v${{package.version}}.tar.gz
         expected-sha256: "2f8715530175ac640660852fad9817094bbd9abed9f2432a2dd054206dbc7891"
         directory: pg-gvm
-    - runs: patch --batch --fuzz=0 -p1 -d pg-gvm < libical4.patch
+    - runs: patch --batch --fuzz=0 -p1 -d pg-gvm < patches/libical4.patch
     - runs: |
         printf '\nadd_subdirectory(base)\n' >>gvm-libs/CMakeLists.txt
         cmake -S gvm-libs -B build-base \
@@ -93,7 +93,7 @@ changes:
   - what: Use libical 4's reference-counted recurrence rules and counted BY arrays.
     why: Build against the supported Wolfi library without carrying a retired libical 3 runtime.
     evidence:
-      - libical4.patch
+      - patches/libical4.patch
       - tests/recurrence.sql
 drop-when: Wolfi provides equivalent packaging, supported versions, architectures and required hardening; review compatibility before retiring this context.
 test:
