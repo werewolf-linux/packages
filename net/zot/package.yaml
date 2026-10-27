@@ -44,7 +44,7 @@ melange:
         # Reuse completed downloads if the module proxy interrupts a stream.
         for delay in 0 5 15; do
           sleep "$delay"
-          if go mod download; then
+          if CGO_ENABLED=0 GOEXPERIMENT=jsonv2 go list -mod=readonly -deps ./cmd/zot >/dev/null; then
             exit 0
           fi
         done
