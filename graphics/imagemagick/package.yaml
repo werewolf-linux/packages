@@ -22,8 +22,8 @@ wolfi:
         - uses=git-checkout
         - uses=autoconf/configure
         - uses=autoconf/make
-        - uses=upstream-tests/make-check
         - uses=autoconf/make-install
+        - uses=upstream-tests/make-check
         - uses=strip
     - path: [subpackages]
       shape:

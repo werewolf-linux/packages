@@ -2,7 +2,7 @@
   "package": {
     "name": "ffmpeg-9.0",
     "version": "9.0.2",
-    "epoch": 4006,
+    "epoch": 4008,
     "description": "ffmpeg multimedia library",
     "copyright": [
       {
@@ -12,8 +12,8 @@
     "dependencies": {
       "provides": [
         "ffmpeg=${{package.full-version}}",
-        "upstream-origin:ffmpeg-9.0:9.0.2-r6",
-        "ffmpeg-hardened=${{package.full-version}}"
+        "ffmpeg-hardened=${{package.full-version}}",
+        "upstream-origin:ffmpeg-9.0:9.0.2-r8"
       ],
       "provider-priority": 5,
       "runtime": [
@@ -98,13 +98,13 @@
       "uses": "autoconf/make"
     },
     {
-      "uses": "upstream-tests/ffmpeg-fate"
-    },
-    {
       "uses": "autoconf/make-install"
     },
     {
       "runs": "make install-man DESTDIR=${{targets.destdir}}"
+    },
+    {
+      "uses": "upstream-tests/ffmpeg-fate"
     },
     {
       "uses": "strip"
@@ -132,7 +132,7 @@
       "dependencies": {
         "provides": [
           "${{range.key}}=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r8"
         ],
         "provider-priority": 5
       },
@@ -160,7 +160,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-static=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r8"
         ]
       },
       "pipeline": [
@@ -192,7 +192,7 @@
         ],
         "provides": [
           "ffmpeg-dev=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r8"
         ]
       },
       "pipeline": [
@@ -226,7 +226,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-doc=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r8"
         ]
       },
       "pipeline": [
@@ -254,7 +254,7 @@
       "dependencies": {
         "provides": [
           "ffmpeg-qt-faststart=${{package.full-version}}",
-          "upstream-origin:ffmpeg-9.0:9.0.2-r6"
+          "upstream-origin:ffmpeg-9.0:9.0.2-r8"
         ]
       },
       "description": "Utility for optimizing MP4 files for HTTP streaming",

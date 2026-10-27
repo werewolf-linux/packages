@@ -24,9 +24,9 @@ wolfi:
         - uses=patch
         - runs
         - uses=autoconf/make
-        - uses=upstream-tests/ffmpeg-fate
         - uses=autoconf/make-install
         - runs
+        - uses=upstream-tests/ffmpeg-fate
         - uses=strip
     - path: [subpackages]
       shape:
