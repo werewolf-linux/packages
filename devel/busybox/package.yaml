@@ -11,7 +11,7 @@ wolfi:
   sources:
     - https://github.com/vda-linux/busybox_mirror.git
     - https://git.busybox.net/busybox.git
-  description-suffix: ' (Werewolf: applets exec applets by path)'
+  description-suffix: ' (Werewolf: applets exec applets by path; no wget or telnet)'
   test-unpinned:
     - busybox
     - busybox-full
@@ -165,6 +165,12 @@ wolfi:
             sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
             grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
             grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+            # Werewolf: no wget, telnet or telnetd: a machine fetches nothing and
+            # serves no plain-text logins with them (devel/busybox/README.md).
+            for applet in WGET TELNET TELNETD; do
+              sed -i "s/^CONFIG_$applet=y\$/# CONFIG_$applet is not set/" .config
+              if grep -qx "CONFIG_$applet=y" .config; then exit 1; fi
+            done
     - path: [subpackages, name=busybox-static, pipeline, name=Configure, runs]
       replace:
         - old: |
@@ -176,6 +182,12 @@ wolfi:
             sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
             grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
             grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+            # Werewolf: no wget, telnet or telnetd: a machine fetches nothing and
+            # serves no plain-text logins with them (devel/busybox/README.md).
+            for applet in WGET TELNET TELNETD; do
+              sed -i "s/^CONFIG_$applet=y\$/# CONFIG_$applet is not set/" .config
+              if grep -qx "CONFIG_$applet=y" .config; then exit 1; fi
+            done
     - path: [subpackages, name=busybox-static, test, pipeline]
       append:
         - name: Tools run applets by name without searching PATH
@@ -194,6 +206,12 @@ wolfi:
             sed -i 's/^# CONFIG_FEATURE_PREFER_APPLETS is not set$/CONFIG_FEATURE_PREFER_APPLETS=y/' .config
             grep -qx 'CONFIG_FEATURE_PREFER_APPLETS=y' .config
             grep -qx 'CONFIG_BUSYBOX_EXEC_PATH="/usr/bin/busybox"' .config
+            # Werewolf: no wget, telnet or telnetd: a machine fetches nothing and
+            # serves no plain-text logins with them (devel/busybox/README.md).
+            for applet in WGET TELNET TELNETD; do
+              sed -i "s/^CONFIG_$applet=y\$/# CONFIG_$applet is not set/" .config
+              if grep -qx "CONFIG_$applet=y" .config; then exit 1; fi
+            done
     - path: [subpackages, name=busybox-full, test, pipeline]
       append:
         - name: Tools run applets by name without searching PATH
@@ -201,6 +219,13 @@ wolfi:
             cat > /tmp/busybox-probe.sh <<'WEREWOLF_BUSYBOX_PROBE'
             ${file:tests/probe.sh}WEREWOLF_BUSYBOX_PROBE
             /usr/bin/busybox sh /tmp/busybox-probe.sh
+    # busybox-full has no wget: its own tests check nc, netcat and nslookup alone.
+    - path: [subpackages, name=busybox-full, test, pipeline, name=Verify network utilities are present, runs]
+      replace:
+        - old: for p in nc netcat wget nslookup; do
+          new: for p in nc netcat nslookup; do
+    - path: [subpackages, name=busybox-full, test, pipeline, name=Test wget can download a file]
+      delete: true
     - path: [test, pipeline]
       append:
         - name: Tools run applets by name without searching PATH
@@ -283,41 +308,11 @@ wolfi:
     - path: [subpackages, name=busybox-static, test, environment, contents, packages]
       append:
         - bash-binsh
-    # Keep the upstream download assertion with a local, single-connection fixture.
+    # Only the wget download test served files with Python, and wget is gone.
     - path: [subpackages, name=busybox-full, test, environment, contents, packages]
       remove:
         - python3
-    - path: [subpackages, name=busybox-full, test, pipeline, name=Test wget can download a file, runs]
-      expect: |
-        # Create test content for HTTP server
-        mkdir -p /tmp/www
-        echo "wget test content" > /tmp/www/test.txt
-
-        # Start Python HTTP server
-        cd /tmp/www
-        python3 -m http.server 8888 > /tmp/httpd.log 2>&1 &
-        SERVER_PID=$!
-
-        # Wait for server to be ready
-        sleep 2
-
-        # Test wget download
-        wget -O /tmp/downloaded.txt http://127.0.0.1:8888/test.txt
-
-        # Verify downloaded content
-        if ! grep -F "wget test content" /tmp/downloaded.txt; then
-          echo "FAIL: wget did not download expected content"
-          cat /tmp/downloaded.txt
-          kill "$SERVER_PID"
-          exit 1
-        fi
-
-        echo "PASS: wget successfully downloaded file"
-
-        # Cleanup
-        kill "$SERVER_PID"
-      set: ${file:tests/wget.sh}
-  revision: 9
+  revision: 10
   recipe: busybox
 changes:
   - what: Enable CONFIG_FEATURE_PREFER_APPLETS in busybox, busybox-full and busybox-static, keeping BUSYBOX_EXEC_PATH /usr/bin/busybox.
@@ -327,6 +322,11 @@ changes:
       - tests/probe.sh
   - what: Exclude /bin/sh from all BusyBox applet-link manifests and APK triggers.
     why: mksh owns /bin/sh; installing or updating BusyBox must not change its behavior.
+    evidence:
+      - package.yaml
+      - tests/probe.sh
+  - what: Leave wget, telnet and telnetd out of busybox, busybox-full and busybox-static.
+    why: A machine should carry no downloader and no plain-text login server; one that needs either brings a separate program.
     evidence:
       - package.yaml
       - tests/probe.sh
