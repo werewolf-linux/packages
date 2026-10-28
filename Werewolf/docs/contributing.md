@@ -27,7 +27,11 @@ inputs must be captured first.
 
 Bump `melange.package.epoch` for changed direct-recipe build inputs at the same
 upstream version, or `wolfi.revision` for a derivation. Published APK identities are
-immutable. Preserve source pins, original licenses and signing checks.
+immutable. Shared builder and test-runner changes also affect package input
+identities. After those changes, run `Werewolf/.work/tools/package release-plan`
+and resolve every entry in `failed` before publishing; the planner checks signed
+release records and reports which packages need an epoch bump. Preserve source
+pins, original licenses and signing checks.
 
 Keep functions small and direct. Avoid duplicate configuration, speculative
 frameworks and silent fallbacks. A failed update retains the previous publication

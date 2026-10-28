@@ -9,7 +9,7 @@ melange:
   package:
     name: bugsink
     version: 2.6.2
-    epoch: 6
+    epoch: 7
     description: Error tracking compatible with Sentry SDKs
     copyright:
       - license: PolyForm-Shield-1.0.0

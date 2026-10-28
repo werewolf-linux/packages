@@ -18,7 +18,7 @@ melange:
   package:
     name: vaultwarden
     version: 1.37.4
-    epoch: 7
+    epoch: 8
     description: Bitwarden-compatible password manager server
     copyright:
       - license: AGPL-3.0-only

@@ -10,7 +10,7 @@ melange:
   package:
     name: minecraft
     version: 26.3
-    epoch: 6
+    epoch: 7
     description: Minecraft Java Edition server
     copyright:
       - license: LicenseRef-Minecraft-EULA

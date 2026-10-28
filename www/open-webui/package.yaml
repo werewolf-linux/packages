@@ -18,7 +18,7 @@ melange:
   package:
     name: open-webui
     version: 0.12.4
-    epoch: 5
+    epoch: 6
     description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
     copyright:
       - license: LicenseRef-Open-WebUI

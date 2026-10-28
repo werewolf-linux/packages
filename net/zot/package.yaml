@@ -15,7 +15,7 @@ melange:
   package:
     name: zot
     version: 2.1.22
-    epoch: 7
+    epoch: 8
     description: OCI-native container image registry
     copyright:
       - license: Apache-2.0
