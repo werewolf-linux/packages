@@ -6,8 +6,8 @@ update:
 melange:
   package:
     name: wordpress-sqlite-integration
-    version: 3.1.1
-    epoch: 6
+    version: "3.1.2"
+    epoch: 0
     description: WordPress SQLite database integration and drop-in
     copyright:
       - license: GPL-2.0-or-later
@@ -24,7 +24,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/WordPress/sqlite-database-integration/releases/download/v${{package.version}}/plugin-sqlite-database-integration.zip
-        expected-sha256: a00baefefe852a0abd83f66cc04a4a91be3c1bd9d4b5adde62e7a72c7ba453a5
+        expected-sha256: "67dd43f93826c5d222a1d055c432ac5d11279503e4628dce3de72509f48c8a6a"
         extract: false
     - runs: |
         unzip -q plugin-sqlite-database-integration.zip
