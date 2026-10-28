@@ -16,7 +16,7 @@ melange:
   package:
     name: continuwuity
     version: 26.9.1
-    epoch: 6
+    epoch: 7
     description: A Matrix homeserver, the continuation of conduwuit
     copyright:
       - license: Apache-2.0

@@ -15,7 +15,7 @@ melange:
   package:
     name: mastodon
     version: 4.7.3
-    epoch: 8
+    epoch: 9
     description: Decentralized social network server
     copyright:
       - license: AGPL-3.0-or-later
