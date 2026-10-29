@@ -8,7 +8,7 @@ melange:
   package:
     name: langflow-vuln-demo
     version: 1.8.1
-    epoch: 7
+    epoch: 8
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
       - license: MIT

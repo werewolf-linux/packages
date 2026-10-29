@@ -15,7 +15,7 @@ melange:
   package:
     name: pg-gvm
     version: "22.6.19"
-    epoch: 1
+    epoch: 2
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later

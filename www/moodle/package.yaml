@@ -16,7 +16,7 @@ melange:
   package:
     name: moodle
     version: "5.3"
-    epoch: 7
+    epoch: 8
     description: Moodle, a learning management system
     copyright:
       - license: GPL-3.0-or-later

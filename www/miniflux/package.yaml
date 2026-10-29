@@ -12,7 +12,7 @@ melange:
   package:
     name: miniflux
     version: 2.3.4
-    epoch: 6
+    epoch: 7
     description: Minimalist and opinionated feed reader
     copyright:
       - license: Apache-2.0

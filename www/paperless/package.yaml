@@ -17,7 +17,7 @@ melange:
   package:
     name: paperless
     version: 3.3.4
-    epoch: 8
+    epoch: 9
     description: Document management with OCR, tags and full-text search
     copyright:
       - license: GPL-3.0-only

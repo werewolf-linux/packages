@@ -14,7 +14,7 @@ melange:
   package:
     name: galene
     version: 1.2.1
-    epoch: 7
+    epoch: 8
     description: Videoconference server for lectures and seminars
     copyright:
       - license: MIT

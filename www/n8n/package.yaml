@@ -17,7 +17,7 @@ melange:
   package:
     name: n8n
     version: "2.45.6"
-    epoch: 0
+    epoch: 1
     description: n8n workflow automation on hardened Node.js
     copyright:
       - license: LicenseRef-Sustainable-Use
