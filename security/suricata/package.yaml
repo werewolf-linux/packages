@@ -18,8 +18,8 @@ melange:
   # which a form's image prefers by name, replaces Wolfi's frozen build.
   package:
     name: suricata
-    version: 8.0.7
-    epoch: 8
+    version: "8.0.8"
+    epoch: 0
     description: Network IDS, IPS and security monitoring engine
     copyright:
       - license: GPL-2.0-only
@@ -47,7 +47,7 @@ melange:
     - uses: fetch
       with:
         uri: https://www.openinfosecfoundation.org/download/suricata-${{package.version}}.tar.gz
-        expected-sha256: a9d46a9c8f40e81f8a6df3ecc2c5a9a8e8da985876299108d92da547c013ba8c
+        expected-sha256: "bb56bbaeb4da81b4c90e61148f93b789ea924412207388bc9cba0a7ac6a24a8f"
     # The release tarball vendors the Rust crates, so the build fetches
     # nothing. Baseline CPU targets keep host-only instructions out.
     # nfqueue, eBPF and Python stay off: this form uses AF_PACKET.
