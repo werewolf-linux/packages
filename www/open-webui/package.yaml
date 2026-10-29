@@ -17,8 +17,8 @@ melange:
   # the form names the package and this file goes.
   package:
     name: open-webui
-    version: 0.12.4
-    epoch: 6
+    version: "0.12.5"
+    epoch: 0
     description: Self-hosted AI chat interface for Ollama and OpenAI-compatible APIs
     copyright:
       - license: LicenseRef-Open-WebUI
@@ -52,7 +52,7 @@ melange:
     - uses: fetch
       with:
         uri: https://files.pythonhosted.org/packages/py3/o/open-webui/open_webui-${{package.version}}-py3-none-any.whl
-        expected-sha256: 02e9caba96234db3fa17a92e56163b3f7f2b8ca8227fa886b85c178d696483f6
+        expected-sha256: "74fafb4efeee7c894303ca5b87fa7525fbf63b39c0b9962496fb82939119d3fd"
         extract: false
     # Built where it runs, since a virtual environment records its path.
     # The requirements as upstream pins them, and what they pull in as PyPI
@@ -64,7 +64,7 @@ melange:
         werewolf-tools/package-helper --action requirements
         uv venv --python /usr/bin/python3.12 /usr/lib/open-webui
         export VIRTUAL_ENV=/usr/lib/open-webui
-        uv pip install --exclude-newer 2026-10-25T11:09:14Z \
+        uv pip install --exclude-newer 2026-10-29T09:45:18Z \
           -r requirements-slim.txt
         uv pip install --no-deps \
           open_webui-${{package.version}}-py3-none-any.whl
