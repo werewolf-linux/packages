@@ -33,17 +33,15 @@ wolfi:
         - name=Support OpenSSL 4 ABI
         - name=Force use of system libraries
         - name=Block blake and hmac usage in FIPS mode
-        - name=Clone patched source for no-GIL and JIT builds
     - path: [subpackages]
       shape:
         - name=${{package.name}}${{range.key}}-runtime
         - name=${{package.name}}t
-        - name=${{package.name}}t-dev
         - name=${{package.name}}-jit
         - name=${{package.name}}${{range.key}}-base
         - name=${{package.name}}-privileged-netbindservice
         - name=${{package.name}}${{range.key}}-tk
-        - name=${{package.name}}${{range.key}}-doc
+        - name=${{package.name}}-doc
         - name=${{package.name}}${{range.key}}-dev
         - name=${{package.name}}${{range.key}}-base-dev
     - path: [vars, config-opts-common]
@@ -84,14 +82,21 @@ wolfi:
         - name: variants
           items:
             "": ${{vars.config-opts-gil}}
+            t: ${{vars.config-opts-freethreading}}
+            -jit: ${{vars.config-opts-jit}}
   edits:
     - path: [vars, config-opts-common]
       replace:
         - old: |
             --enable-loadable-sqlite-extensions \
           new: ""
-    - path: [pipeline, name=Clone patched source for no-GIL and JIT builds]
-      delete: true
+    - path: [data, name=variants, items]
+      expect:
+        "": ${{vars.config-opts-gil}}
+        t: ${{vars.config-opts-freethreading}}
+        -jit: ${{vars.config-opts-jit}}
+      set:
+        "": ${{vars.config-opts-gil}}
     - path: [pipeline]
       append:
         - name: Allow every runtime-hardening group in the build guest only
@@ -157,15 +162,13 @@ wolfi:
           needs:
             packages:
               - build-base
-    - path: [subpackages, 'name=${{package.name}}${{range.key}}-doc']
+    - path: [subpackages, 'name=${{package.name}}-doc']
       delete: true
     - path: [subpackages, 'name=${{package.name}}${{range.key}}-tk']
       delete: true
     - path: [subpackages, 'name=${{package.name}}-privileged-netbindservice']
       delete: true
     - path: [subpackages, 'name=${{package.name}}-jit']
-      delete: true
-    - path: [subpackages, 'name=${{package.name}}t-dev']
       delete: true
     - path: [subpackages, 'name=${{package.name}}t']
       delete: true
