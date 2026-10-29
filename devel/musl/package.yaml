@@ -9,7 +9,7 @@ melange:
   package:
     name: musl-werewolf
     version: 1.2.6
-    epoch: 6
+    epoch: 7
     description: musl with local resolver socket confinement
     copyright:
       - license: MIT

@@ -9,7 +9,7 @@ melange:
   package:
     name: solr-vuln-demo
     version: 8.11.0
-    epoch: 7
+    epoch: 8
     description: Deliberately vulnerable Solr, on hardened OpenJDK 27
     copyright:
       - license: Apache-2.0

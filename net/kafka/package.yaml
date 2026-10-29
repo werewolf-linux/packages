@@ -10,7 +10,7 @@ melange:
   package:
     name: kafka
     version: 4.4.0
-    epoch: 2
+    epoch: 3
     description: Apache Kafka, directly launched with hardened OpenJDK 27
     copyright:
       - license: Apache-2.0

@@ -14,7 +14,7 @@ melange:
   package:
     name: dependency-track
     version: 5.2.1
-    epoch: 1
+    epoch: 2
     description: OWASP Dependency-Track API and frontend on hardened OpenJDK 27
     copyright:
       - license: Apache-2.0

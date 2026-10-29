@@ -17,7 +17,7 @@ melange:
   package:
     name: opensearch
     version: 3.9.0
-    epoch: 6
+    epoch: 7
     description: Open source distributed and RESTful search engine, with its security plugin
     copyright:
       - license: Apache-2.0

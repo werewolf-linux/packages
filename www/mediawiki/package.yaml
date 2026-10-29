@@ -16,7 +16,7 @@ melange:
   package:
     name: mediawiki
     version: 1.46.2
-    epoch: 6
+    epoch: 7
     description: The wiki engine of Wikipedia, long-term release
     copyright:
       - license: GPL-2.0-or-later

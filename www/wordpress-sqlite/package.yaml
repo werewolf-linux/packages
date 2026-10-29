@@ -7,7 +7,7 @@ melange:
   package:
     name: wordpress-sqlite-integration
     version: "3.1.2"
-    epoch: 0
+    epoch: 1
     description: WordPress SQLite database integration and drop-in
     copyright:
       - license: GPL-2.0-or-later
