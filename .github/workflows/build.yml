@@ -94,7 +94,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: always()
+        if: always() && steps.paths.outcome == 'success'
         with:
           name: log-${{ inputs.package }}-${{ inputs.arch }}
           path: ${{ steps.paths.outputs.logs }}

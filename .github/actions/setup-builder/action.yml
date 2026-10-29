@@ -6,7 +6,9 @@ runs:
     - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
       with:
         go-version: '1.27.x'
-        cache-dependency-path: Werewolf/go.sum
+        # Self-hosted jobs share the Go module cache; concurrent restores can
+        # collide while extracting read-only module files.
+        cache: false
     - shell: bash
       run: make tools
     - shell: bash
