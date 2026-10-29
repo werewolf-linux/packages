@@ -110,6 +110,10 @@ wolfi:
           new: |
             smbd --port=1445
             trap 'kill "$(cat /run/samba/smbd.pid)"' EXIT
+    - path: [test, pipeline, name=Test smbd Service Start, runs]
+      replace:
+        - old: smbd -i -s "$TMP_CONF" &
+          new: smbd -i -p 1445 -s "$TMP_CONF" &
   revision: 5
   recipe: samba
 changes:

@@ -38,7 +38,7 @@ jobs:
       - uses: actions/setup-go@90ad2b35f69faf97585ad74d28fa006d2739b7af
         with:
           go-version: '1.27.x'
-          cache-dependency-path: Werewolf/go.sum
+          cache: false
       - run: make tools
       - run: Werewolf/.work/tools/package install-melange --dest Werewolf/.work/tools/melange
       - name: Download the x86_64 build
