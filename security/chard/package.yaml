@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=../../Werewolf/package.schema.json
+update:
+  source: git
+  repo: hexproofdev/chard
+  branch: main
+  reason: No tags or releases; track main with a dated version and immutable commit pin until upstream publishes releases.
+melange:
+  package:
+    name: chard
+    version: "0.1.0_git20261030"
+    epoch: 0
+    description: Measure which hardening protections a C and C++ toolchain applies
+    copyright:
+      - license: BSD-3-Clause
+  environment:
+    contents:
+      repositories:
+        - https://packages.wolfi.dev/os
+      keyring:
+        - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      packages:
+        - build-base
+        - busybox
+        - ca-certificates-bundle
+        - cargo-auditable
+        - git
+        - rust-1.98
+  pipeline:
+    - uses: git-checkout
+      with:
+        repository: https://github.com/hexproofdev/chard
+        branch: main
+        expected-commit: b08c50a97761431026db8a91a422078cefc79eac
+    - runs: |
+        cargo auditable build --release --locked
+        target/release/chard --version
+        install -Dm755 target/release/chard ${{targets.destdir}}/usr/bin/chard
+        install -Dm644 LICENSE ${{targets.destdir}}/usr/share/licenses/chard/LICENSE
+    - uses: strip
+  test:
+    environment:
+      contents:
+        packages:
+          - build-base
+          - jq
+    pipeline:
+      - name: Installed CLI and compiler measurement
+        runs: sh /home/build/smoke.sh '${{package.version}}'
+changes:
+  - what: Build chard from a pinned upstream snapshot with Wolfi's Rust toolchain and Cargo.lock; record crate metadata with cargo-auditable.
+    why: Provide empirical compiler hardening measurements, report rendering and evidence replay as an installable package.
+    evidence:
+      - package.yaml
+  - what: Test the installed binary's embedded probes, compiler measurement, report rendering and evidence replay.
+    why: Verify chard works without an upstream checkout and publishes usable measurement evidence.
+    evidence:
+      - package.yaml
+      - tests/smoke.sh
+drop-when: Wolfi provides equivalent packaging, supported versions and architectures; review compatibility before retiring this context.
+test:
+  confined: true
