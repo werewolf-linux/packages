@@ -16,7 +16,7 @@ melange:
   # this file goes.
   package:
     name: paperless
-    version: "3.4.0"
+    version: "3.4.1"
     epoch: 0
     description: Document management with OCR, tags and full-text search
     copyright:
@@ -55,7 +55,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/paperless-ngx/paperless-ngx/releases/download/v${{package.version}}/paperless-ngx-v${{package.version}}.tar.xz
-        expected-sha256: "2f16770417e1b1f3f74865cfb96bf4c696190d13751a11b0864f978df207aeff"
+        expected-sha256: "763c974427136965377612bbd0c187aba907cc79ebb8c742ef1a783b2cf9dbda"
         directory: paperless
     # The lock is the release's. --no-emit-package drops the assistant's
     # stack and keeps every other pin, hashes included. Importing the
