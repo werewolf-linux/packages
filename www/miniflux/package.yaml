@@ -11,8 +11,8 @@ melange:
   # goes.
   package:
     name: miniflux
-    version: 2.3.4
-    epoch: 7
+    version: "2.3.5"
+    epoch: 0
     description: Minimalist and opinionated feed reader
     copyright:
       - license: Apache-2.0
@@ -32,7 +32,7 @@ melange:
       with:
         repository: https://github.com/miniflux/v2
         tag: ${{package.version}}
-        expected-commit: 238c5614e584ebc87894e7d9f10bc91373a0b2c2
+        expected-commit: "faecfa2fac61a91f4f69550bb1afd506c4b51749"
     - runs: |
         CGO_ENABLED=0 go build -buildmode=pie -trimpath \
           -ldflags="-s -w -X miniflux.app/v2/internal/version.Version=${{package.version}}" \
