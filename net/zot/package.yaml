@@ -14,8 +14,8 @@ melange:
   # as a PIE, the form names it and this file goes.
   package:
     name: zot
-    version: 2.1.22
-    epoch: 9
+    version: "2.1.23"
+    epoch: 0
     description: OCI-native container image registry
     copyright:
       - license: Apache-2.0
@@ -36,7 +36,7 @@ melange:
       with:
         repository: https://github.com/project-zot/zot
         tag: v${{package.version}}
-        expected-commit: 6bbc7e56db2b7a64eee589324efe5813245e3a28
+        expected-commit: "d7915e82e6693255338ef7fa9bb15300c82db020"
     # Upstream's --version prints build details but omits the injected release tag.
     - runs: patch -p1 < version.patch
     - uses: go-deps
