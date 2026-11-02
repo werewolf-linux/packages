@@ -17,13 +17,13 @@ melange:
   # it, the form names the package and this file goes.
   package:
     name: vaultwarden
-    version: 1.37.4
-    epoch: 9
+    version: "1.37.5"
+    epoch: 0
     description: Bitwarden-compatible password manager server
     copyright:
       - license: AGPL-3.0-only
   vars:
-    web-vault-version: 2026.7.0
+    web-vault-version: "2026.10.1"
   environment:
     contents:
       repositories:
@@ -45,7 +45,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/dani-garcia/vaultwarden/archive/refs/tags/${{package.version}}.tar.gz
-        expected-sha256: d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7
+        expected-sha256: "6be37dcc95b91a058ecbe614f1a7acff68ca8d23dc2c016cec18517c7173e4cc"
     # SQLite and OpenSSL from Wolfi, dynamically; mimalloc in its secure mode
     # (guard pages, encrypted free lists), compiled in.
     - runs: |
@@ -64,7 +64,7 @@ melange:
         - uses: fetch
           with:
             uri: https://github.com/dani-garcia/bw_web_builds/releases/download/v${{vars.web-vault-version}}/bw_web_v${{vars.web-vault-version}}.tar.gz
-            expected-sha256: 002e972bf0d0487ec0324b06d916de33e29de4c29bffd92ee3b843084c300570
+            expected-sha256: "354de9056c871e48db84975985e7d57c111ac6537bd4e4720488019e8638060f"
             directory: web-vault
         - runs: |
             mkdir -p ${{targets.subpkgdir}}/usr/share/vaultwarden
