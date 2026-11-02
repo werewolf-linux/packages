@@ -17,7 +17,7 @@ melange:
   package:
     name: n8n
     version: "2.45.7"
-    epoch: 0
+    epoch: 1
     description: n8n workflow automation on hardened Node.js
     copyright:
       - license: LicenseRef-Sustainable-Use
@@ -27,8 +27,8 @@ melange:
         - nodejs-26>=26.12.0-r2000
         - libstdc++
   vars:
-    launcher-version: 1.5.1
-    launcher-commit: 871cb76bc35c990f368eaa788f0b4ce7b145e143
+    launcher-version: "1.6.0"
+    launcher-commit: "a569a0d2ef40c936fbd36d628cfc2b17856a261d"
   environment:
     contents:
       repositories:
@@ -57,7 +57,7 @@ melange:
     - uses: fetch
       with:
         uri: https://codeload.github.com/n8n-io/task-runner-launcher/tar.gz/${{vars.launcher-commit}}
-        expected-sha256: f858cda1a8b30ffb91d2ed7b7c89ac2e1ac063319872e907085b976192301e05
+        expected-sha256: "408ae30176220bf9759d7822dfcb5a587e29a5d03a487f85874e5f57d7d44f24"
         extract: false
     - runs: |
         # Build native addons for the same Node major as the hardened runtime.
