@@ -14,7 +14,7 @@ melange:
   # when Wolfi ships it, the form names the package and this file goes.
   package:
     name: mastodon
-    version: "4.7.4"
+    version: "4.7.5"
     epoch: 0
     description: Decentralized social network server
     copyright:
@@ -57,7 +57,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/mastodon/mastodon/archive/refs/tags/v${{package.version}}.tar.gz
-        expected-sha256: "76066150ff8228db3c7b1bf771d4c35dd6cc9fc5a0e5d479d53d529f36798ac1"
+        expected-sha256: "77f3eaeb3c7fbe40d24b3053ba6586ffa9c948a2ca205d4bd1b3a3092922f9a5"
     # Built where it runs, /usr/lib/mastodon, since bootsnap's cache and
     # some gems record their paths. Gems as Mastodon's image installs them,
     # less those for development and tests, into vendor/bundle, each from
