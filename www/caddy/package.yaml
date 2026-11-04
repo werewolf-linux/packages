@@ -16,8 +16,8 @@ melange:
   # Go as PIE, the form names Wolfi's caddy and this file goes.
   package:
     name: caddy
-    version: 2.11.7
-    epoch: 9
+    version: "2.11.8"
+    epoch: 0
     description: Fast, multi-platform web server with automatic HTTPS, position independent
     copyright:
       - license: Apache-2.0
@@ -38,7 +38,7 @@ melange:
       with:
         repository: https://github.com/caddyserver/caddy
         tag: v${{package.version}}
-        expected-commit: 72dd0fb067f6d7826c7f79907670ba4a713bfe37
+        expected-commit: "55996dfe05c10bb616ccdcc9bf5b8407a5be75b7"
     - runs: patch --batch --fuzz=0 -p1 < optional-modules.patch
     - uses: go-deps
       with:
