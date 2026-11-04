@@ -12,9 +12,9 @@ ag-ui-protocol==0.1.18 \
     # via
     #   langflow-base
     #   lfx
-aiobotocore==3.9.2 \
-    --hash=sha256:363b4892423b272eb84afbb58000da0be6ccd0cf8a68b98438c957d05b841efc \
-    --hash=sha256:8e32238c5bd77717ab1ac90077ff51ab141d025528115ccc7cc9b50b2d176e5f
+aiobotocore==3.10.0 \
+    --hash=sha256:35480ef11c51e23087273b85d97f80da2f356a46ce5f3fb88e24483cd343ffdb \
+    --hash=sha256:de0ccbcb82b6b0009f1b6667f48442e9d0432f9b8bfe6172fa51777cbea89d03
     # via langflow-base
 aiofile==3.12.3 \
     --hash=sha256:5c1bcc9e929c50834608e8cc1a4cc1d7503eb60c15a535b779fd39e2f372c017 \
@@ -200,6 +200,8 @@ aiohttp==3.14.5 \
     #   langchain-azure-ai
     #   langchain-community
     #   langchain-google-community
+    #   langflow-base
+    #   lfx
     #   lfx-slack
     #   litellm
     #   spider-client
@@ -259,7 +261,9 @@ anyio==4.15.1 \
 apsw==3.54.1.0 \
     --hash=sha256:8f9d433555e38ef314c9d9070c62dc896acaac1e262a1e5aa6ee58704b09e45e \
     --hash=sha256:d6358568e12eef86c2b63c1491515ce19bcf6bdf143440b67bac51a3b6e9e6d6
-    # via lfx, overrides.txt (CP315 wheels)
+    # via
+    #   --override overrides.txt
+    #   lfx
 argcomplete==3.7.2 \
     --hash=sha256:6029205678bdd9c1c728a155f5f9ecf5812393f969eef58807641a2bc2aa5b19 \
     --hash=sha256:aad8b69a0b9969edb62db0d1752354c0d50717b10e0cbb00e2a958381b9fc6b9
@@ -414,7 +418,9 @@ bcrypt==5.0.0 \
     --hash=sha256:f748f7c2d6fd375cc93d3fba7ef4a9e3a092421b8dbf34d8d4dc06be9492dfdd \
     --hash=sha256:f8429e1c410b4073944f03bd778a9e066e7fad723564a52ff91841d278dfc822 \
     --hash=sha256:fc746432b951e92b58317af8e0ca746efe93e66555f1b40888865ef5bf56446b
-    # via lfx
+    # via
+    #   chromadb
+    #   lfx
 beartype==0.23.1 \
     --hash=sha256:4461b4dc57e3fdd6c8a8464b22cf118002eea107c33e9fef651c69068ab3cce3 \
     --hash=sha256:8b805f246b32931c74f2b321ea0939fe5bb2ff43c12a3eff19cc4c854b832e1d
@@ -455,9 +461,9 @@ black==26.10.1 \
     --hash=sha256:fe85fc4019bee59bc495c0f2a8ee76c5cd02c7015508d94a967ba2376f39a52c \
     --hash=sha256:ff57f63029aa1353fa8b1b0c8971fd88a6c92dc766608d2eee33ad2deb23270e
     # via datamodel-code-generator
-boto3==1.43.106 \
-    --hash=sha256:c11ad4c429a983493ba10014c7af9831a455c2c0eea91c1cefff74530e480277 \
-    --hash=sha256:fdf2e304f9e8864b8613591b18b36ee995560c9666033622eda1cb9057866880
+boto3==1.43.117 \
+    --hash=sha256:a5b6cd7e67653987fcf0e212187c16f7b58af2ae192e368f7212ddab7c05b25d \
+    --hash=sha256:f3d314908d866b577ee6b74ed432c21e565c4c4dbd640ef3fd5e0da30fa13a98
     # via
     #   langchain-aws
     #   lfx-amazon
@@ -466,9 +472,9 @@ boto3-stubs==1.43.114 \
     --hash=sha256:2a9effc8ea19b5edf95b83e01c033e12c92c293c3a193268eeb7830cc4c10ddb \
     --hash=sha256:98729a4aa168a23e27cb68490979987cf7e4872df48c7480fd4399679c9dcbf8
     # via opik
-botocore==1.43.106 \
-    --hash=sha256:006870b3b4e40547232ad12c3bb4faec91bbbe0659aafaa3b7fa48a112c4ee97 \
-    --hash=sha256:c1fb8818f9957cb5037f73db34ac1a12ba43562e31d6e7f9cb7e5fc64e1dba78
+botocore==1.43.117 \
+    --hash=sha256:5920ef9b3002e1361846549078549d9154a6e0004c22853c01ce7b279d05d495 \
+    --hash=sha256:71993702832cc37c2495048b9945f2929d306fccb3fb767e9964e437e637fa6c
     # via
     #   aiobotocore
     #   boto3
@@ -480,6 +486,7 @@ botocore-stubs==1.43.114 \
 build==1.6.1 \
     --hash=sha256:51cc11666391ab6f092070437ac747002ff46f3e4113a3622177ee6b488bfc53 \
     --hash=sha256:ecd351a4be9d35a9eaaba244a7687143c9c7d4aea6ac964e7e7ddab20cbcf4e7
+    # via chromadb
 cachetools==7.2.2 \
     --hash=sha256:39b6c9291adde28c5de6622d25329375fadf3e8a678226e7872e2e72854e4549 \
     --hash=sha256:d521dc98d501ba9efd8d2b1663bbf88163509c0c0a090eea6dc154b421ec5410
@@ -565,9 +572,9 @@ cassio==0.1.10 \
     --hash=sha256:577f0a2ce5898a57c83195bf74811dec8794282477eb6fa4debd4ccec6cfab98 \
     --hash=sha256:9eebe5f18b627d0f328de4dbbf22c68cc76dbeecf46d846c0277e410de5cb1dc
     # via lfx-datastax
-certifi==2026.7.22 \
-    --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775 \
-    --hash=sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55
+certifi==2026.10.23 \
+    --hash=sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd \
+    --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
     # via
     #   clickhouse-connect
     #   httpcore
@@ -575,6 +582,7 @@ certifi==2026.7.22 \
     #   ibm-watsonx-ai
     #   kubernetes
     #   langchain-openai
+    #   litellm
     #   requests
     #   sentry-sdk
 cffi==2.1.1 \
@@ -912,6 +920,9 @@ chromadb==1.5.9 \
     --hash=sha256:814b9c95617377f6501e5757d63dfddb554a283a7739c87b9fa573850174e6f3 \
     --hash=sha256:9192d111bd662241625867962333d99369a00769a50f8b2f58cb388731274d7e \
     --hash=sha256:cc09b3df76e5a5cb386aed2715a2eea152e3949f9e1ba93c7119505377749929
+    # via
+    #   --override overrides.txt
+    #   -r requirements.in
 click==8.5.0 \
     --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360 \
     --hash=sha256:ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34
@@ -1296,14 +1307,13 @@ fastmcp-slim==3.4.10 \
     --hash=sha256:d80ae606ead8dfefa1f21b009929824210ea87eb4b422653a1be8dca61797ccd \
     --hash=sha256:f388941db8bdf38999e6c9d2536c4cd59a6571908d851cee2d10ee59f4e53532
     # via fastmcp
-filelock==3.32.7 \
-    --hash=sha256:37b8a3d9811b0f9aef7e5ec5c71bb320de52df51e6ca9bcd6f5ad81187660da7 \
-    --hash=sha256:65ff0d0190ea42038b32bda4b77834fb05be2cad4c5b9b01aa4dfb3614536e52
+filelock==4.2.7 \
+    --hash=sha256:31f6f7e3a8b6f0bd89114d30c5d5218ea1cfb63e5c4aa695b7559314a209bc7f \
+    --hash=sha256:d08972bbca2b8767ee552aff877b091dd111ffb1d22de7de885766ea7d719d5e
     # via
     #   huggingface-hub
     #   langflow-base
     #   lfx
-    #   litellm
 filetype==1.2.0 \
     --hash=sha256:66b56cd6474bf41d8c54660347d37afcc3f7d1970648de365c102ef77548aadb \
     --hash=sha256:7ce71b6880181241cf7ac8697a2f1eb6a8bd9b429f7ad6d27b8db9ba5f1c2d25
@@ -1721,6 +1731,7 @@ grpcio==1.84.0 \
     --hash=sha256:fc66cb50c93554b86db0b6625ab5c6e9051dbf8847c08d93c84918e02e413fb7 \
     --hash=sha256:fff5ef3fe1bba7d6147e5f19e01e5e122ac2c076486887ddcb8d42e663400fbe
     # via
+    #   chromadb
     #   google-api-core
     #   google-cloud-modelarmor
     #   grpcio-health-checking
@@ -1924,6 +1935,7 @@ httpx==0.28.1 \
     #   anthropic
     #   assemblyai
     #   astrapy
+    #   chromadb
     #   cohere
     #   elevenlabs
     #   fastmcp-slim
@@ -1964,7 +1976,6 @@ huggingface-hub==1.33.0 \
     --hash=sha256:04e434b06e100eddbce9a6e817d72693a7884b10a79bd67ab48080d5c07eb899 \
     --hash=sha256:367be21a201db9523eddf8aeac7048f2602c1b308691c97640d5e72ed188007e
     # via
-    #   litellm
     #   smolagents
     #   tokenizers
     #   transformers
@@ -2134,6 +2145,7 @@ importlib-metadata==8.9.0 \
 importlib-resources==7.1.0 \
     --hash=sha256:0722d4c6212489c530f2a145a34c0a7a3b4721bc96a15fada5930e2a0b760708 \
     --hash=sha256:1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1
+    # via chromadb
 inflect==7.5.0 \
     --hash=sha256:2aea70e5e70c35d8350b8097396ec155ffd68def678c7ff97f51aa69c1d92344 \
     --hash=sha256:faf19801c3742ed5a05a8ce388e0d8fe1a07f8d095c82201eb904f5d27ad571f
@@ -2435,6 +2447,7 @@ jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
     # via
+    #   chromadb
     #   docling-core
     #   lfx
     #   litellm
@@ -2454,7 +2467,9 @@ keyring==25.7.0 \
 kubernetes==32.0.1 \
     --hash=sha256:35282ab8493b938b08ab5526c7ce66588232df00ef5e1dbe88a419107dc10998 \
     --hash=sha256:42f43d49abd437ada79a79a16bd48a604d3471a117a8347e87db693f2ba0ba28
-    # via langflow-base
+    # via
+    #   chromadb
+    #   langflow-base
 langchain==1.3.18 \
     --hash=sha256:74ce99294f6f2c82ee64c3df39daa6a22085ee1449a718065b3604a88d78bf4d \
     --hash=sha256:f29cbef985848e5cfff5398f3c8c1568994a3a6f2a8f4fa720df30b6e0668b9c
@@ -2666,14 +2681,14 @@ lfx-cohere==0.2.0 \
 lfx-datastax==0.2.0 \
     --hash=sha256:f05953f964b660c92278486c4a750232bd3cf71f20a652d7a2403393faf737e1
     # via langflow
-lfx-docling==0.2.1 \
-    --hash=sha256:7be46fc2f5cf288bf82a183f5ff8dcc6420880e7bd60bdc584f70a74025f7178
+lfx-docling==0.2.3 \
+    --hash=sha256:087d841164e82015aef9c87fba7ec6d2708b44abdee9b3383a0732a2187b7c92
     # via langflow
 lfx-google==0.3.5 \
     --hash=sha256:488bebedba2a5960ff0f368cdb9f8c6f7af99470abd3ba5c3256e0307b5a3598
     # via langflow
-lfx-ibm==0.3.0 \
-    --hash=sha256:62155b4fbdfdf00fb0132b9157fc002a04da90c447430a0b1416a31e691af2ed
+lfx-ibm==0.3.2 \
+    --hash=sha256:871fc45a0ab13e14596a19e9db4636d5e30811ab2c2ebd2664c41b7e4f3ce629
     # via langflow
 lfx-microsoft==0.1.4 \
     --hash=sha256:bd690bfe32e56fbde3df6624800df7ac0b90b75e9f877eaccd3df11306e887e5
@@ -2687,8 +2702,8 @@ lfx-openai==0.2.0 \
 lfx-openai-compatible==0.2.0 \
     --hash=sha256:742eab5c117ddf4177bec80363d1e94fa7c0d25ffde2a82586d8390cd40327a3
     # via langflow
-lfx-oracle==0.2.0 \
-    --hash=sha256:1f4cca4603a40153fdf5697712bca0d9d5f103c79d2e0070f8d6a3758736db28
+lfx-oracle==0.3.1 \
+    --hash=sha256:9beceb8feecdc0a2e9c48b1adbb2787a1319f93259cb9e6d012f7dae3882b919
     # via langflow
 lfx-slack==0.2.2 \
     --hash=sha256:ec84a794aeb87f62bd63ee408cedbdd43c2405948015e0487d58920a3955d546
@@ -2703,15 +2718,15 @@ limits==5.8.0 \
     --hash=sha256:ae1b008a43eb43073c3c579398bd4eb4c795de60952532dc24720ab45e1ac6b8 \
     --hash=sha256:c9e0d74aed837e8f6f50d1fcebcf5fd8130957287206bc3799adaee5092655da
     # via slowapi
-litellm==1.106.1 \
-    --hash=sha256:2686765fb4b875f4aa41583de9a3ffd9816e23969063592336f639599d7b6b44 \
-    --hash=sha256:7efc2e3b7bdea5842e9b372fd37bedde2754f4dccd01abc84b8c65e3ed174a6b \
-    --hash=sha256:c998a2eed235989e77b1711487ea81adf42e647f2eb11d60cdf8d0fe9a97a00a \
-    --hash=sha256:ca159f7bac098e2e34c9a159bbe55b1085e15a0297c48d2f040b6cc09df003b2 \
-    --hash=sha256:ca8e28c6ff03d0c2be0406fb7d167cc5d576eb009bbbfc45b2f661fbefc6c01d \
-    --hash=sha256:d412e85ef7046eee701ae178da4c1587eddbeac4aaaacfca0fd5afec28c2abde \
-    --hash=sha256:f6fdd222598da980db8980a1d9661d80a6ce90e7f5ff054e68e39b5d3ee86156 \
-    --hash=sha256:fc31dd800d34871453ebb70d3914beb2cf7b28d80fb3f7c1cbd363ddaa7bc09a
+litellm==1.103.10 \
+    --hash=sha256:0085bb61fdb321ce17014eac697d8d7513f36e6681d490af845e8d8b9af8e613 \
+    --hash=sha256:5774a19560e93b1da1838b160d0ac4fec5238c11bde2cd2411422a06fb4f5e7f \
+    --hash=sha256:7451792391b9e268e812b17a4a5cc0d34dba9bac8d51615798ebcc58f10e1b09 \
+    --hash=sha256:a7d2b6a0de7c0abfc97fe89184cb2b719a5f76170a4cac9ffd4d14e85fbb3b73 \
+    --hash=sha256:adbcbb663a9cc96331de0f6ddd60e81d883288b901b7a4f6fbbfeb66edb669cd \
+    --hash=sha256:b1bf12810b6565156c6b23bda2ccaf115c6edafbbf92e98220ecbc73f89d6972 \
+    --hash=sha256:ca4cbf0492f65c383de264da0ff98f48d4eb56e4edf4a55713d2562a554b986f \
+    --hash=sha256:f639bd02ac34869080b7792732336345bc066ffb04be301093090425f6caa2bc
     # via
     #   langflow-base
     #   lfx-toolguard
@@ -2978,7 +2993,9 @@ magika==0.6.3 \
 mako==1.4.3 \
     --hash=sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f \
     --hash=sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a
-    # via alembic
+    # via
+    #   alembic
+    #   langflow-base
 markdown==3.11.2 \
     --hash=sha256:87bf5d90f2d2882e2c02fcda182c2800456b985bff38913867c49706481514b0 \
     --hash=sha256:f80390747a2a0ff2ba54da074ce4f862f72a6685f608cd2637b646a6d83993f5
@@ -3326,6 +3343,7 @@ mmh3==5.3.1 \
     --hash=sha256:fc205e9f78224db7239d163b9b7cac35596aa615665135b0105beb8080e9ebc5 \
     --hash=sha256:fc7a4ab919a66b9db72c1425d610f69a8480dce22aa4c6ad2218e4acf41f8c01 \
     --hash=sha256:fd3bbb5dc3c3a045605c1a618bfccb2de6d65ae89b99ff9a7f54556cf81175b7
+    # via chromadb
 more-itertools==11.2.1 \
     --hash=sha256:35a7377edd1dd6608dcb2cdf534ded55ea32d49448875ad042cd3f879fb1ded0 \
     --hash=sha256:cbf08fd0af284dc69718b9b76a8e6203df624d70209ea511e4219d350c856f63
@@ -3635,6 +3653,7 @@ numpy==2.5.4 \
     --hash=sha256:ffa6ce09a1c6a08e9667dd9c97aa0b14184e8d18f2a14b78b2a2328c9147f076
     # via
     #   cassio
+    #   chromadb
     #   graph-retriever
     #   langchain-astradb
     #   langchain-aws
@@ -3706,6 +3725,7 @@ opentelemetry-api==1.45.1 \
     --hash=sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75 \
     --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
     # via
+    #   chromadb
     #   fastapi
     #   fastmcp-slim
     #   google-api-core
@@ -3788,6 +3808,7 @@ opentelemetry-exporter-otlp-proto-grpc==1.45.1 \
     --hash=sha256:3b3dcfbfdcb4e35149fcf309972282054b45228f5c10547d0095d6578510a9a0 \
     --hash=sha256:e42ecb789d2fc5d8145e3dadc3e2991c9f18cd166d7c7514e234702540274b76
     # via
+    #   chromadb
     #   opentelemetry-exporter-otlp
     #   traceloop-sdk
 opentelemetry-exporter-otlp-proto-http==1.45.1 \
@@ -4031,6 +4052,7 @@ opentelemetry-sdk==1.45.1 \
     --hash=sha256:c604c11dc429810812348989115fa44bd558772a3d7442afc43d024f2c250ca4
     # via
     #   arize-phoenix-otel
+    #   chromadb
     #   langflow-base
     #   langfuse
     #   openinference-instrumentation
@@ -4235,6 +4257,7 @@ orjson==3.13.0 \
     --hash=sha256:fbbad6b9b1da43f25c1f5b20cd5a268e028a2fc95d5a8d1ade6059973bc71584
     # via
     #   --override overrides.txt
+    #   chromadb
     #   langflow-base
     #   langgraph-sdk
     #   langsmith
@@ -4294,12 +4317,14 @@ ormsgpack==1.13.0 \
 overrides==7.7.0 \
     --hash=sha256:55158fa3d93b98cc75299b1e67078ad9003ca27945c76162c1c0766d6f91820a \
     --hash=sha256:c7ed9d062f78b8e4c1a7b70bd8796b35ead4d9f510227ef9c5dc7626c60d7e49
+    # via chromadb
 packaging==24.2 \
     --hash=sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759 \
     --hash=sha256:c228a6dc5e932d346bc5739379109d49e8853dd8223571c7c5b55260edc0b97f
     # via
     #   a2a-sdk
     #   black
+    #   build
     #   deprecation
     #   fastmcp-slim
     #   google-cloud-bigquery
@@ -4311,7 +4336,6 @@ packaging==24.2 \
     #   langsmith
     #   lfx
     #   limits
-    #   litellm
     #   onnxruntime
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-sqlalchemy
@@ -4789,9 +4813,9 @@ pyarrow==26.0.0 \
     --hash=sha256:fcdd1e04982637c6042337d3e24d472f938f01fdc502e2b994844b726d12c3f4 \
     --hash=sha256:ff1e816af7abff71f289242e109217036723ce36aca74ad6691e52d964a74afa
     # via openlayer
-pyasn1==0.6.4 \
-    --hash=sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81 \
-    --hash=sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b
+pyasn1==0.6.5 \
+    --hash=sha256:4017b0fce125096b8573b39c989fdb1a4b19cf761e683398184550fea0e66587 \
+    --hash=sha256:6b11616a6bcf3a40e635f082bb232fa57b5e0dd7f517bd7ddd69ec3794508a47
     # via
     #   langflow-base
     #   pyasn1-modules
@@ -5013,6 +5037,7 @@ pybase64==1.5.1 \
     --hash=sha256:fdfdba1afd4a8593528fcff1c82ab89e37259b82b07f5871347e53c0efaf5e0c \
     --hash=sha256:fe8f88239c5d0fee5de3ac60aec66fc58ccf1f28d56b1df88dc496fe0a239054 \
     --hash=sha256:ff84beb9ea241af830d313cec822aeff1146179e6c58fa9915711f8fb4cd3edc
+    # via chromadb
 pycparser==3.11 \
     --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80 \
     --hash=sha256:d875f09c3507d00e1aba0eecc6dcadc1352f30fff09dc6bff2f1c2935e97c2bc
@@ -5026,6 +5051,7 @@ pydantic==2.13.5 \
     #   ag-ui-protocol
     #   anthropic
     #   assemblyai
+    #   chromadb
     #   cohere
     #   datamodel-code-generator
     #   docling-core
@@ -5198,6 +5224,7 @@ pydantic-settings==2.16.0 \
     --hash=sha256:7e73acf7f61936a15e5a3b6eedaea29f133357faf7272f2607ba479b049dd7f2
     # via
     #   assemblyai
+    #   chromadb
     #   docling-core
     #   fastmcp-slim
     #   langchain-community
@@ -5312,9 +5339,9 @@ pyparsing==3.3.3 \
     # via
     #   grandalf
     #   httplib2
-pypdf==6.21.0 \
-    --hash=sha256:3aec619699dacb1b73f57e87d9adaa4424814517b2cc028de20adba5a37af4c4 \
-    --hash=sha256:c16174c8653abafbe4d023b3c9227d226938d9579ffb5a73b4fac7756c0895a6
+pypdf==6.21.4 \
+    --hash=sha256:33e4fb41ca352810eb4e9838aa0d82d6888a5f8bf682f43e99cce5faa666255c \
+    --hash=sha256:c8817e3f888d47a087872ded69812c1ef30cacb871d6e053e0c00bbaf0bc2163
     # via
     #   langflow-base
     #   lfx
@@ -5328,9 +5355,11 @@ pyperclip==1.11.0 \
 pypika==0.51.1 \
     --hash=sha256:77985b4d7ce71b9905255bf12468cf598349e98837c037541cfc240e528aec46 \
     --hash=sha256:c30c7c1048fbf056fd3920c5a2b88b0c29dd190a9b2bee971fd17e4abe4d0ebe
+    # via chromadb
 pyproject-hooks==1.3.3 \
     --hash=sha256:5fc53fdac9f7bd63fbcdc868fb5f90b4784d78a53a3d3388cd738b807441a20b \
     --hash=sha256:defda19b854fa0d3bd4f76ea4ddcba8abd7dcfcdd585a6690ade050744fc5f43
+    # via build
 pyright==1.1.414 \
     --hash=sha256:2a6b4b3298c9eec174c5ed83bd338de6eee82df2992f3e1930e6199d381be36f \
     --hash=sha256:523c0a97c60da6333234955c277730c9cf4f5bd6d5399e7b7d2b0fc5d3599524
@@ -5510,6 +5539,7 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
+    #   chromadb
     #   datamodel-code-generator
     #   docling-core
     #   fastmcp-slim
@@ -5522,7 +5552,6 @@ pyyaml==6.0.3 \
     #   langchain-core
     #   langflow-base
     #   lfx
-    #   litellm
     #   openlayer
     #   transformers
     #   uvicorn
@@ -5832,6 +5861,7 @@ rich==13.9.4 \
     --hash=sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098 \
     --hash=sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90
     # via
+    #   chromadb
     #   cyclopts
     #   fastmcp-slim
     #   langflow-base
@@ -6240,6 +6270,7 @@ tenacity==9.1.4 \
     --hash=sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55 \
     --hash=sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a
     # via
+    #   chromadb
     #   google-genai
     #   langchain-community
     #   langchain-core
@@ -6340,6 +6371,7 @@ tokenizers==0.23.3 \
     --hash=sha256:ec82e80e65a862275b97c3d90b7a523df8d9519ee48aeb4e9625b2cc909274e0 \
     --hash=sha256:efa3d7318406b4d115dce61ad5061953f1f44b128e79c020ce4615d763e23b6e
     # via
+    #   chromadb
     #   cohere
     #   litellm
     #   transformers
@@ -6426,6 +6458,7 @@ tqdm==4.70.1 \
     --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73 \
     --hash=sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4
     # via
+    #   chromadb
     #   huggingface-hub
     #   openai
     #   openlayer
@@ -6527,6 +6560,7 @@ typer==0.26.8 \
     --hash=sha256:3512ca79ac5c11113414b36e80281b872884477722440691c89d1112e321a49c \
     --hash=sha256:c244a6bd558886fe3f8780efb6bdd28bb9aff005a94eedebaa5cb32926fe2f7e
     # via
+    #   chromadb
     #   doclang
     #   docling-core
     #   langflow-base
@@ -6565,6 +6599,7 @@ typing-extensions==4.16.0 \
     #   azure-search-documents
     #   azure-storage-blob
     #   beautifulsoup4
+    #   chromadb
     #   cohere
     #   datamodel-code-generator
     #   docling-core
@@ -6583,7 +6618,6 @@ typing-extensions==4.16.0 \
     #   langsmith
     #   lfx
     #   limits
-    #   litellm
     #   mcp
     #   openai
     #   openlayer
@@ -6747,6 +6781,7 @@ uvicorn==0.54.0 \
     --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf \
     --hash=sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620
     # via
+    #   chromadb
     #   fastmcp-slim
     #   langflow-base
     #   lfx
@@ -7547,3 +7582,4 @@ zstandard==0.25.0 \
 
 # The following packages were excluded from the output:
 # onnxruntime
+# ibm-db
