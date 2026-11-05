@@ -15,8 +15,8 @@ melange:
   # Wolfi's mattermost-11.7 stopped at 11.7.2 and brings bash.
   package:
     name: mattermost-team
-    version: 12.0.1
-    epoch: 7
+    version: "12.0.2"
+    epoch: 0
     description: Open source collaboration for developer teams (Team Edition)
     copyright:
       - license: MIT
@@ -33,12 +33,12 @@ melange:
       uses: fetch
       with:
         uri: https://releases.mattermost.com/${{package.version}}/mattermost-team-${{package.version}}-linux-arm64.tar.gz
-        expected-sha256: 6246ebcba8418606ac98e1e9ee5b0cd732e75190bb0c67c4d66a5503007aecf8
+        expected-sha256: "a26de4d33c31a0114ea37256c2c6fe9db00da39d0e92d196ad6e3e767c9cb402"
     - if: ${{build.arch}} == 'x86_64'
       uses: fetch
       with:
         uri: https://releases.mattermost.com/${{package.version}}/mattermost-team-${{package.version}}-linux-amd64.tar.gz
-        expected-sha256: 1e7512f4782d4df552543f60ca17cc572a9ddc8faaebc3942dcc40b4f6a979d9
+        expected-sha256: "da47482f66168fc36b11248047d3578d0cc720a02d50d86524e6ea55d2557c04"
     - runs: |
         home=${{targets.destdir}}/usr/lib/mattermost
         mkdir -p $home/bin
