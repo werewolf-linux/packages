@@ -8,8 +8,8 @@ melange:
   # the venv's interpreter remains a link to the system package, never a copied binary.
   package:
     name: bugsink
-    version: 2.6.2
-    epoch: 8
+    version: "2.6.3"
+    epoch: 0
     description: Error tracking compatible with Sentry SDKs
     copyright:
       - license: PolyForm-Shield-1.0.0
