@@ -13,8 +13,8 @@ melange:
   # goes.
   package:
     name: galene
-    version: 1.2.1
-    epoch: 8
+    version: "1.2.2"
+    epoch: 0
     description: Videoconference server for lectures and seminars
     copyright:
       - license: MIT
@@ -35,7 +35,7 @@ melange:
       with:
         repository: https://github.com/jech/galene
         tag: galene-${{package.version}}
-        expected-commit: 6d9338e909fdecdd906150e4dda34e10d9869654
+        expected-commit: "f2becb441b409881a4bdd2f8f5bbf5d8e9ab28b9"
     # Galène tests its TURN relay at start and every 12 hours, with two
     # peer connections of pion's defaults: mDNS on 5353 and host candidates
     # on any port, which fence refuses. The test is skipped without ICE
