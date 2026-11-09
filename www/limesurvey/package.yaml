@@ -16,13 +16,13 @@ melange:
   # is; when Wolfi ships it, the form names the package and this file goes.
   package:
     name: limesurvey
-    version: "7.9.0"
+    version: "7.9.1"
     epoch: 0
     description: Online survey tool
     copyright:
       - license: GPL-2.0-or-later
   vars:
-    build: "261029"
+    build: "261102"
   environment:
     contents:
       repositories:
@@ -37,7 +37,7 @@ melange:
     - uses: fetch
       with:
         uri: https://download.limesurvey.org/latest-master/limesurvey${{package.version}}+${{vars.build}}.zip
-        expected-sha256: "346b01bba915813d969e4183bbc14ad1eb2602d51a8f936655f3627e0cd53de0"
+        expected-sha256: "c90a1dae4b0b3e265d20de08185a74f5d68f1af3e78fa5e33772f82f550d6891"
         extract: false
     - runs: |
         unzip -q limesurvey${{package.version}}+${{vars.build}}.zip
