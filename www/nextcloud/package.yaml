@@ -13,8 +13,8 @@ melange:
   # ships it, the form names the package and this file goes.
   package:
     name: nextcloud
-    version: 35.0.2
-    epoch: 7
+    version: "35.0.3"
+    epoch: 0
     description: Nextcloud server, a safe home for all your data
     copyright:
       - license: AGPL-3.0-or-later
@@ -32,7 +32,7 @@ melange:
     - uses: fetch
       with:
         uri: https://download.nextcloud.com/server/releases/nextcloud-${{package.version}}.tar.bz2
-        expected-sha256: dfc7955eaec5621de90e031d10f76006173b3f3e31d5d6e174821d1da14f162d
+        expected-sha256: "58401440ce81b7f8d445a8c2a8027572b616ef83592f96b121fd15ec8a1aed35"
         directory: nextcloud
     # The installer's flag for a web install: this form installs from the
     # machine's config before the site serves, and keeps its config on /data.
