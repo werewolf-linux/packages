@@ -15,8 +15,8 @@ melange:
   # is; when Wolfi ships it, the form names the package and this file goes.
   package:
     name: moodle
-    version: "5.3"
-    epoch: 8
+    version: "5.3.1"
+    epoch: 0
     description: Moodle, a learning management system
     copyright:
       - license: GPL-3.0-or-later
@@ -34,7 +34,7 @@ melange:
     - uses: fetch
       with:
         uri: https://download.moodle.org/download.php/direct/stable503/moodle-${{package.version}}.tgz
-        expected-sha256: 7e5edf110555956571f40e42acffde0eb23681ebebd212a2fec0fe7d795dd511
+        expected-sha256: "820ee2bcd89acc6b91df255b2010bbbab108f29952ab78895a79c4feabf541e7"
         directory: moodle
     # The developers' dotfiles (lint, Grunt, Jest, GitHub's) run nothing on
     # a machine. PHP-DI makes the container Moodle compiles into
