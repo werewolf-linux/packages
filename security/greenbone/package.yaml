@@ -15,12 +15,12 @@ melange:
   package:
     name: pg-gvm
     version: "22.6.19"
-    epoch: 2
+    epoch: 3
     description: Greenbone PostgreSQL extension and its base library
     copyright:
       - license: GPL-3.0-or-later
   vars:
-    gvm-libs-version: 23.15.0
+    gvm-libs-version: "23.16.0"
   environment:
     contents:
       repositories:
@@ -42,7 +42,7 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/greenbone/gvm-libs/archive/refs/tags/v${{vars.gvm-libs-version}}.tar.gz
-        expected-sha256: 5fc60b16c5d40f802bb61c8ce1c24f147bd3a98c680be70e07c39b0331f5aa21
+        expected-sha256: "98f1c8afa7865e2738c5e4c5b44a753db5845ff356ece8dd87ae667a33f7d3fc"
         directory: gvm-libs
     - uses: fetch
       with:
