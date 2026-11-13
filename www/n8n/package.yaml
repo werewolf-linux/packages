@@ -16,7 +16,7 @@ test:
 melange:
   package:
     name: n8n
-    version: "2.47.5"
+    version: "2.47.7"
     epoch: 0
     description: n8n workflow automation on hardened Node.js
     copyright:
