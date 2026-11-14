@@ -15,7 +15,7 @@ melange:
   # ships it, the form names the package and this file goes.
   package:
     name: continuwuity
-    version: "26.9.3"
+    version: "26.9.4"
     epoch: 0
     description: A Matrix homeserver, the continuation of conduwuit
     copyright:
@@ -41,7 +41,7 @@ melange:
       with:
         repository: https://github.com/continuwuity/continuwuity
         tag: v${{package.version}}
-        expected-commit: "48d4bd60cb30ab4609de8146141d168981954b84"
+        expected-commit: "dda4bdc36768ac272bc7fecc08981f34d3990436"
     - runs: |
         # OIDC also uses download_media; its imports cannot depend on previews.
         patch --batch --fuzz=0 -p1 < no-preview-build.patch
