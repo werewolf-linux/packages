@@ -10,7 +10,7 @@ test:
 melange:
   package:
     name: langflow
-    version: "1.13.2"
+    version: "1.13.3"
     epoch: 0
     description: Langflow editor, API and local CPU inference on hardened Python
     copyright:
@@ -51,18 +51,18 @@ melange:
   pipeline:
     - uses: fetch
       with:
-        uri: "https://files.pythonhosted.org/packages/0e/42/4014d013193b6b5736bfa3749d2873b97fb86dc0ad4b4e5c662a2a3a5ee8/langflow-1.13.2-py3-none-any.whl"
-        expected-sha256: "0e0cfa4eacba79b59b1b0b1b3f98382d2803aa015df3dc2c4e799223d40447f8"
+        uri: "https://files.pythonhosted.org/packages/16/d2/0a76da4d4edc4979670e729411ab401460259c14a7cacdcf23fc3a4a7be6/langflow-1.13.3-py3-none-any.whl"
+        expected-sha256: "03cde6082bebf49e27a01900f5ae08bd6b90c980cfa49f208fd7af39fb551f47"
         extract: false
     - uses: fetch
       with:
-        uri: "https://files.pythonhosted.org/packages/45/f3/19ed126488f03b4b3ddf7cb4d681e2230068384fb7c47e40ca2b7b770551/langflow_base-1.13.2-py3-none-any.whl"
-        expected-sha256: "db68f5d259581333b84732ab8ef153a26e3e33738490afb8d744403be1e36bc5"
+        uri: "https://files.pythonhosted.org/packages/bb/6e/006f26d08bfc44fa68155b6f0582043b971182dcc777a063bbbd2ca6c54c/langflow_base-1.13.3-py3-none-any.whl"
+        expected-sha256: "0d38feb48ed57d409c6131d71095e91cf3803d34ed27743639a3cb8975a432a4"
         extract: false
     - uses: fetch
       with:
-        uri: "https://files.pythonhosted.org/packages/ff/35/72bf0a657698e05aa40c14b4cee3ab3753d6821a3838cb8c8065f683331d/lfx-1.13.2-py3-none-any.whl"
-        expected-sha256: "7baa01b501e35a09f5b6e5d8142a7c5bcd12d48a928bf12e886ea9416623a643"
+        uri: "https://files.pythonhosted.org/packages/af/98/10f88244ba42131d86129d6d6e30c8c64cae35d374894a55b40e67e3c3eb/lfx-1.13.3-py3-none-any.whl"
+        expected-sha256: "b0ad912d1808e39f43e91fe65082cc637e73655d76dd4147e8bf242a55db1e66"
         extract: false
     - runs: |
         # Use CP315 wheel tags. Only metadata's Python upper bounds are bypassed;
@@ -76,7 +76,7 @@ melange:
         /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
           --require-hashes --prefer-binary --only-binary=apsw,chromadb -r minimal-requirements.txt
         /usr/lib/langflow/bin/python -m pip install --no-deps --ignore-requires-python \
-          langflow-1.13.2-py3-none-any.whl langflow_base-1.13.2-py3-none-any.whl lfx-1.13.2-py3-none-any.whl
+          langflow-1.13.3-py3-none-any.whl langflow_base-1.13.3-py3-none-any.whl lfx-1.13.3-py3-none-any.whl
         # APSW's wheel bundles non-PIE SQLite diagnostic executables. Langflow
         # uses the binding, not those command-line tools.
         rm -rf /usr/lib/langflow/lib/python3.15/site-packages/apsw/sqlite_extra_binaries
