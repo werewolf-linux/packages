@@ -14,7 +14,7 @@ melange:
   # rebuilds when this file changes.
   package:
     name: postdoc
-    version: "0.2.0_git20261116"
+    version: "0.2.0_git20261117"
     epoch: 0
     description: Worker and server coordination for the Atomdrift analysis fleet
     copyright:
@@ -41,7 +41,7 @@ melange:
       with:
         repository: https://github.com/atomdrift-project/postdoc
         branch: main
-        expected-commit: "4718536e46a05979ece150d4d1f9a13e8ea7469e"
+        expected-commit: "f579bce09ce47a5037a59eb9415a77db2004b796"
     # Cargo's own git, not libgit2, fetches the engines: it follows the
     # environment's CA bundle and proxy as the rest of the build does.
     - runs: |
