@@ -16,8 +16,8 @@ melange:
   # Wolfi's opensearch-3 stopped at 3.6.0 and brings bash and busybox.
   package:
     name: opensearch
-    version: 3.9.0
-    epoch: 7
+    version: "3.10.0"
+    epoch: 0
     description: Open source distributed and RESTful search engine, with its security plugin
     copyright:
       - license: Apache-2.0
@@ -34,16 +34,16 @@ melange:
       uses: fetch
       with:
         uri: https://artifacts.opensearch.org/releases/core/opensearch/${{package.version}}/opensearch-min-${{package.version}}-linux-arm64.tar.gz
-        expected-sha256: 1bdceaf2eee8cfe294205c28f4be1c62ebf97348aeb82348e12f396d0aff4b42
+        expected-sha256: "1c7bc3cd7349d4f8e1c43a429df10c4461c576bc8ca0d9da706dcfe33a7d6a63"
     - if: ${{build.arch}} == 'x86_64'
       uses: fetch
       with:
         uri: https://artifacts.opensearch.org/releases/core/opensearch/${{package.version}}/opensearch-min-${{package.version}}-linux-x64.tar.gz
-        expected-sha256: 6126bdf7437446c19c42e2313e534cb432ef9cd87a412fc5dbad25ab45b89d26
+        expected-sha256: "2740f9ac475ae3d663fa1100d908b739d467ef1ef7e7dcea59ccda4521b2c6b0"
     - uses: fetch
       with:
         uri: https://repo1.maven.org/maven2/org/opensearch/plugin/opensearch-security/${{package.version}}.0/opensearch-security-${{package.version}}.0.zip
-        expected-sha256: 6b77366827a2df73655e7d04d42d0ff166b6a00ffcd556f2cb5d63762d43f096
+        expected-sha256: "5aada202d004ebfb30c1042b31fa3ce760ff5eb555d6936308ac2374c7852c36"
         extract: false
     - runs: |
         home=/usr/share/opensearch
