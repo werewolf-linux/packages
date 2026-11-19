@@ -13,8 +13,8 @@ melange:
   # PostgreSQL is configured with DT_DATASOURCE_URL, USERNAME and PASSWORD.
   package:
     name: dependency-track
-    version: 5.2.1
-    epoch: 2
+    version: "5.2.2"
+    epoch: 0
     description: OWASP Dependency-Track API and frontend on hardened OpenJDK 27
     copyright:
       - license: Apache-2.0
@@ -22,7 +22,7 @@ melange:
       runtime:
         - openjdk-27-jre>=27.0.0-r2002
   vars:
-    frontend-version: 5.2.1
+    frontend-version: "5.2.2"
   environment:
     contents:
       repositories:
@@ -36,12 +36,12 @@ melange:
     - uses: fetch
       with:
         uri: https://github.com/DependencyTrack/dependency-track/releases/download/${{package.version}}/dependency-track-apiserver-dist.tar.gz
-        expected-sha256: a39242248034f4e372fcb11092b69752070cd342a57bd00ef2936fe8b76f8ff9
+        expected-sha256: "45f8f9cfe04f995c5a462428fb2c9d3f7508a86de5ec5c9ff5e29851c8119c0f"
         strip-components: 0
     - uses: fetch
       with:
         uri: https://github.com/DependencyTrack/frontend/releases/download/${{vars.frontend-version}}/frontend-dist.zip
-        expected-sha256: d9f1a919cc55f32f61d48efafb16ec841bb04aa465946324362dd28165b06163
+        expected-sha256: "34ac5abe8b08183b456f265fa51723a062f92775e676cd0a8165ce3835bc9bac"
         extract: false
     - runs: |
         dest=${{targets.destdir}}/usr/share/java/dependency-track
