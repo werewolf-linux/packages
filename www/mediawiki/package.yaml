@@ -15,8 +15,8 @@ melange:
   # goes.
   package:
     name: mediawiki
-    version: 1.46.2
-    epoch: 7
+    version: "1.46.3"
+    epoch: 0
     description: The wiki engine of Wikipedia, long-term release
     copyright:
       - license: GPL-2.0-or-later
@@ -33,7 +33,7 @@ melange:
     - uses: fetch
       with:
         uri: https://releases.wikimedia.org/mediawiki/1.46/mediawiki-${{package.version}}.tar.gz
-        expected-sha256: 8f7f937f8bbc1acd4cef1c5362a95f248dcd242020f2588798eb2f73ac2e69ba
+        expected-sha256: "c74987cc2da7c88c3644c106a264cc558c3026f2f9ad632a3465925afb3a1395"
         directory: mediawiki
     # Left out besides: the bundled extensions that run a program (Scribunto
     # carries Lua binaries for x86, SyntaxHighlight pygmentize, Math and
