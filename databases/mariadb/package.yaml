@@ -8,8 +8,8 @@ melange:
   # From Wolfi's mariadb-13.1 recipe; see package.yaml for every change.
   package:
     name: mariadb
-    version: 13.0.2
-    epoch: 6
+    version: "13.1.2"
+    epoch: 0
     description: 'The MariaDB open source relational database (Werewolf: newest stable, no PAM)'
     copyright:
       - license: GPL-3.0-or-later
@@ -52,7 +52,7 @@ melange:
       with:
         repository: https://github.com/MariaDB/server.git
         tag: mariadb-${{package.version}}
-        expected-commit: 620a4b5624222048fece7fe1789978ae0675cae2
+        expected-commit: "8d58226507635114bf4547ce4e10a61f3e578c00"
     - name: Cmake
       runs: |
         cmake . -G Ninja \
