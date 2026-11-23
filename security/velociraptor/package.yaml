@@ -9,8 +9,8 @@ melange:
   # There is no musl build for arm64, so both arches take the glibc binary.
   package:
     name: velociraptor
-    version: 0.77.3
-    epoch: 7
+    version: "0.77.4"
+    epoch: 0
     description: Endpoint visibility and collection server
     copyright:
       - license: AGPL-3.0-only
@@ -27,13 +27,13 @@ melange:
       uses: fetch
       with:
         uri: https://github.com/Velocidex/velociraptor/releases/download/v${{package.version}}/velociraptor-v${{package.version}}-linux-arm64.gz
-        expected-sha256: f28e097c98bee125bf65adfe64937c9699b4d77742b7ab12f186a065298e72c3
+        expected-sha256: "908eda7aaaf46f4a988b282cabbe7844c273ad185d5c9846aa33518ff5e2708c"
         extract: false
     - if: ${{build.arch}} == 'x86_64'
       uses: fetch
       with:
         uri: https://github.com/Velocidex/velociraptor/releases/download/v${{package.version}}/velociraptor-v${{package.version}}-linux-amd64.gz
-        expected-sha256: c2c4eb585f16b622cd57de04995a7a13c076ee455bc2a828fd9243cec2ccfed8
+        expected-sha256: "890c1b8458276909cfbbfb2edad2e0b9c31672b95532e41516c39d2537925157"
         extract: false
     - runs: |
         gzip -d velociraptor-v${{package.version}}-linux-*.gz
