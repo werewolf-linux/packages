@@ -8,7 +8,7 @@ melange:
   # the venv's interpreter remains a link to the system package, never a copied binary.
   package:
     name: bugsink
-    version: "2.6.3"
+    version: "2.7.0"
     epoch: 0
     description: Error tracking compatible with Sentry SDKs
     copyright:
