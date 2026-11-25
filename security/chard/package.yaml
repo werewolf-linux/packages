@@ -7,7 +7,7 @@ update:
 melange:
   package:
     name: chard
-    version: "0.1.0_git20261030"
+    version: "0.1.0_git20261125"
     epoch: 0
     description: Measure which hardening protections a C and C++ toolchain applies
     copyright:
@@ -30,7 +30,7 @@ melange:
       with:
         repository: https://github.com/hexproofdev/chard
         branch: main
-        expected-commit: b08c50a97761431026db8a91a422078cefc79eac
+        expected-commit: "7e77bd2a0c0bfb5f359c09857c703fcf30cc3669"
     - runs: |
         cargo auditable build --release --locked
         target/release/chard --version
